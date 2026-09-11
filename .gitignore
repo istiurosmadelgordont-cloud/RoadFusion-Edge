@@ -1,0 +1,34 @@
+# Local Python/RKNN environments
+.rknn-env/
+.tools/
+.yolo/
+.matplotlib/
+__pycache__/
+*.py[cod]
+
+# Downloaded upstream SDKs and model-zoo sources
+vendor/
+
+# Generated calibration data and intermediate graphs
+calibration/images/
+calibration/dataset.txt
+calibration/*.onnx
+
+# Board build and runtime artifacts
+board/build/
+board/output/
+board/samples/
+board/models/
+
+# Video and local debug media
+*.avi
+*.mp4
+*.mov
+*.mkv
+*.tar.gz
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
