@@ -29,7 +29,7 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 
 ## 功能
 
-- 17 类道路目标检测，重点识别车辆、行人、红灯、绿灯、斑马线和导向箭头。
+- 单个 21 类道路目标检测模型，交通灯细分为红/绿两色的圆灯、左箭头、右箭头和直行箭头。
 - 有效信号灯区域筛选和连续帧状态判断。
 - 四点车道标定、IPM 鸟瞰变换、二值特征、滑动窗口搜索和二次曲线拟合。
 - 车道偏移、道路曲率、安全距离、相对速度和 TTC 风险估计。
@@ -37,7 +37,7 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 
 ## 软件模块
 
-The PC conversion pipeline exports the current 17-class detector with Rockchip's
+The PC conversion pipeline exports the current 21-class detector with Rockchip's
 YOLOv8 output layout and builds an RK3568 INT8 RKNN model. The board application
 is C++11 and keeps inference, lane detection, traffic-signal selection, distance/TTC
 estimation, and visualization in separate modules.
@@ -57,9 +57,22 @@ python tools/inspect_onnx.py
 python tools/convert_int8.py
 ```
 
+21 类模型完成训练后，将选中权重复制到 `models/unified21_light_focus_v4_selected_640.pt`，
+再执行上述三步。运行脚本会优先选择 21 类 RKNN；在新模型尚未部署时自动回退到旧 17 类模型。
+
 The RKNN Toolkit step runs in the `.rknn-env` Linux environment under WSL.
 
 量化校准图片由脚本从本地数据集中选取，不提交到代码仓库。
+
+## 21 类训练流水线
+
+`training/scripts` 保存公共 ATLAS 静态图像的断点下载、八类灯整理、19→21 类
+标签和检测头迁移、数据门槛检查、训练及独立评估代码。圆灯与直行箭头始终使用
+不同类别；训练仍输出一个检测模型。数据集、缓存和训练结果由 `.gitignore` 排除。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File training/scripts/run_unified21_full_pipeline.ps1 -Epochs 24 -Batch 16
+```
 
 ## RK3568 编译与运行
 

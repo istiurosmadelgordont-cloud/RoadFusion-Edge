@@ -233,7 +233,7 @@ std::vector<Detection> RknnDetector::postprocess(const std::vector<rknn_output>&
         detection.class_id = best_class;
         detection.score = best_score;
         detection.box = cv::Rect2f(x1, y1, x2 - x1, y2 - y1);
-        detection.name = class_name(best_class);
+        detection.name = class_name(best_class, config_.class_count);
         candidates.push_back(detection);
       }
     }

@@ -11,9 +11,9 @@ from pathlib import Path
 def parse_args():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", type=Path, default=root / "models/unified17_v10_candidate_640.pt")
+    parser.add_argument("--weights", type=Path, default=root / "models/unified21_light_focus_v4_selected_640.pt")
     parser.add_argument("--vendor", type=Path, default=root.parent / "adas_training/vendor/ultralytics_yolov8")
-    parser.add_argument("--output", type=Path, default=root / "models/unified17_v10_candidate_640_rkopt.onnx")
+    parser.add_argument("--output", type=Path, default=root / "models/unified21_light_focus_v4_rkopt.onnx")
     parser.add_argument("--imgsz", type=int, default=640)
     return parser.parse_args()
 

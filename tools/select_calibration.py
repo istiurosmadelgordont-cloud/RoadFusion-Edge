@@ -14,7 +14,7 @@ IMPORTANT = (0, 2, 7, 8, 9, 12, 13)
 def parse_args():
     root = Path(__file__).resolve().parents[1]
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset", type=Path, default=root.parent / "adas_training/datasets/unified17_v10_anchor")
+    p.add_argument("--dataset", type=Path, default=root.parent / "adas_training/datasets/unified21_light_focus_v4")
     p.add_argument("--count", type=int, default=300)
     p.add_argument("--seed", type=int, default=3568)
     p.add_argument("--output-dir", type=Path, default=root / "calibration/images")

@@ -12,7 +12,7 @@ def shape(value):
 def main():
     root = Path(__file__).resolve().parents[1]
     p = argparse.ArgumentParser()
-    p.add_argument("model", nargs="?", type=Path, default=root / "models/unified17_v10_candidate_640_rkopt.onnx")
+    p.add_argument("model", nargs="?", type=Path, default=root / "models/unified21_light_focus_v4_rkopt.onnx")
     args = p.parse_args()
     model = onnx.load(str(args.model))
     onnx.checker.check_model(model)

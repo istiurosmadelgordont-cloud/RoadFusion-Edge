@@ -32,6 +32,7 @@ struct Options {
   int detection_interval = 2;
   int lane_interval = 2;
   int cpu_threads = 4;
+  int class_count = 17;
   float confidence = 0.25f;
   std::string roi_file = "config/lane_roi.txt";
 };
@@ -46,6 +47,7 @@ void usage(const char* program) {
             << "  --detect-every N      NPU inference interval\n"
             << "  --lane-every N        CPU lane detection interval\n"
             << "  --cpu-threads N       OpenCV CPU worker threads\n"
+            << "  --classes N           detector class count (17 legacy or 21 directional)\n"
             << "  --confidence FLOAT    detection threshold\n"
             << "  --roi-file FILE       persistent four-point lane calibration\n"
             << "Keys: O open, P pause, C calibrate, D detection, -/+ size, Q quit\n";
@@ -65,9 +67,14 @@ bool parse(int argc, char** argv, Options& options) {
     else if (arg == "--detect-every") options.detection_interval = std::max(1, std::atoi(value.c_str()));
     else if (arg == "--lane-every") options.lane_interval = std::max(1, std::atoi(value.c_str()));
     else if (arg == "--cpu-threads") options.cpu_threads = std::max(1, std::min(4, std::atoi(value.c_str())));
+    else if (arg == "--classes") options.class_count = std::atoi(value.c_str());
     else if (arg == "--confidence") options.confidence = std::atof(value.c_str());
     else if (arg == "--roi-file") options.roi_file = value;
     else { std::cerr << "Unknown option: " << arg << std::endl; return false; }
+  }
+  if (options.class_count != 17 && options.class_count != 21) {
+    std::cerr << "--classes must be 17 or 21" << std::endl;
+    return false;
   }
   return true;
 }
@@ -317,6 +324,7 @@ int main(int argc, char** argv) {
   std::cout << "ARM CPU OpenCV threads: " << cv::getNumThreads() << std::endl;
   adas::DetectorConfig detector_config;
   detector_config.model_path = options.model;
+  detector_config.class_count = options.class_count;
   detector_config.confidence = options.confidence;
   adas::RknnDetector detector(detector_config);
   if (!detector.ready()) {

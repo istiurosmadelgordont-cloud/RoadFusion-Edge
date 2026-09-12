@@ -1,0 +1,22 @@
+names:
+  0: pedestrian
+  1: rider
+  2: car
+  3: bus
+  4: truck
+  5: motorcycle
+  6: bicycle
+  7: traffic_red_circle
+  8: traffic_red_left
+  9: traffic_red_right
+  10: traffic_red_straight
+  11: traffic_green_circle
+  12: traffic_green_left
+  13: traffic_green_right
+  14: traffic_green_straight
+  15: traffic_sign
+  16: crosswalk
+  17: guide_arrows
+  18: traffic_cone
+  19: roadworks_sign
+  20: delineator

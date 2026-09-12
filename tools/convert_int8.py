@@ -10,9 +10,9 @@ from rknn.api import RKNN
 def parse_args():
     root = Path(__file__).resolve().parents[1]
     p = argparse.ArgumentParser()
-    p.add_argument("--onnx", type=Path, default=root / "models/unified17_v10_candidate_640_rkopt.onnx")
+    p.add_argument("--onnx", type=Path, default=root / "models/unified21_light_focus_v4_rkopt.onnx")
     p.add_argument("--dataset", type=Path, default=root / "calibration/dataset.txt")
-    p.add_argument("--output", type=Path, default=root / "models/unified17_v10_candidate_640_int8.rknn")
+    p.add_argument("--output", type=Path, default=root / "models/unified21_light_focus_v4_int8.rknn")
     p.add_argument("--verbose", action="store_true")
     return p.parse_args()
 

@@ -8,11 +8,11 @@
 namespace adas {
 namespace {
 
-cv::Scalar color_for(int id) {
-  if (id == 7) return cv::Scalar(0, 0, 255);
-  if (id == 8) return cv::Scalar(0, 220, 255);
-  if (id == 9) return cv::Scalar(0, 255, 0);
-  if (id == 0) return cv::Scalar(255, 80, 255);
+cv::Scalar color_for(const Detection& detection) {
+  if (detection.name.find("traffic_red") == 0) return cv::Scalar(0, 0, 255);
+  if (detection.name.find("traffic_green") == 0) return cv::Scalar(0, 255, 0);
+  if (detection.name == "traffic_yellow") return cv::Scalar(0, 220, 255);
+  if (detection.class_id == 0) return cv::Scalar(255, 80, 255);
   return cv::Scalar(255, 180, 40);
 }
 
@@ -41,14 +41,15 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
     cv::polylines(frame, lane.right, false, cv::Scalar(255, 230, 0), 5, cv::LINE_AA);
   }
   for (const Detection& detection : detections) {
-    const cv::Scalar color = color_for(detection.class_id);
+    const cv::Scalar color = color_for(detection);
     cv::rectangle(frame, detection.box, color, 2);
     std::ostringstream text;
     text << detection.name << " " << std::fixed << std::setprecision(2) << detection.score;
     label(frame, text.str(), cv::Point(static_cast<int>(detection.box.x), static_cast<int>(detection.box.y)), color);
   }
   if (signal.state != SignalState::NONE) {
-    std::string text = std::string("FORWARD SIGNAL: ") + signal_name(signal.state);
+    std::string text = std::string("FORWARD SIGNAL: ") + signal_name(signal.state) +
+                       " " + signal_direction_name(signal.direction);
     if (!signal.stable) text += " (checking)";
     const cv::Scalar color = signal.state == SignalState::RED ? cv::Scalar(0, 0, 255) :
                              signal.state == SignalState::GREEN ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 220, 255);

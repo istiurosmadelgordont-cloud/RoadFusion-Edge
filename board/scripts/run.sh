@@ -5,10 +5,14 @@ PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$PROJECT_DIR"
 
 # Prefer the deployment layout used on the board, then the repository layout.
-MODEL_FILE="models/unified17_v10_candidate_640_int8.rknn"
+MODEL_FILE="models/unified21_light_focus_v4_int8.rknn"
+CLASS_COUNT=21
+if [ ! -f "$MODEL_FILE" ]; then MODEL_FILE="../models/unified21_light_focus_v4_int8.rknn"; fi
 if [ ! -f "$MODEL_FILE" ]; then
-  MODEL_FILE="../models/unified17_v10_candidate_640_int8.rknn"
+  MODEL_FILE="models/unified17_v10_candidate_640_int8.rknn"
+  CLASS_COUNT=17
 fi
+if [ ! -f "$MODEL_FILE" ]; then MODEL_FILE="../models/unified17_v10_candidate_640_int8.rknn"; fi
 
 # A deployed board contains the bundled demonstration video. Repository clones
 # should pass --source explicitly because test videos are intentionally ignored.
@@ -21,4 +25,4 @@ if [ "$#" -eq 0 ]; then
   fi
 fi
 
-exec ./build/adas_demo --model "$MODEL_FILE" "$@"
+exec ./build/adas_demo --model "$MODEL_FILE" --classes "$CLASS_COUNT" "$@"

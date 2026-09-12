@@ -8,6 +8,15 @@ __pycache__/
 
 # Downloaded upstream SDKs and model-zoo sources
 vendor/
+training/.venv-train/
+training/.runtime_cache/
+training/runtime_v21/
+training/incoming/
+training/datasets/
+training/runs/
+training/reports/
+training/weights/
+training/tools/
 
 # Generated calibration data and intermediate graphs
 calibration/images/
