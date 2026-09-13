@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# 换行符与二进制标记
+#
+# 本仓库在 Windows 上开发，git 配置为 core.autocrlf=true。
+# 若不显式标记，二进制文件有被当成文本做换行转换的风险 ——
+# 位流文件（.sbit）一旦被转换会静默损坏，且很难发现。
+# ---------------------------------------------------------------------------
+
+# 二进制：禁止任何转换
+*.sbit		binary
+*.smsk		binary
+*.bit		binary
+*.bin		binary
+*.fs		binary
+*.wf		binary
+*.pdf		binary
+*.png		binary
+*.jpg		binary
+*.jpeg		binary
+
+# 源码与脚本：统一存 LF，保证在 Linux 板端与 Windows 上 checkout 结果一致
+*.v		text eol=lf
+*.vh		text eol=lf
+*.sv		text eol=lf
+*.svh		text eol=lf
+*.vhd		text eol=lf
+*.vhdl		text eol=lf
+*.c		text eol=lf
+*.h		text eol=lf
+*.sh		text eol=lf
+*.tcl		text eol=lf
+*.fdc		text eol=lf
+*.idf		text eol=lf
+*.pds		text eol=lf
+Makefile	text eol=lf

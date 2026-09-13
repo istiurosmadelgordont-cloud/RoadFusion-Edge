@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# 本目录的构建产物不入库
+# 上层仓库根 .gitignore 覆盖不到的（它是按顶层目录写的），在这里补齐
+# ---------------------------------------------------------------------------
+
+# 内核模块编译中间产物
+driver/*.o
+driver/*.ko
+driver/*.mod
+driver/*.mod.c
+driver/*~
+driver/.*.cmd
+driver/.cache.mk
+driver/.tmp_versions/
+driver/Module.symvers
+driver/modules.order
+
+# 上位机构建输出（Makefile 的 create_build 目标会自动建目录，无需入库）
+app_pcie/build/
+
+# 编辑器 / 系统
+*.swp
+*~
