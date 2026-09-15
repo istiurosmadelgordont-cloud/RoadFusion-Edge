@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------
+# 运行产物不入库
+# ---------------------------------------------------------------------------
+
+# Python 运行时缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 采集输出（host.py --output 的默认目录，以及测试用的 demo 输出）
+captures/
+demo_output/
+
+# 内核模块编译中间产物
+driver/*.o
+driver/*.ko
+driver/*.mod
+driver/*.mod.c
+driver/.*.cmd
+driver/.tmp_versions/
+driver/Module.symvers
+driver/modules.order
+
+# 编辑器 / 系统
+*.swp
+*~
+.DS_Store
