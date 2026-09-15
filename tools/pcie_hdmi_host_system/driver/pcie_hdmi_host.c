@@ -1,9 +1,10 @@
 /*
  * pcie_hdmi_host.c —— PCIe HDMI 视频采集：主机端（Root Complex 侧）字符设备驱动
  *
- * 目标协议： FPGA 端 PCIF_FIX_20260912（即 fpga/pcie_video 里的 PGL50H HDMI 彩条工程）
+ * 目标协议： FPGA 端 PCIE_FIX_20260912（即 fpga/pcie_video 里的 PGL50H HDMI 彩条工程）
  * 运行环境： RK3568 / Debian / Linux 4.19
  * 设备节点： /dev/pcie_hdmi_host（misc 设备，权限 0600）
+ * 版本：     arm-fast-v2（2026-09-15）—— 取帧策略改为"优先选最新候选帧"，并加 perf 统计
  *
  * ===========================================================================
  * 一、这套协议的关键约束（决定了下面所有写法）
@@ -39,7 +40,7 @@
  *  并且分配到的地址高 32 位必须为 0。
  *
  * ===========================================================================
- * 三、持续接收模式（本驱动与"每次采集一帧"的旧版最大的区别）
+ * 三、持续接收模式
  * ===========================================================================
  *  第一次 read() 时才开始：置 Bus Master → 下发 4 个地址 → 此后不再干预。
  *  之后每次 read() 只是等一个新的完整帧并复制出来。
@@ -56,7 +57,52 @@
  *    - .suppress_bind_attrs = true，禁止从 sysfs 手动 unbind 绕过上述保护。
  *
  * ===========================================================================
- * 四、缓冲区布局（每个缓冲区 BUFFER_BYTES，共 4 个）
+ * 四、arm-fast-v2 的取帧策略（与旧版最大的区别）
+ * ===========================================================================
+ *  旧版按 `next_buffer` 轮转，**第一个**发现"标志完整且未交付"的缓冲区就用，
+ *  于是可能交付较旧的帧。新版改成：先把 4 个标志一次性读出来，再从中挑
+ *  **帧号最新**的那个。
+ *
+ *  帧号是 1..255 的循环序列（0 表示标志不完整，无效）。比较新旧用
+ *  "相差是否落在半周期内"来判断：
+ *
+ *      delta = (value + 255 - chosen) % 255      // value 比 chosen 新多少
+ *      取 delta ∈ (0, 127] 的作为更新者
+ *
+ *  **这个判断有前提**：只有两个候选相差不到半个序列时才可靠。如果某个缓冲区
+ *  长时间没被写入（丢帧、链路复位），它的帧号会显得"很旧"，此时先后顺序可能
+ *  算错。所以：
+ *    - 它**不是**可靠的时间戳，也不消除原协议本身的撕裂风险；
+ *    - 保留了 `newest_first=0` 来回退到旧的轮转行为，便于对比与排障。
+ *
+ *  **不要把性能提升等同于完整性提升**——选最新帧只是让交付的帧更"新鲜"，
+ *  并不能保证每一帧都完整无撕裂。
+ *
+ *  运行时可切换：
+ *    echo N | sudo tee /sys/module/pcie_hdmi_host/parameters/newest_first   # 轮转
+ *    echo Y | sudo tee /sys/module/pcie_hdmi_host/parameters/newest_first   # 选最新
+ *
+ * ===========================================================================
+ * 五、perf 统计
+ * ===========================================================================
+ *  每约 5 秒（或在超时时）向内核日志输出一行 `perf`，各字段是**该统计窗口内的
+ *  累计值**，输出后清零：
+ *
+ *    frames      成功交付给用户态的帧数
+ *    attempts    实际执行图像复制的次数
+ *    retries     复制前后标志发生变化（疑似被覆盖）而放弃的次数
+ *    timeouts    超时次数
+ *    read_us     整个 read() 函数体的累计耗时
+ *    dma_copy_us 4 MB DMA 缓冲区 → 内核暂存区 的累计耗时
+ *    user_copy_us 内核暂存区 → 用户缓冲区 的累计耗时
+ *    markers     四个缓冲区当前的帧号
+ *    newest      本窗口内 newest_first 的取值
+ *
+ *  注意：read_us **已经包含**两次复制的时间，三者不能相加。
+ *  耗时数据受调度影响，只作趋势参考。
+ *
+ * ===========================================================================
+ * 六、缓冲区布局（每个缓冲区 BUFFER_BYTES，共 4 个）
  * ===========================================================================
  *   0x000000 ~ 0x3F47FF   1920×1080 RGB565 图像，4,147,200 字节（0x3F4800）
  *   0x3F4800 ~ 0x3F483F   64 字节帧尾标志
@@ -77,6 +123,7 @@
 #include <linux/sched/signal.h>
 #include <linux/jiffies.h>
 #include <linux/vmalloc.h>
+#include <linux/ktime.h>
 
 /* 单帧图像字节数：1920 × 1080 × 2（RGB565 每像素 2 字节）= 0x3F4800 */
 #define FRAME_BYTES (1920U * 1080U * 2U)
@@ -97,8 +144,24 @@ static dma_addr_t addresses[4];		/* 对应交给 FPGA 的 DMA 总线地址 */
 
 static bool streaming;			/* 是否已进入持续接收（地址已下发） */
 static u8 delivered[4];			/* 每个缓冲区最近一次已交付给用户的帧号 */
-static unsigned int next_buffer;	/* 下次优先检查的缓冲区下标（轮转起点） */
+static unsigned int next_buffer;	/* 轮转起点：newest_first=0 时决定扫描顺序 */
 static void *frame_copy;		/* 内核侧暂存区，避免持锁太久/撕裂 */
+
+/*
+ * 取帧策略开关（可运行时修改）：
+ *   true （默认）—— 在候选帧里选帧号最新的那个；
+ *   false        —— 退回按 next_buffer 轮转，取第一个命中的。
+ * 详见文件头第四节。旧流启动后模块被钉住，但该参数仍可热切换。
+ */
+static bool newest_first = true;
+module_param(newest_first, bool, 0644);
+MODULE_PARM_DESC(newest_first, "Prefer newest candidate using 1..255 marker order; false uses round robin");
+
+/* ---- perf 统计（窗口累计，输出后清零）---- */
+static unsigned long stats_next;	/* 下次输出 perf 的时间点 */
+static u64 stats_copy_ns, stats_user_ns, stats_total_ns;	/* 两段复制 / 总耗时 */
+static unsigned int stats_frames, stats_retries, stats_attempts, stats_timeouts;
+
 
 /*
  * 读一次 PCI 配置空间（PCI_COMMAND）。
@@ -110,7 +173,6 @@ static void *frame_copy;		/* 内核侧暂存区，避免持锁太久/撕裂 */
 static void flush_commands(struct pci_dev *pdev)
 {
     u16 command;
-
     pci_read_config_word(pdev, PCI_COMMAND, &command);
 }
 
@@ -142,7 +204,6 @@ static u8 marker(int index)
     u8 *p = (u8 *)buffers[index] + FRAME_BYTES;
     u8 value = READ_ONCE(p[0]);
     int j;
-
     if (!value)
         return 0;
     for (j = 1; j < 64; j++)
@@ -159,13 +220,16 @@ static u8 marker(int index)
  *
  * 流程：
  *   首次调用 → 清空缓冲、开 Bus Master、下发 4 个地址、钉住模块、进入 streaming
- *   每次都 → 在 5 秒窗口内轮询 4 个缓冲区，找一个"标志完整且帧号未交付过"的，
- *            复核标志未变（尽力检测拷贝期间被覆盖）后 copy_to_user
+ *   每次都 → 在 5 秒窗口内轮询：先一次性读出 4 个标志，按 newest_first 选中
+ *            一个候选帧，复核标志未变（尽力检测拷贝期间被覆盖）后 copy_to_user
  */
 static ssize_t video_read(struct file *file, char __user *out,
                           size_t count, loff_t *pos)
 {
-    int i, slot;
+    int i, slot, selected;
+    u8 observed[4], chosen;
+    u64 started = 0, tick;
+    bool measure = false;
     unsigned long deadline;
     ssize_t ret;
     u8 value;
@@ -224,6 +288,10 @@ static ssize_t video_read(struct file *file, char __user *out,
         dev_info(&video_pdev->dev, "stream started; no CLEAR; buffers retained until reboot\n");
     }
 
+    /* 从这里开始计时：perf 的 read_us 覆盖整个等待+复制过程 */
+    started = ktime_get_ns();
+    measure = true;
+
     /*
      * 轮询等待一个新帧。
      * 硬件无 START 寄存器：地址下发后要等 FPGA 走到下一个完整帧边界才会出数据，
@@ -237,30 +305,67 @@ static ssize_t video_read(struct file *file, char __user *out,
             ret = -ERESTARTSYS;
             break;
         }
+
+        /*
+         * 先一次性把 4 个标志都读出来再挑，避免边读边比导致拿到不一致的快照。
+         * 这里不持任何锁去读 FPGA 内存，读到的值随时可能变化，只做启发式判断。
+         */
+        selected = -1;
+        chosen = 0;
+        for (i = 0; i < 4; i++)
+            observed[i] = marker(i);
         for (i = 0; i < 4; i++) {
+            unsigned int delta;
             slot = (next_buffer + i) % 4;
-            value = marker(slot);
-            /* 标志为空，或这一帧号已经交付过 → 换下一个缓冲区 */
+            value = observed[slot];
+            /* 标志不完整，或这一帧号已经交付过 → 不是候选 */
             if (!value || value == delivered[slot])
                 continue;
+            /* Heuristic for marker sequence 1..255 (zero is invalid).
+             * Valid only for candidates less than half a sequence apart.
+             * Stale/aborted buffers make age ambiguous; retain RR option. */
+            delta = (value + 255U - chosen) % 255U;
+            /*
+             * newest_first=1 时，只有 delta 落在半个周期 (0,127] 内才认为
+             * value 比当前 chosen 更新——超过半周期说明两者跨度太大，
+             * 无法判断先后，此时保留先扫到的那个（即轮转语义）。
+             * newest_first=0 时条件恒假，等价于"取第一个候选"。
+             */
+            if (selected < 0 || (newest_first && delta > 0 && delta <= 127)) {
+                selected = slot;
+                chosen = value;
+            }
+        }
 
-            /* PCIe 写图像数据先于写标志，读数据前先加读屏障 */
+        if (selected >= 0) {
+            slot = selected;
+            value = chosen;
+
+            /* 统计第一次复制（DMA 缓冲区 → 内核暂存区）的耗时 */
+            tick = ktime_get_ns();
+            stats_attempts++;
             dma_rmb();
             memcpy(frame_copy, buffers[slot], FRAME_BYTES);
             dma_rmb();
+            stats_copy_ns += ktime_get_ns() - tick;
 
-            /*
-             * 尽力检测"拷贝期间被 FPGA 覆盖"的情况：拷贝前后标志应一致。
-             * 必须说明：老版 RTL 在开始写一帧时**不会**把标志清零，
-             * 所以这个检查无法排除所有撕裂帧，也提供不了任何所有权保证。
-             * 这是协议本身的缺陷，不是实现疏漏。
-             */
-            if (marker(slot) != value)
+            /* Detect completed overwrites during copying. The legacy RTL
+             * does NOT invalidate the marker at write start, so this check
+             * cannot exclude every torn frame. No ownership guarantee. */
+            if (marker(slot) != value) {
+                /* 复制期间标志变了 → 大概率被 FPGA 覆盖，本轮数据作废重来 */
+                stats_retries++;
+                cond_resched();		/* 连续重试时让出 CPU，避免独占 */
                 continue;
+            }
 
+            /* 统计第二次复制（内核暂存区 → 用户缓冲区）的耗时 */
+            tick = ktime_get_ns();
             ret = copy_to_user(out, frame_copy, FRAME_BYTES) ?
                   -EFAULT : FRAME_BYTES;
+            stats_user_ns += ktime_get_ns() - tick;
             if (ret > 0) {
+                stats_frames++;
                 delivered[slot] = value;
                 next_buffer = (slot + 1) % 4;	/* 下次从下一块开始找 */
             }
@@ -273,6 +378,26 @@ static ssize_t video_read(struct file *file, char __user *out,
     if (ret == -ETIMEDOUT)
         dev_warn(&video_pdev->dev, "stream: no new frame in 5s; addresses not resent\n");
 unlock:
+    /* 累加本次 read 的总耗时，并按窗口输出 perf */
+    if (measure) {
+        stats_total_ns += ktime_get_ns() - started;
+        if (ret == -ETIMEDOUT)
+            stats_timeouts++;
+        /* 每约 5 秒输出一次；超时则立即输出，便于快速定位卡在哪 */
+        if (time_after_eq(jiffies, stats_next) || ret == -ETIMEDOUT) {
+            dev_info(&video_pdev->dev,
+                     "perf frames=%u attempts=%u retries=%u timeouts=%u read_us=%llu dma_copy_us=%llu user_copy_us=%llu markers=%u,%u,%u,%u newest=%u\n",
+                     stats_frames, stats_attempts, stats_retries, stats_timeouts,
+                     (unsigned long long)(stats_total_ns / 1000),
+                     (unsigned long long)(stats_copy_ns / 1000),
+                     (unsigned long long)(stats_user_ns / 1000),
+                     marker(0), marker(1), marker(2), marker(3), newest_first);
+            stats_next = jiffies + msecs_to_jiffies(5000);
+            /* 窗口清零：下一行 perf 是新的统计区间，不是累计总量 */
+            stats_frames = stats_attempts = stats_retries = stats_timeouts = 0;
+            stats_total_ns = stats_copy_ns = stats_user_ns = 0;
+        }
+    }
     mutex_unlock(&video_lock);
     return ret;
 }
@@ -346,7 +471,7 @@ static struct miscdevice video_misc = {
     .minor = MISC_DYNAMIC_MINOR,
     .name = "pcie_hdmi_host",	/* → /dev/pcie_hdmi_host */
     .fops = &video_fops,
-    .mode = 0600,			/* 仅 root 可读写 */
+    .mode = 0600,		/* 仅 root 可读写 */
 };
 
 /*
@@ -510,4 +635,4 @@ module_pci_driver(video_driver);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("PCIE_FIX_20260912 RGB565 continuous diagnostic receiver");
 
-MODULE_VERSION("2026.09.15-control-v1");
+MODULE_VERSION("2026.09.15-arm-fast-v2");
