@@ -8,8 +8,9 @@ ARM 端软件与模型部署工程。FPGA 负责多路视频同步采集、图�
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
 
-> 当前仓库包含 RK3568 端 C++ 程序、RKNN 模型与转换工具。FPGA 工程可在
-> 完成视频采集和通信接口后作为独立目录接入。
+> 当前仓库包含 RK3568 端 C++ 程序、RKNN 模型与转换工具，以及 FPGA 开发基线。
+> HDMI → DDR → 图像增强 → PCIe 工程见 [fpga/hdmi_ddr_pice](fpga/hdmi_ddr_pice/README.md)，
+> 原 PCIe 彩条基线保留于 [fpga/pcie_video](fpga/pcie_video/)。当前 FPGA 版本的已知问题与验证边界见各目录说明。
 
 ## 数据流
 
