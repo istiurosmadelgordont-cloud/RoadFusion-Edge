@@ -11,6 +11,7 @@ ARM 端软件与模型部署工程。FPGA 负责多路视频同步采集、图�
 > 当前仓库包含 RK3568 端 C++ 程序、RKNN 模型与转换工具，以及 FPGA 开发基线。
 > HDMI → DDR → 图像增强 → PCIe 工程见 [fpga/hdmi_ddr_pice](fpga/hdmi_ddr_pice/README.md)，
 > 原 PCIe 彩条基线保留于 [fpga/pcie_video](fpga/pcie_video/)。当前 FPGA 版本的已知问题与验证边界见各目录说明。
+> 当前以太网 960×540 RGB565 接收工程及 Windows 视频/图片发送器见 [fpga/ethernet_video](fpga/ethernet_video/README.md) 和 [tools/udp_video_sender](tools/udp_video_sender/README.md)。
 
 ## 数据流
 
