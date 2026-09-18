@@ -10,10 +10,18 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from protocol import BOARD_IP, BOARD_MAC, WIDTH, HEIGHT, Sender, rgb565, wait_until
 from media import parse_size, VideoFrames
+
+COMMON_RESOLUTIONS = (
+    '320x180', '320x240', '640x360', '640x480', '720x480',
+    '720x576', '800x600', '854x480', '960x540', '1024x768',
+    '1280x720', '1280x800', '1366x768', '1440x900',
+    '1600x900', '1920x1080', '1920x1200', '2560x1440',
+    '2560x1600', '3840x2160',
+)
 
 
 def check_network(local_ip):
@@ -127,16 +135,19 @@ class App:
         ttk.Entry(row, textvariable=self.path).pack(side='left', fill='x', expand=True, padx=8)
         ttk.Button(row, text='选择视频 / 图片', command=self.choose).pack(side='left')
         ttk.Label(body, textvariable=self.info, wraplength=890).pack(anchor='w')
-        sizes = ['320x180', '640x360', '640x480', '960x540', '1280x720', '1920x1080']
         box = ttk.LabelFrame(body, text='输入处理（不会修改原文件）', padding=8); box.pack(fill='x', pady=8)
         ttk.Label(box, text='输入分辨率').pack(side='left')
-        ttk.Combobox(box, textvariable=self.input_size, values=['原始尺寸'] + sizes, width=16).pack(side='left', padx=8)
+        ttk.Combobox(box, textvariable=self.input_size,
+                     values=('原始尺寸',) + COMMON_RESOLUTIONS, width=13).pack(side='left', padx=(8, 2))
+        ttk.Button(box, text='自定义…', command=lambda: self.custom_resolution(self.input_size)).pack(side='left', padx=(0, 8))
         ttk.Label(box, text='输入采样 fps').pack(side='left')
         ttk.Combobox(box, textvariable=self.input_fps, values=['5','10','15','24','25','30','60'], width=7).pack(side='left', padx=8)
         ttk.Combobox(box, textvariable=self.mode, values=['等比留黑','居中裁剪','拉伸填满'], state='readonly', width=12).pack(side='left')
         box = ttk.LabelFrame(body, text='发送设置', padding=8); box.pack(fill='x', pady=4)
         ttk.Label(box, text='输出分辨率（实际发送）').pack(side='left')
-        ttk.Combobox(box, textvariable=self.output_size, values=sizes, width=13).pack(side='left', padx=8)
+        ttk.Combobox(box, textvariable=self.output_size,
+                     values=COMMON_RESOLUTIONS, width=13).pack(side='left', padx=(8, 2))
+        ttk.Button(box, text='自定义…', command=lambda: self.custom_resolution(self.output_size)).pack(side='left', padx=(0, 8))
         ttk.Label(box, text='发送 fps').pack(side='left')
         ttk.Combobox(box, textvariable=self.fps, values=['1','5','10','15','24','25','30','60'], width=7).pack(side='left', padx=8)
         ttk.Label(body, text='宽×高、输入和输出 fps 均可手动填写；输出尺寸会改变帧头与像素数量，FPGA 必须匹配。').pack(anchor='w')
@@ -152,6 +163,22 @@ class App:
         ttk.Label(body, text='限速或解码跟不上时自动降低播放速度，不突发补发。网络丢包无法由现有 FPGA 协议恢复。', wraplength=750).pack(anchor='w', pady=8)
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.poll)
+
+    def custom_resolution(self, variable):
+        current = variable.get()
+        answer = simpledialog.askstring(
+            '自定义分辨率', '请输入宽x高，例如 1024x600：',
+            initialvalue=current if current != '原始尺寸' else '', parent=self.root)
+        if answer is None:
+            return
+        try:
+            size = parse_size(answer.strip())
+            if size is None:
+                raise ValueError('请填写具体的宽和高')
+        except ValueError as e:
+            messagebox.showerror('分辨率错误', str(e), parent=self.root)
+            return
+        variable.set(f'{size[0]}x{size[1]}')
 
     def choose(self):
         path = filedialog.askopenfilename(filetypes=[('视频和图片', '*.mp4 *.avi *.mkv *.mov *.wmv *.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp'), ('所有文件', '*.*')])
