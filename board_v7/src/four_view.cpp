@@ -45,6 +45,10 @@ const int kFooterH = 300;
 const int kSideW = 640;
 const int kCanvasW = 2 * kTileW + kSideW;
 const int kCanvasH = 1080;
+const int kFpgaViewW = 960;
+const int kFpgaViewH = 540;
+const int kFpgaCompositeW = 2 * kFpgaViewW;
+const int kFpgaCompositeH = 2 * kFpgaViewH;
 const char* kFiles[] = {"front.mp4", "rear.mp4", "left.mp4", "right.mp4"};
 const char* kTitles[] = {"前视 / YOLO V7", "后视 / YOLO V7", "左侧 / YOLO V7", "右侧 / YOLO V7"};
 const cv::Rect kPrevSceneButton(834, 936, 196, 48);
@@ -65,6 +69,7 @@ struct Options {
   bool dump_detections = false;
   bool opencv_display = false;
   bool software_decode = false;
+  bool legacy_mosaic = false;
 };
 
 bool parse(int argc, char** argv, Options& o) {
@@ -77,10 +82,11 @@ bool parse(int argc, char** argv, Options& o) {
     if (key == "--dump-detections") { o.dump_detections = true; continue; }
     if (key == "--opencv") { o.opencv_display = true; continue; }
     if (key == "--software-decode") { o.software_decode = true; continue; }
+    if (key == "--legacy-mosaic") { o.legacy_mosaic = true; continue; }
     if (key == "--help") {
       std::cout << "--scene DIR --model FILE --detect-every N --cpu-threads N "
                    "--max-frames N --snapshot FILE --snapshot-frame N --headless --benchmark --once "
-                   "--separate --dump-detections --opencv --software-decode\n";
+                   "--separate --dump-detections --opencv --software-decode --legacy-mosaic\n";
       return false;
     }
     if (++i >= argc) { std::cerr << "Missing value for " << key << '\n'; return false; }
@@ -510,6 +516,21 @@ cv::Mat make_mosaic(const std::array<cv::Mat, 4>& frames) {
   return mosaic;
 }
 
+cv::Mat make_fpga_composite(const std::array<cv::Mat, 4>& frames) {
+  // Match the production FPGA interface: a single 1920x1080 frame containing
+  // four 960x540 camera quadrants. The fixed 640x640 detector letterboxes this
+  // whole frame, so each camera occupies 320x180 pixels in the model tensor.
+  cv::Mat composite(kFpgaCompositeH, kFpgaCompositeW, CV_8UC3);
+  for (int i = 0; i < 4; ++i) {
+    const cv::Rect destination((i % 2) * kFpgaViewW,
+                               (i / 2) * kFpgaViewH,
+                               kFpgaViewW, kFpgaViewH);
+    cv::resize(frames[i], composite(destination), destination.size(),
+               0.0, 0.0, cv::INTER_LINEAR);
+  }
+  return composite;
+}
+
 std::array<std::vector<adas::Detection>, 4> split_mosaic(
     const std::vector<adas::Detection>& combined) {
   std::array<std::vector<adas::Detection>, 4> result;
@@ -532,6 +553,37 @@ std::array<std::vector<adas::Detection>, 4> split_mosaic(
     mapped.box = cv::Rect2f(x1 * 2.0f, y1 * 2.0f,
                             (x2 - x1) * 2.0f, (y2 - y1) * 2.0f);
     result[row * 2 + col].push_back(mapped);
+  }
+  return result;
+}
+
+std::array<std::vector<adas::Detection>, 4> split_fpga_composite(
+    const std::vector<adas::Detection>& combined) {
+  std::array<std::vector<adas::Detection>, 4> result;
+  const float scale_x = static_cast<float>(kTileW) / kFpgaViewW;
+  const float scale_y = static_cast<float>(kTileH) / kFpgaViewH;
+  for (const auto& detection : combined) {
+    const float center_x = detection.box.x + detection.box.width * 0.5f;
+    const float center_y = detection.box.y + detection.box.height * 0.5f;
+    const int column = static_cast<int>(center_x / kFpgaViewW);
+    const int row = static_cast<int>(center_y / kFpgaViewH);
+    if (column < 0 || column > 1 || row < 0 || row > 1) continue;
+
+    const float origin_x = column * static_cast<float>(kFpgaViewW);
+    const float origin_y = row * static_cast<float>(kFpgaViewH);
+    const float x1 = std::max(0.0f, detection.box.x - origin_x);
+    const float y1 = std::max(0.0f, detection.box.y - origin_y);
+    const float x2 = std::min(static_cast<float>(kFpgaViewW),
+                              detection.box.x + detection.box.width - origin_x);
+    const float y2 = std::min(static_cast<float>(kFpgaViewH),
+                              detection.box.y + detection.box.height - origin_y);
+    const float clipped_area = std::max(0.0f, x2 - x1) * std::max(0.0f, y2 - y1);
+    if (clipped_area < detection.box.area() * 0.5f || clipped_area < 9.0f) continue;
+
+    adas::Detection mapped = detection;
+    mapped.box = cv::Rect2f(x1 * scale_x, y1 * scale_y,
+                            (x2 - x1) * scale_x, (y2 - y1) * scale_y);
+    result[row * 2 + column].push_back(mapped);
   }
   return result;
 }
@@ -632,7 +684,8 @@ void draw_sidebar(cv::Mat& canvas, double fps, double npu_ms, const adas::Signal
 
 void draw_bottom_left(cv::Mat& canvas, double fps, double npu_ms,
                       const std::array<std::vector<adas::Detection>, 4>& detections,
-                      int frame_index, bool separate, int scene_index,
+                      int frame_index, bool separate, bool fpga_composite,
+                      int scene_index,
                       int scene_count, const std::string& scene_name) {
   const int y = kHeaderH + 2 * kTileH + 12;
   panel(canvas, 14, y, 390, kFooterH - 26);
@@ -666,7 +719,8 @@ void draw_bottom_left(cv::Mat& canvas, double fps, double npu_ms,
   sync << "源视频帧       " << frame_index;
   caption(canvas, sync.str(), 431, y + 177,
           cv::Scalar(225, 235, 240), 0.53);
-  caption(canvas, separate ? "推理：分路轮询" : "推理：四路拼接单次调用",
+  caption(canvas, separate ? "推理：分路轮询" :
+          (fpga_composite ? "推理：FPGA 1080p 单帧" : "推理：四路拼接单次调用"),
           431, y + 225, cv::Scalar(130, 190, 220), 0.49);
 
   caption(canvas, "操作", 834, y + 29,
@@ -799,7 +853,10 @@ int main(int argc, char** argv) {
   std::cout << "Four synchronized streams: " << source_frames << " frames at "
             << source_fps << " FPS; " << (options.separate ? "round-robin" : "mosaic")
             << " V7 inference every " << options.detect_every << " frame(s); decoder="
-            << (options.software_decode ? "software" : "MPP hardware") << '\n';
+            << (options.software_decode ? "software" : "MPP hardware")
+            << "; inference_source="
+            << (options.legacy_mosaic ? "legacy 640x640 mosaic" : "FPGA-style 1920x1080")
+            << "; video_ui=1280x720\n";
   const auto start = std::chrono::steady_clock::now();
   cv::Mat canvas(kCanvasH, kCanvasW, CV_8UC3, cv::Scalar(19, 24, 29));
   cv::rectangle(canvas, cv::Rect(0, 0, kCanvasW, kHeaderH),
@@ -869,15 +926,18 @@ int main(int argc, char** argv) {
         fresh_measurement[camera] = true;
         signal = signal_logic.update(detections[0], frames[0].cols, frames[0].rows);
       } else {
-        std::array<cv::Mat, 4> inference_frames;
-        for (int i = 0; i < 4; ++i) inference_frames[i] = frames[i].clone();
+        const bool fpga_composite = !options.legacy_mosaic;
+        cv::Mat inference_image = fpga_composite
+            ? make_fpga_composite(frames) : make_mosaic(frames);
         const auto captured_at = std::chrono::steady_clock::now();
         inference_future = std::async(std::launch::async,
-            [&detector, inference_frames, captured_at]() {
+            [&detector, inference_image, captured_at, fpga_composite]() {
               InferenceResult result;
               result.captured_at = captured_at;
-              result.detections = split_mosaic(
-                  detector.detect(make_mosaic(inference_frames), &result.npu_ms));
+              const std::vector<adas::Detection> combined =
+                  detector.detect(inference_image, &result.npu_ms);
+              result.detections = fpga_composite
+                  ? split_fpga_composite(combined) : split_mosaic(combined);
               return result;
             });
         inference_running = true;
@@ -941,7 +1001,8 @@ int main(int argc, char** argv) {
     draw_sidebar(canvas, display_fps, npu_ms, signal, detections,
                  source_frame_index, options.scene.substr(options.scene.find_last_of("/\\") + 1));
     draw_bottom_left(canvas, display_fps, npu_ms, detections,
-                     source_frame_index, options.separate, scene_index,
+                     source_frame_index, options.separate,
+                     !options.legacy_mosaic, scene_index,
                      static_cast<int>(scene_paths.size()),
                      options.scene.substr(options.scene.find_last_of("/\\") + 1));
     draw_progress_bar(canvas, source_frame_index, source_frames, calibration_paused);

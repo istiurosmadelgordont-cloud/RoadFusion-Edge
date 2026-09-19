@@ -19,8 +19,12 @@ On the board, build and run from `/home/cat/rk3568_adas/board_v7`:
 ./scripts/run_four_view.sh
 ```
 
-The four-view demo uses one 640x640 mosaic RKNN call for the synchronized
-front, rear, left and right clips. Press `C` to calibrate the front lane or
+The four-view demo first builds the same 1920x1080 four-quadrant frame that
+the production FPGA will output: front and rear on the top row, left and right
+on the bottom row. That full frame is letterboxed to the fixed 640x640 RKNN
+input and sent through one NPU call. The video area in the UI is 1280x720
+(four 640x360 tiles). `--legacy-mosaic` retains the earlier direct 640x640
+composition for A/B checks. Press `C` to calibrate the front lane or
 `R` for the rear lane. Playback freezes while four points on the two lane
 markings are selected, then resumes after the ROI is validated and saved in
 `config/front_lane_roi.txt` or `config/rear_lane_roi.txt`. The green ROI and
