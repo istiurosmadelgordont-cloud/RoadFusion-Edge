@@ -1,0 +1,1024 @@
+diff --git archive/pcie_dma_ctrl.before_handshake.v source/source/pcie_dma_ctrl.v
+index 9c3f873..1933362 100644
+--- archive/pcie_dma_ctrl.before_handshake.v
++++ source/source/pcie_dma_ctrl.v
+@@ -1,4 +1,9 @@
+-module pcie_dma_ctrl(
++`timescale 1ns/1ps
++// PCIE_HS_20260919: four-buffer ownership protocol v2.
++// Change map: docs/CODE_NOTES.md; host contract: docs/RC_HANDSHAKE_GUIDE.md.
++module pcie_dma_ctrl #(
++    parameter [15:0] IMAGE_TLP_COUNT = 16'd64800
++)(
+     input  wire             clk,
+     input  wire             pix_clk_out,
+     input  wire             rstn,
+@@ -32,93 +37,121 @@ module pcie_dma_ctrl(
+     output reg              video_enhance_darkup_sw     /* synthesis PAP_MARK_DEBUG="1" */
+ );
+ 
+-// PCIE_FIX_20260912:
+-//   1. Decode received commands with an explicit HEADER/PAYLOAD state machine.
+-//   2. Require BAR1, MWr32, Length=1DW, valid DW0 and TLAST for a command.
+-//   3. Buffer an entire 64-byte payload before presenting a transmit TLP.
+-//   4. Advance all TX state only on TVALID && TREADY handshakes.
+-//   5. Hold TVALID/TDATA/TLAST stable while the PCIe core applies backpressure.
+-//   6. Select a valid frame buffer only at a VS frame boundary.
+-//   7. Emit one constant 64-byte marker per frame and increment it once/frame.
+ 
++// PCIE_HS_20260919 [H1]: Register protocol. All command values use endian32.
+ localparam [7:0] MWR_32 = 8'h40;
+ 
+-localparam [11:0] DMA_CMD_L_ADDR               = 12'h110;
+-localparam [11:0] DMA_CMD_CLEAR_ADDR           = 12'h130;
+-localparam [11:0] DMA_CMD_VIDEO_HIGHTLIGHT_SUB = 12'h140;
+-localparam [11:0] DMA_CMD_VIDEO_LOWLIGHT_ADD   = 12'h150;
+-localparam [11:0] DMA_CMD_VIDEO_ENHANCE_CLEAR  = 12'h160;
+-
+-localparam [1:0] RX_HEADER  = 2'd0;
+-localparam [1:0] RX_PAYLOAD = 2'd1;
+-
+-localparam [2:0] TX_WAIT          = 3'd0;
+-localparam [2:0] TX_FETCH_REQUEST = 3'd1;
+-localparam [2:0] TX_FETCH_WAIT    = 3'd2;
+-localparam [2:0] TX_FETCH_CAPTURE = 3'd3;
+-localparam [2:0] TX_HEADER        = 3'd4;
+-localparam [2:0] TX_DATA          = 3'd5;
+-
+-localparam [9:0]  TLP_LENGTH_DW    = 10'd16;
+-localparam [15:0] IMAGE_TLP_COUNT  = 16'd64800;
+-localparam [15:0] TOTAL_TLP_COUNT  = 16'd64801;
+-
+-wire [12:0]  rd_water_level /* synthesis PAP_MARK_DEBUG="1" */;
+-wire [127:0] pcie_dma_data  /* synthesis PAP_MARK_DEBUG="1" */;
+-wire         fifo_wr_full   /* synthesis PAP_MARK_DEBUG="1" */;
+-wire         fifo_rd_empty  /* synthesis PAP_MARK_DEBUG="1" */;
+-
+-reg [1:0]  rx_state /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [11:0] rx_cmd_addr /* synthesis PAP_MARK_DEBUG="1" */;
+-
+-reg [1:0]  alloc_addr_state /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [31:0] dma_addr0 /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [31:0] dma_addr1 /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [31:0] dma_addr2 /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [31:0] dma_addr3 /* synthesis PAP_MARK_DEBUG="1" */;
+-reg        rc_cfg_ep_flag /* synthesis PAP_MARK_DEBUG="1" */;
+-reg        dma_clear_pulse /* synthesis PAP_MARK_DEBUG="1" */;
+-
+-reg vs_in_meta /* synthesis PAP_MARK_DEBUG="1" */;
+-reg vs_in_sync /* synthesis PAP_MARK_DEBUG="1" */;
+-reg vs_in_prev /* synthesis PAP_MARK_DEBUG="1" */;
+-
++localparam [11:0] CMD_ADDR         = 12'h110;
++localparam [11:0] CMD_STOP         = 12'h130;
++localparam [11:0] CMD_LIGHT        = 12'h140;
++localparam [11:0] CMD_DARK         = 12'h150;
++localparam [11:0] CMD_ENH_CLEAR    = 12'h160;
++localparam [11:0] CMD_RELEASE      = 12'h170;
++localparam [11:0] CMD_STATUS       = 12'h180;
++localparam [11:0] CMD_START        = 12'h190;
++localparam [11:0] CMD_RESET_CONFIG = 12'h1a0;
++
++localparam [1:0] RX_HEADER  = 0;
++localparam [1:0] RX_PAYLOAD = 1;
++localparam [1:0] RX_DROP    = 2;
++
++localparam [2:0] TX_WAIT          = 0;
++localparam [2:0] TX_FETCH_REQUEST = 1;
++localparam [2:0] TX_FETCH_WAIT    = 2;
++localparam [2:0] TX_FETCH_CAPTURE = 3;
++localparam [2:0] TX_HEADER        = 4;
++localparam [2:0] TX_DATA          = 5;
++
++localparam [1:0] BUF_FREE    = 0;
++localparam [1:0] BUF_WRITING = 1;
++localparam [1:0] BUF_HELD    = 2;
++
++localparam [1:0] PK_IMAGE      = 0;
++localparam [1:0] PK_FRAME_DONE = 1;
++localparam [1:0] PK_STOP_DONE  = 2;
++
++localparam [9:0]  TLP_LENGTH_DW = 10'd16;
++localparam [32:0] BUFFER_BYTES  = ({17'd0, IMAGE_TLP_COUNT} + 33'd1) << 6;
++
++reg [1:0]  rx_state;
++reg [1:0]  alloc_addr_state;
++reg [11:0] rx_cmd_addr;
++reg [31:0] dma_addr0;
++reg [31:0] dma_addr1;
++reg [31:0] dma_addr2;
++reg [31:0] dma_addr3;
++reg [31:0] status_addr;
++reg        rc_cfg_ep_flag;
++reg        status_addr_valid;
++reg        start_pulse;
++reg        stop_pulse;
++reg        release_pulse;
++reg [31:0] release_token;
++reg [31:0] stop_cookie;
++
++reg [2:0]   tx_state;
++reg         r_axis_s_tvalid;
++reg         r_axis_s_tlast;
++reg         pcie_rd_en;
++reg [127:0] r_axis_s_tdata;
++reg [511:0] payload_buffer;
++reg [1:0]   fetch_index;
++reg [1:0]   data_index;
++reg [1:0]   packet_kind;
++reg [15:0]  dma_cnt;
++reg [31:0]  current_addr;
++reg [31:0]  packet_addr;
++reg         frame_addr_valid;
++reg         frame_active;
++reg         abort_pending;
++reg         stop_pending;
++reg         running;
++
++// [H2] Sole writer of these ownership registers is the TX always block.
++reg [1:0]  buffer_state [0:3];
++reg [31:0] buffer_token [0:3];
++reg [29:0] allocation_sequence;
++reg [1:0]  active_slot;
++reg [1:0]  addr_page;
++reg [31:0] active_token;
++// Preserve diagnostic counters for PDS/ILA even without a BAR readback path.
++reg [31:0] dropped_frames /* synthesis PAP_MARK_DEBUG="1" */;
++reg [31:0] invalid_releases /* synthesis PAP_MARK_DEBUG="1" */;
++reg       free_found;
++reg [1:0] free_slot;
++reg [1:0] scan_slot;
++integer   scan_i;
++integer   reset_i;
++
++reg vs_in_meta;
++reg vs_in_sync;
++reg vs_in_prev;
+ reg pix_rstn_meta;
+ reg pix_rstn_sync;
+ reg frame_active_pix_meta;
+ reg frame_active_pix;
+-
+-reg [2:0]   tx_state /* synthesis PAP_MARK_DEBUG="1" */;
+-reg         r_axis_s_tvalid /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [127:0] r_axis_s_tdata  /* synthesis PAP_MARK_DEBUG="1" */;
+-reg         r_axis_s_tlast  /* synthesis PAP_MARK_DEBUG="1" */;
+-reg         pcie_rd_en      /* synthesis PAP_MARK_DEBUG="1" */;
+-
+-reg [511:0] payload_buffer /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [1:0]   fetch_index /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [1:0]   data_index  /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [15:0]  dma_cnt     /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [7:0]   frame_counter /* synthesis PAP_MARK_DEBUG="1" */;
+-
+-reg [1:0]  addr_page /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [31:0] current_addr /* synthesis PAP_MARK_DEBUG="1" */;
+-reg [31:0] packet_addr  /* synthesis PAP_MARK_DEBUG="1" */;
+-reg        frame_addr_valid /* synthesis PAP_MARK_DEBUG="1" */;
+-reg        frame_active /* synthesis PAP_MARK_DEBUG="1" */;
+-reg        abort_pending /* synthesis PAP_MARK_DEBUG="1" */;
+-reg        stop_pending  /* synthesis PAP_MARK_DEBUG="1" */;
+-
+-wire rx_handshake;
+-wire tx_handshake;
+-wire vs_rising;
+-wire vs_falling;
+-wire tx_tlp_in_progress;
+-wire fifo_wr_en;
+-wire fifo_wr_rst;
+-wire fifo_rd_rst;
++reg overflow_pix;
++reg overflow_meta;
++reg overflow_sync;
++
++wire [12:0]  rd_water_level;
++wire [127:0] pcie_dma_data;
++wire         fifo_wr_full;
++wire         fifo_rd_empty;
++wire [31:0]  command_value;
++wire         rx_handshake;
++wire         tx_handshake;
++wire         vs_rising;
++wire         vs_falling;
++wire         tx_tlp_in_progress;
++wire         fifo_wr_en;
++wire         fifo_wr_rst;
++wire         fifo_rd_rst;
++wire         idle_control;
++wire         cancel_frame;
+ 
+ assign axis_master_tready = 1'b1;
+-assign rx_handshake = axis_master_tvalid && axis_master_tready;
++assign rx_handshake       = axis_master_tvalid && axis_master_tready;
+ 
+ assign AXIS_S_TVALID = r_axis_s_tvalid;
+ assign AXIS_S_TDATA  = r_axis_s_tdata;
+@@ -126,8 +159,11 @@ assign AXIS_S_TLAST  = r_axis_s_tlast;
+ assign AXIS_S_TUSER  = 1'b0;
+ assign tx_handshake  = r_axis_s_tvalid && AXIS_S_TREADY;
+ 
+-assign vs_rising  =  vs_in_sync && !vs_in_prev;
+-assign vs_falling = !vs_in_sync &&  vs_in_prev;
++assign command_value = endian32(axis_master_tdata[31:0]);
++assign idle_control  = !running && !stop_pending && (tx_state == TX_WAIT);
++assign vs_rising     =  vs_in_sync && !vs_in_prev;
++assign vs_falling    = !vs_in_sync &&  vs_in_prev;
++assign cancel_frame  = vs_rising || stop_pulse || overflow_sync;
+ 
+ assign tx_tlp_in_progress =
+     ((tx_state == TX_HEADER) && r_axis_s_tvalid) ||
+@@ -176,390 +212,508 @@ function [127:0] make_mwr32_header;
+     end
+ endfunction
+ 
+-// PCIE_FIX_20260912: synchronize the pixel-domain VS signal before edge use in
+-// the pclk_div2 domain. The FIFO itself remains the data-domain crossing point.
+-always @(posedge clk) begin
+-    if (!rstn) begin
+-        vs_in_meta <= 1'b0;
+-        vs_in_sync <= 1'b0;
+-        vs_in_prev <= 1'b0;
++
++// [H3] 33-bit endpoint arithmetic rejects wrap and overlapping DMA ranges.
++function address_valid;
++    input [31:0] address;
++    begin
++        address_valid = (address != 0) &&
++                        (address[5:0] == 0) &&
++                        ({1'b0, address} + BUFFER_BYTES <= 33'h100000000);
+     end
+-    else begin
+-        vs_in_meta <= vs_in;
+-        vs_in_sync <= vs_in_meta;
+-        vs_in_prev <= vs_in_sync;
++endfunction
++
++function ranges_separate;
++    input [31:0] a;
++    input [31:0] b;
++    begin
++        ranges_separate = ({1'b0, a} + BUFFER_BYTES <= {1'b0, b}) ||
++                          ({1'b0, b} + BUFFER_BYTES <= {1'b0, a});
++    end
++endfunction
++
++function status_separate;
++    input [31:0] a;
++    input [31:0] b;
++    begin
++        status_separate = ({1'b0, a} + BUFFER_BYTES <= {1'b0, b}) ||
++                          ({1'b0, b} + 33'd64 <= {1'b0, a});
++    end
++endfunction
++
++// [H4] Round-robin arbitration skips buffers held by any RC consumer.
++always @* begin
++    free_found = 0;
++    free_slot  = addr_page;
++    scan_slot  = addr_page;
++
++    for (scan_i = 0; scan_i < 4; scan_i = scan_i + 1) begin
++        scan_slot = addr_page + scan_i;
++        if (!free_found && (buffer_state[scan_slot] == BUF_FREE)) begin
++            free_found = 1;
++            free_slot  = scan_slot;
++        end
+     end
+ end
+ 
+-// Create a clean pixel-clock reset release and synchronize frame_active back to
+-// the FIFO write domain. frame_active changes only around a synchronized VS edge.
++// Preserve the existing VS crossing and FIFO clock/reset structure.
++// [H5] Overflow becomes sticky for this frame; never report it as complete.
+ always @(posedge pix_clk_out or negedge rstn) begin
+     if (!rstn) begin
+-        pix_rstn_meta         <= 1'b0;
+-        pix_rstn_sync         <= 1'b0;
+-        frame_active_pix_meta <= 1'b0;
+-        frame_active_pix      <= 1'b0;
++        pix_rstn_meta         <= 0;
++        pix_rstn_sync         <= 0;
++        frame_active_pix_meta <= 0;
++        frame_active_pix      <= 0;
++        overflow_pix          <= 0;
+     end
+     else begin
+-        pix_rstn_meta         <= 1'b1;
++        pix_rstn_meta         <= 1;
+         pix_rstn_sync         <= pix_rstn_meta;
+         frame_active_pix_meta <= frame_active;
+         frame_active_pix      <= frame_active_pix_meta;
++
++        if (vs_in || !frame_active_pix)
++            overflow_pix <= 0;
++        else if (de_in && fifo_wr_full)
++            overflow_pix <= 1;
+     end
+ end
+ 
+-// PCIE_FIX_20260912: explicit receive framing replaces TVALID rising-edge
+-// detection. Back-to-back TLPs are accepted and commands are restricted to BAR1.
+ always @(posedge clk) begin
+     if (!rstn) begin
+-        rx_state                    <= RX_HEADER;
+-        rx_cmd_addr                 <= 12'd0;
+-        alloc_addr_state            <= 2'd0;
+-        dma_addr0                   <= 32'd0;
+-        dma_addr1                   <= 32'd0;
+-        dma_addr2                   <= 32'd0;
+-        dma_addr3                   <= 32'd0;
+-        rc_cfg_ep_flag              <= 1'b0;
+-        dma_clear_pulse             <= 1'b0;
+-        video_enhance_lightdown_num <= 8'd0;
+-        video_enhance_lightdown_sw  <= 1'b0;
+-        video_enhance_darkup_num    <= 8'd0;
+-        video_enhance_darkup_sw     <= 1'b0;
++        vs_in_meta   <= 0;
++        vs_in_sync   <= 0;
++        vs_in_prev   <= 0;
++        overflow_meta <= 0;
++        overflow_sync <= 0;
+     end
+     else begin
+-        dma_clear_pulse <= 1'b0;
++        vs_in_meta   <= vs_in;
++        vs_in_sync   <= vs_in_meta;
++        vs_in_prev   <= vs_in_sync;
++        overflow_meta <= overflow_pix;
++        overflow_sync <= overflow_meta;
++    end
++end
+ 
+-        case (rx_state)
+-            RX_HEADER: begin
+-                if (rx_handshake) begin
+-                    if (({axis_master_tdata[31:29], axis_master_tdata[28:24]} == MWR_32) &&
+-                        (axis_master_tdata[9:0] == 10'd1) &&
++// [H6] Explicit RX framing. Unsupported TLPs drain to TLAST.
++always @(posedge clk) begin
++    if (!rstn) begin
++        rx_state                    <= RX_HEADER;
++        rx_cmd_addr                 <= 0;
++        alloc_addr_state            <= 0;
++        dma_addr0                   <= 0;
++        dma_addr1                   <= 0;
++        dma_addr2                   <= 0;
++        dma_addr3                   <= 0;
++        status_addr                 <= 0;
++        status_addr_valid           <= 0;
++        rc_cfg_ep_flag              <= 0;
++        start_pulse                 <= 0;
++        stop_pulse                  <= 0;
++        release_pulse               <= 0;
++        release_token               <= 0;
++        stop_cookie                 <= 0;
++        video_enhance_lightdown_num <= 0;
++        video_enhance_lightdown_sw  <= 0;
++        video_enhance_darkup_num    <= 0;
++        video_enhance_darkup_sw     <= 0;
++    end
++    else begin
++        start_pulse   <= 0;
++        stop_pulse    <= 0;
++        release_pulse <= 0;
++
++        if (rx_handshake) begin
++            case (rx_state)
++                RX_HEADER: begin
++                    if ((axis_master_tdata[31:24] == MWR_32) &&
++                        (axis_master_tdata[9:0] == 1) &&
+                         (axis_master_tuser[5:4] == 2'b01) &&
++                        (axis_master_tkeep[2:0] == 3'b111) &&
++                        (axis_master_tdata[39:32] == 8'h0f) &&
++                        (axis_master_tdata[65:64] == 0) &&
+                         !axis_master_tlast) begin
+                         rx_cmd_addr <= axis_master_tdata[75:64];
+                         rx_state    <= RX_PAYLOAD;
+                     end
+-                    else begin
+-                        rx_state <= RX_HEADER;
++                    else if (!axis_master_tlast) begin
++                        rx_state <= RX_DROP;
+                     end
+                 end
+-            end
+ 
+-            RX_PAYLOAD: begin
+-                if (rx_handshake) begin
++                RX_PAYLOAD: begin
+                     if (axis_master_tlast && axis_master_tkeep[0]) begin
+                         case (rx_cmd_addr)
+-                            DMA_CMD_L_ADDR: begin
+-                                // Once all four addresses are committed, ignore
+-                                // further address writes until CLEAR prevents an
+-                                // accidental fifth write from rotating the list.
+-                                if (!rc_cfg_ep_flag) begin
++                            CMD_ADDR: begin
++                                if (idle_control && !rc_cfg_ep_flag &&
++                                    address_valid(command_value)) begin
+                                     case (alloc_addr_state)
+-                                        2'd0: begin
+-                                            dma_addr0        <= endian32(axis_master_tdata[31:0]);
+-                                            alloc_addr_state <= 2'd1;
++                                        0: begin
++                                            dma_addr0        <= command_value;
++                                            alloc_addr_state <= 1;
+                                         end
+-                                        2'd1: begin
+-                                            dma_addr1        <= endian32(axis_master_tdata[31:0]);
+-                                            alloc_addr_state <= 2'd2;
++                                        1: begin
++                                            dma_addr1        <= command_value;
++                                            alloc_addr_state <= 2;
+                                         end
+-                                        2'd2: begin
+-                                            dma_addr2        <= endian32(axis_master_tdata[31:0]);
+-                                            alloc_addr_state <= 2'd3;
++                                        2: begin
++                                            dma_addr2        <= command_value;
++                                            alloc_addr_state <= 3;
+                                         end
+-                                        default: begin
+-                                            dma_addr3        <= endian32(axis_master_tdata[31:0]);
+-                                            alloc_addr_state <= 2'd0;
+-                                            if ((dma_addr0 != 32'd0) &&
+-                                                (dma_addr1 != 32'd0) &&
+-                                                (dma_addr2 != 32'd0) &&
+-                                                (endian32(axis_master_tdata[31:0]) != 32'd0)) begin
+-                                                rc_cfg_ep_flag <= 1'b1;
++                                        3: begin
++                                            dma_addr3        <= command_value;
++                                            alloc_addr_state <= 0;
++                                            if (ranges_separate(dma_addr0, dma_addr1) &&
++                                                ranges_separate(dma_addr0, dma_addr2) &&
++                                                ranges_separate(dma_addr1, dma_addr2) &&
++                                                ranges_separate(dma_addr0, command_value) &&
++                                                ranges_separate(dma_addr1, command_value) &&
++                                                ranges_separate(dma_addr2, command_value)) begin
++                                                rc_cfg_ep_flag <= 1;
+                                             end
+                                         end
+                                     endcase
+                                 end
+                             end
+ 
+-                            DMA_CMD_CLEAR_ADDR: begin
+-                                alloc_addr_state <= 2'd0;
+-                                dma_addr0        <= 32'd0;
+-                                dma_addr1        <= 32'd0;
+-                                dma_addr2        <= 32'd0;
+-                                dma_addr3        <= 32'd0;
+-                                rc_cfg_ep_flag   <= 1'b0;
+-                                dma_clear_pulse  <= 1'b1;
++                            CMD_STATUS: begin
++                                if (idle_control && rc_cfg_ep_flag &&
++                                    (command_value != 0) &&
++                                    (command_value[5:0] == 0) &&
++                                    status_separate(dma_addr0, command_value) &&
++                                    status_separate(dma_addr1, command_value) &&
++                                    status_separate(dma_addr2, command_value) &&
++                                    status_separate(dma_addr3, command_value)) begin
++                                    status_addr       <= command_value;
++                                    status_addr_valid <= 1;
++                                end
++                            end
++
++                            CMD_START: begin
++                                if (idle_control && (command_value == 1) &&
++                                    rc_cfg_ep_flag && status_addr_valid) begin
++                                    start_pulse <= 1;
++                                end
++                            end
++
++                            CMD_STOP: begin
++                                if (status_addr_valid && !stop_pending &&
++                                    (command_value != 0)) begin
++                                    stop_cookie <= command_value;
++                                    stop_pulse  <= 1;
++                                end
+                             end
+ 
+-                            DMA_CMD_VIDEO_LOWLIGHT_ADD: begin
+-                                // Low byte after endian32() equals the received
+-                                // AXIS DW's upper byte.
+-                                video_enhance_darkup_num <= axis_master_tdata[31:24];
+-                                video_enhance_darkup_sw  <= 1'b1;
++                            CMD_RELEASE: begin
++                                release_token <= command_value;
++                                release_pulse <= 1;
+                             end
+ 
+-                            DMA_CMD_VIDEO_HIGHTLIGHT_SUB: begin
+-                                video_enhance_lightdown_num <= axis_master_tdata[31:24];
+-                                video_enhance_lightdown_sw  <= 1'b1;
++                            CMD_RESET_CONFIG: begin
++                                if (idle_control && (command_value == 1)) begin
++                                    rc_cfg_ep_flag   <= 0;
++                                    alloc_addr_state <= 0;
++                                    status_addr_valid <= 0;
++                                end
+                             end
+ 
+-                            DMA_CMD_VIDEO_ENHANCE_CLEAR: begin
+-                                video_enhance_lightdown_num <= 8'd0;
+-                                video_enhance_lightdown_sw  <= 1'b0;
+-                                video_enhance_darkup_num    <= 8'd0;
+-                                video_enhance_darkup_sw     <= 1'b0;
++                            CMD_DARK: begin
++                                video_enhance_darkup_num <= command_value[7:0];
++                                video_enhance_darkup_sw  <= 1;
+                             end
+ 
+-                            default: begin
++                            CMD_LIGHT: begin
++                                video_enhance_lightdown_num <= command_value[7:0];
++                                video_enhance_lightdown_sw  <= 1;
+                             end
++
++                            CMD_ENH_CLEAR: begin
++                                video_enhance_lightdown_num <= 0;
++                                video_enhance_lightdown_sw  <= 0;
++                                video_enhance_darkup_num    <= 0;
++                                video_enhance_darkup_sw     <= 0;
++                            end
++
+                         endcase
+                     end
+ 
+                     if (axis_master_tlast)
+                         rx_state <= RX_HEADER;
++                    else
++                        rx_state <= RX_DROP;
+                 end
+-            end
+ 
+-            default: rx_state <= RX_HEADER;
+-        endcase
++                RX_DROP: begin
++                    if (axis_master_tlast)
++                        rx_state <= RX_HEADER;
++                end
++
++                default: begin
++                    rx_state <= RX_HEADER;
++                end
++            endcase
++        end
+     end
+ end
+ 
+-// PCIE_FIX_20260912: a complete 64-byte payload is staged locally before TVALID
+-// is asserted. No FIFO read or packet counter can advance during backpressure.
++// [H7] Process AXIS handshake even if VS/STOP arrives at the same edge.
++// All in-flight packet fields remain stable under backpressure.
+ always @(posedge clk) begin
+     if (!rstn) begin
+-        tx_state        <= TX_WAIT;
+-        r_axis_s_tvalid <= 1'b0;
+-        r_axis_s_tdata  <= 128'd0;
+-        r_axis_s_tlast  <= 1'b0;
+-        pcie_rd_en      <= 1'b0;
+-        payload_buffer  <= 512'd0;
+-        fetch_index     <= 2'd0;
+-        data_index      <= 2'd0;
+-        dma_cnt         <= 16'd0;
+-        frame_counter   <= 8'd1;
+-        addr_page       <= 2'd0;
+-        current_addr    <= 32'd0;
+-        packet_addr     <= 32'd0;
+-        frame_addr_valid <= 1'b0;
+-        frame_active    <= 1'b0;
+-        abort_pending   <= 1'b0;
+-        stop_pending    <= 1'b0;
++        tx_state            <= TX_WAIT;
++        r_axis_s_tvalid     <= 0;
++        r_axis_s_tdata      <= 0;
++        r_axis_s_tlast      <= 0;
++        pcie_rd_en          <= 0;
++        payload_buffer      <= 0;
++        fetch_index         <= 0;
++        data_index          <= 0;
++        dma_cnt             <= 0;
++        addr_page           <= 0;
++        active_slot         <= 0;
++        active_token        <= 0;
++        current_addr        <= 0;
++        packet_addr         <= 0;
++        packet_kind         <= PK_IMAGE;
++        frame_addr_valid    <= 0;
++        frame_active        <= 0;
++        abort_pending       <= 0;
++        stop_pending        <= 0;
++        running             <= 0;
++        allocation_sequence <= 0;
++        dropped_frames      <= 0;
++        invalid_releases    <= 0;
++
++        for (reset_i = 0; reset_i < 4; reset_i = reset_i + 1) begin
++            buffer_state[reset_i] <= BUF_FREE;
++            buffer_token[reset_i] <= 0;
++        end
+     end
+     else begin
+-        pcie_rd_en <= 1'b0;
+-
+-        if (dma_clear_pulse) begin
+-            frame_active     <= 1'b0;
+-            frame_addr_valid <= 1'b0;
+-            addr_page        <= 2'd0;
+-            current_addr     <= 32'd0;
+-            dma_cnt          <= 16'd0;
+-
+-            // A TLP whose header is already visible must finish according to
+-            // AXIS. If nothing is on the wire, stop immediately.
+-            if (tx_tlp_in_progress) begin
+-                abort_pending <= 1'b1;
+-                stop_pending  <= 1'b1;
++        pcie_rd_en <= 0;
++
++        // [H8] Exact token match prevents duplicate/stale releases from
++        // freeing a later use of this slot. WRITING slots cannot be released.
++        if (release_pulse) begin
++            if (running &&
++                (buffer_state[release_token[1:0]] == BUF_HELD) &&
++                (buffer_token[release_token[1:0]] == release_token) &&
++                (release_token[31:2] != 0)) begin
++                buffer_state[release_token[1:0]] <= BUF_FREE;
+             end
+             else begin
+-                tx_state        <= TX_WAIT;
+-                r_axis_s_tvalid <= 1'b0;
+-                r_axis_s_tdata  <= 128'd0;
+-                r_axis_s_tlast  <= 1'b0;
+-                fetch_index     <= 2'd0;
+-                data_index      <= 2'd0;
+-                abort_pending   <= 1'b0;
+-                stop_pending    <= 1'b0;
++                invalid_releases <= invalid_releases + 1'b1;
+             end
+         end
+-        else if (vs_rising) begin
+-            // Arm exactly one known buffer for the next frame. Configuration
+-            // completed after this edge waits for the following full frame.
+-            frame_active <= 1'b0;
+-            dma_cnt      <= 16'd0;
+-
+-            if (rc_cfg_ep_flag) begin
+-                frame_addr_valid <= 1'b1;
+-                case (addr_page)
+-                    2'd0: current_addr <= dma_addr0;
+-                    2'd1: current_addr <= dma_addr1;
+-                    2'd2: current_addr <= dma_addr2;
+-                    default: current_addr <= dma_addr3;
+-                endcase
+-                addr_page <= addr_page + 2'd1;
+-            end
+-            else begin
+-                frame_addr_valid <= 1'b0;
+-                current_addr     <= 32'd0;
+-                addr_page        <= 2'd0;
++
++        if (start_pulse && idle_control) begin
++            running          <= 1;
++            addr_page        <= 0;
++            frame_addr_valid <= 0;
++            frame_active     <= 0;
++            abort_pending    <= 0;
++
++            // Host must finish every previous consumer before restarting.
++            for (reset_i = 0; reset_i < 4; reset_i = reset_i + 1)
++                buffer_state[reset_i] <= BUF_FREE;
++        end
++
++        if (stop_pulse) begin
++            running      <= 0;
++            stop_pending <= 1;
++        end
++
++        // [H9] Reserve at VS rising, capture at VS falling.
++        // A late in-flight packet makes us skip this entire incoming frame.
++        if (cancel_frame) begin
++            frame_active     <= 0;
++            frame_addr_valid <= 0;
++
++            if (tx_tlp_in_progress && (packet_kind != PK_STOP_DONE))
++                abort_pending <= 1;
++
++            if (!tx_tlp_in_progress &&
++                (buffer_state[active_slot] == BUF_WRITING)) begin
++                buffer_state[active_slot] <= BUF_FREE;
+             end
++        end
+ 
+-            if (tx_tlp_in_progress) begin
+-                // Finish the already presented TLP, then discard the remainder
+-                // of the late frame. The new buffer address is not used by it;
+-                // packet_addr was latched before its header was presented.
+-                abort_pending <= 1'b1;
++        if (vs_rising && running && !stop_pending && !stop_pulse) begin
++            if (!tx_tlp_in_progress && !abort_pending && free_found &&
++                (allocation_sequence != 30'h3fffffff)) begin
++                active_slot            <= free_slot;
++                active_token           <= {allocation_sequence + 30'd1, free_slot};
++                buffer_token[free_slot] <= {allocation_sequence + 30'd1, free_slot};
++                allocation_sequence    <= allocation_sequence + 1'b1;
++                buffer_state[free_slot] <= BUF_WRITING;
++                addr_page              <= free_slot + 1'b1;
++                frame_addr_valid       <= 1;
++                dma_cnt                <= 0;
++
++                case (free_slot)
++                    0: current_addr <= dma_addr0;
++                    1: current_addr <= dma_addr1;
++                    2: current_addr <= dma_addr2;
++                    3: current_addr <= dma_addr3;
++                endcase
+             end
+             else begin
+-                tx_state        <= TX_WAIT;
+-                r_axis_s_tvalid <= 1'b0;
+-                r_axis_s_tdata  <= 128'd0;
+-                r_axis_s_tlast  <= 1'b0;
+-                fetch_index     <= 2'd0;
+-                data_index      <= 2'd0;
+-                abort_pending   <= 1'b0;
+-                stop_pending    <= 1'b0;
++                dropped_frames <= dropped_frames + 1'b1;
+             end
+         end
+-        else begin
+-            if (vs_falling && rc_cfg_ep_flag && frame_addr_valid &&
+-                (tx_state == TX_WAIT) && !abort_pending && !stop_pending) begin
+-                frame_active <= 1'b1;
+-                dma_cnt      <= 16'd0;
+-            end
+ 
+-            case (tx_state)
+-                TX_WAIT: begin
+-                    r_axis_s_tvalid <= 1'b0;
+-                    r_axis_s_tdata  <= 128'd0;
+-                    r_axis_s_tlast  <= 1'b0;
+-                    data_index      <= 2'd0;
+-
+-                    if (frame_active && rc_cfg_ep_flag) begin
+-                        if (dma_cnt == IMAGE_TLP_COUNT) begin
+-                            // One stable marker value fills the entire 64-byte
+-                            // marker packet; it increments only after TLAST is
+-                            // accepted by the PCIe core.
+-                            payload_buffer <= {64{frame_counter}};
+-                            packet_addr    <= current_addr;
+-                            tx_state       <= TX_HEADER;
+-                        end
+-                        else if ((rd_water_level >= 13'd4) && !fifo_rd_empty) begin
+-                            fetch_index <= 2'd0;
+-                            tx_state    <= TX_FETCH_REQUEST;
+-                        end
+-                    end
+-                end
++        if (vs_falling && running && frame_addr_valid && !stop_pending &&
++            !stop_pulse && !overflow_sync && (tx_state == TX_WAIT) &&
++            !abort_pending) begin
++            frame_active <= 1;
++        end
+ 
+-                TX_FETCH_REQUEST: begin
+-                    if (!frame_active) begin
+-                        tx_state <= TX_WAIT;
++        case (tx_state)
++            TX_WAIT: begin
++                r_axis_s_tvalid <= 0;
++                r_axis_s_tlast  <= 0;
++
++                if (stop_pending) begin
++                    // [H10] Echo STOP cookie only after preceding writes drain.
++                    payload_buffer <= {16{endian32(stop_cookie)}};
++                    packet_addr    <= status_addr;
++                    packet_kind    <= PK_STOP_DONE;
++                    tx_state       <= TX_HEADER;
++                end
++                else if (frame_active && running && !cancel_frame) begin
++                    if (dma_cnt == IMAGE_TLP_COUNT) begin
++                        // [H11] Frame tail: 16 identical LE32 ownership tokens.
++                        payload_buffer <= {16{endian32(active_token)}};
++                        packet_addr    <= current_addr;
++                        packet_kind    <= PK_FRAME_DONE;
++                        tx_state       <= TX_HEADER;
+                     end
+-                    else if (!fifo_rd_empty) begin
+-                        pcie_rd_en <= 1'b1;
+-                        tx_state   <= TX_FETCH_WAIT;
++                    else if ((rd_water_level >= 4) && !fifo_rd_empty) begin
++                        fetch_index <= 0;
++                        packet_kind <= PK_IMAGE;
++                        tx_state    <= TX_FETCH_REQUEST;
+                     end
+                 end
++            end
+ 
+-                // pcie_rd_en is registered. The FIFO consumes it at the next
+-                // rd_clk edge and updates rd_data after that edge, so capture
+-                // one further clock later.
+-                TX_FETCH_WAIT: begin
+-                    if (!frame_active)
+-                        tx_state <= TX_WAIT;
+-                    else
+-                        tx_state <= TX_FETCH_CAPTURE;
++            TX_FETCH_REQUEST: begin
++                if (cancel_frame || !frame_active) begin
++                    tx_state <= TX_WAIT;
+                 end
++                else if (!fifo_rd_empty) begin
++                    pcie_rd_en <= 1;
++                    tx_state   <= TX_FETCH_WAIT;
++                end
++            end
+ 
+-                TX_FETCH_CAPTURE: begin
+-                    if (!frame_active) begin
+-                        tx_state <= TX_WAIT;
++            TX_FETCH_WAIT: begin
++                if (cancel_frame || !frame_active)
++                    tx_state <= TX_WAIT;
++                else
++                    tx_state <= TX_FETCH_CAPTURE;
++            end
++
++            TX_FETCH_CAPTURE: begin
++                if (cancel_frame || !frame_active) begin
++                    tx_state <= TX_WAIT;
++                end
++                else begin
++                    case (fetch_index)
++                        0: payload_buffer[127:0]   <= endian128(pcie_dma_data);
++                        1: payload_buffer[255:128] <= endian128(pcie_dma_data);
++                        2: payload_buffer[383:256] <= endian128(pcie_dma_data);
++                        3: payload_buffer[511:384] <= endian128(pcie_dma_data);
++                    endcase
++
++                    if (fetch_index == 3) begin
++                        packet_addr <= current_addr;
++                        tx_state    <= TX_HEADER;
+                     end
+                     else begin
+-                        case (fetch_index)
+-                            2'd0: payload_buffer[127:0]   <= endian128(pcie_dma_data);
+-                            2'd1: payload_buffer[255:128] <= endian128(pcie_dma_data);
+-                            2'd2: payload_buffer[383:256] <= endian128(pcie_dma_data);
+-                            default: payload_buffer[511:384] <= endian128(pcie_dma_data);
+-                        endcase
+-
+-                        if (fetch_index == 2'd3) begin
+-                            packet_addr <= current_addr;
+-                            tx_state    <= TX_HEADER;
+-                        end
+-                        else begin
+-                            fetch_index <= fetch_index + 2'd1;
+-                            tx_state    <= TX_FETCH_REQUEST;
+-                        end
++                        fetch_index <= fetch_index + 1'b1;
++                        tx_state    <= TX_FETCH_REQUEST;
+                     end
+                 end
++            end
+ 
+-                TX_HEADER: begin
+-                    if (!r_axis_s_tvalid) begin
+-                        r_axis_s_tdata  <= make_mwr32_header(packet_addr, ep_bus_num, ep_dev_num);
+-                        r_axis_s_tvalid <= 1'b1;
+-                        r_axis_s_tlast  <= 1'b0;
++            TX_HEADER: begin
++                if (!r_axis_s_tvalid) begin
++                    if ((cancel_frame || !frame_active) &&
++                        (packet_kind != PK_STOP_DONE)) begin
++                        tx_state <= TX_WAIT;
+                     end
+-                    else if (tx_handshake) begin
+-                        // Header was accepted. Present payload beat 0 and keep
+-                        // TVALID asserted for a gap-free transfer.
+-                        r_axis_s_tdata  <= payload_buffer[127:0];
+-                        r_axis_s_tvalid <= 1'b1;
+-                        r_axis_s_tlast  <= 1'b0;
+-                        data_index      <= 2'd0;
+-                        tx_state        <= TX_DATA;
++                    else begin
++                        r_axis_s_tdata  <= make_mwr32_header(
++                            packet_addr, ep_bus_num, ep_dev_num
++                        );
++                        r_axis_s_tvalid <= 1;
++                        r_axis_s_tlast  <= 0;
+                     end
+                 end
++                else if (tx_handshake) begin
++                    r_axis_s_tdata <= payload_buffer[127:0];
++                    r_axis_s_tlast <= 0;
++                    data_index     <= 0;
++                    tx_state       <= TX_DATA;
++                end
++            end
+ 
+-                TX_DATA: begin
+-                    if (tx_handshake) begin
+-                        if (r_axis_s_tlast) begin
+-                            r_axis_s_tvalid <= 1'b0;
+-                            r_axis_s_tdata  <= 128'd0;
+-                            r_axis_s_tlast  <= 1'b0;
+-                            data_index      <= 2'd0;
+-                            tx_state        <= TX_WAIT;
+-
+-                            if (abort_pending || stop_pending) begin
+-                                dma_cnt        <= 16'd0;
+-                                abort_pending <= 1'b0;
+-                                stop_pending  <= 1'b0;
+-                            end
+-                            else if (dma_cnt == (TOTAL_TLP_COUNT - 16'd1)) begin
+-                                dma_cnt      <= 16'd0;
+-                                frame_active <= 1'b0;
+-                                current_addr <= current_addr + 32'd64;
+-                                if (frame_counter == 8'hff)
+-                                    frame_counter <= 8'd1;
+-                                else
+-                                    frame_counter <= frame_counter + 8'd1;
+-                            end
+-                            else begin
+-                                dma_cnt      <= dma_cnt + 16'd1;
+-                                current_addr <= current_addr + 32'd64;
+-                            end
++            TX_DATA: begin
++                if (tx_handshake) begin
++                    if (r_axis_s_tlast) begin
++                        r_axis_s_tvalid <= 0;
++                        r_axis_s_tlast  <= 0;
++                        tx_state        <= TX_WAIT;
++                        abort_pending   <= 0;
++
++                        if (packet_kind == PK_STOP_DONE) begin
++                            stop_pending     <= 0;
++                            frame_active     <= 0;
++                            frame_addr_valid <= 0;
++
++                            for (reset_i = 0; reset_i < 4; reset_i = reset_i + 1)
++                                buffer_state[reset_i] <= BUF_FREE;
++                        end
++                        else if (packet_kind == PK_FRAME_DONE) begin
++                        // A presented completion TLP finishes even at VS/STOP.
++                            buffer_state[active_slot] <= BUF_HELD;
++                            frame_active              <= 0;
++                            frame_addr_valid          <= 0;
++                        end
++                        else if (abort_pending || cancel_frame || !running) begin
++                            buffer_state[active_slot] <= BUF_FREE;
++                            frame_active              <= 0;
++                            frame_addr_valid          <= 0;
++                            dma_cnt                   <= 0;
+                         end
+                         else begin
+-                            data_index <= data_index + 2'd1;
+-                            case (data_index)
+-                                2'd0: r_axis_s_tdata <= payload_buffer[255:128];
+-                                2'd1: r_axis_s_tdata <= payload_buffer[383:256];
+-                                default: r_axis_s_tdata <= payload_buffer[511:384];
+-                            endcase
+-
+-                            // The next beat is beat 3, the final 128 bits.
+-                            if (data_index == 2'd2)
+-                                r_axis_s_tlast <= 1'b1;
++                            dma_cnt      <= dma_cnt + 1'b1;
++                            current_addr <= current_addr + 32'd64;
+                         end
+                     end
+-                end
++                    else begin
++                        data_index <= data_index + 1'b1;
++                        case (data_index)
++                            0: r_axis_s_tdata <= payload_buffer[255:128];
++                            1: r_axis_s_tdata <= payload_buffer[383:256];
++                            default: r_axis_s_tdata <= payload_buffer[511:384];
++                        endcase
+ 
+-                default: begin
+-                    tx_state        <= TX_WAIT;
+-                    r_axis_s_tvalid <= 1'b0;
+-                    r_axis_s_tdata  <= 128'd0;
+-                    r_axis_s_tlast  <= 1'b0;
++                        if (data_index == 2)
++                            r_axis_s_tlast <= 1;
++                    end
+                 end
+-            endcase
+-        end
++            end
++
++            default: begin
++                tx_state <= TX_WAIT;
++            end
++        endcase
+     end
+ end
+ 
+-// PCIE_FIX_20260912: full/empty flags are now connected. In the expected design
+-// point neither should assert during active video, but the guards prevent an
+-// illegal FIFO access if PCIe throughput or clock startup differs from nominal.
++// Original IP instance and pixel layout are preserved.
+ hdmi_pcie_fifo u_hdmi_pcie_fifo (
+     .wr_clk         (pix_clk_out),
+     .wr_rst         (fifo_wr_rst),
