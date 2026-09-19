@@ -35,6 +35,32 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 - 车道偏移、道路曲率、安全距离、相对速度和 TTC 风险估计。
 - 集成可视化界面，可导入视频、暂停、重新标定、切换检测并显示实时帧率。
 
+## 当前可演示版本：RK3568 四路 V7
+
+`board_v7` 是当前推荐版本，保留了现有 V7 训练权重。这里的 **V7 是第七版训练模型**，
+检测网络仍为 YOLOv8n-P2，类别数为 21，并不是 YOLOv7 或 23 类模型。八个交通灯类别为：
+
+```text
+traffic_red_circle    traffic_red_left     traffic_red_right    traffic_red_straight
+traffic_green_circle  traffic_green_left   traffic_green_right  traffic_green_straight
+```
+
+当前四路版本包括：
+
+- 前、后、左、右四路同步视频和可拖动的统一进度条；支持按钮或 `[`、`]` 切换场景。
+- 四路画面拼成一个 640×640 输入，一次调用 RK3568 NPU 完成检测，再映射回各个视角。
+- ByteTrack 风格的目标关联、短时预测和检测间隔补偿，降低框体滞后与闪烁。
+- 前后视角独立四点标定；标定时暂停画面，标定结果写入 `board_v7/config`。
+- IPM 鸟瞰空间二次曲线拟合、逐帧插值、车辆遮挡保持，以及车道宽度突变抑制。
+- 前后碰撞/TTC 预警、左右盲区提示、交通灯状态与瞬时显示帧率。
+- 1920×1080 OpenGL ES 界面；进程绑定 CPU 2、3，RKNN Runtime 独立调用 NPU。
+
+模型文件位于 `models/unified21_p2_v7_640_int8.rknn`。训练权重、Rockchip ONNX
+和 INT8 RKNN 一并保留，便于重新转换及核对模型来源。测试视频、NVIDIA PhysicalAI
+原始素材、量化图片、运行日志和构建产物体积较大，不进入 Git 仓库。
+
+四路版本的详细操作、已验证性能和当前模型限制见 [`board_v7/README.md`](board_v7/README.md)。
+
 ## 软件模块
 
 The PC conversion pipeline exports the current 21-class detector with Rockchip's
@@ -75,6 +101,23 @@ powershell -ExecutionPolicy Bypass -File training/scripts/run_unified21_full_pip
 ```
 
 ## RK3568 编译与运行
+
+当前四路版本：
+
+```sh
+cd ~/rk3568_adas/board_v7
+sh scripts/build.sh
+sh scripts/run_four_view.sh
+```
+
+四路样例视频是本地素材，默认目录为 `board_v7/four_view_sample/66b5fa4b_30fps`。
+也可以通过命令行传入其他同步场景。单路 V7 程序可这样运行：
+
+```sh
+sh scripts/run.sh --source /path/to/video.mp4
+```
+
+旧版单路程序仍保存在 `board`：
 
 ```sh
 cd ~/rk3568_adas/board

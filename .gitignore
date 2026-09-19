@@ -20,6 +20,7 @@ training/tools/
 
 # Generated calibration data and intermediate graphs
 calibration/images/
+calibration/v7/
 calibration/dataset.txt
 calibration/*.onnx
 
@@ -28,6 +29,21 @@ board/build/
 board/output/
 board/samples/
 board/models/
+board_v7/build/
+board_v7/output/
+board_v7/four_view_sample/
+board_v7/*.log
+
+# Local board snapshots, runtime bundles and generated validation reports
+runtime_v7/
+remote_snapshot_*/
+scene_selection/
+lane_debug/
+four_view_sample/
+models/*_detected.jpg
+models/v7_smoke*.jpg
+tools/make_nvidia_four_view_candidates.py
+tools/make_nvidia_scene_contact_sheets.py
 
 # Video and local debug media
 *.avi
@@ -35,6 +51,8 @@ board/models/
 *.mov
 *.mkv
 *.tar.gz
+*.tar
+*.log
 
 # Editor and OS files
 .idea/
