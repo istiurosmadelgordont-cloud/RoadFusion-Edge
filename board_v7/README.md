@@ -46,6 +46,19 @@ the timeline, ByteTrack, collision state and lane history. Lane geometry uses
 quadratic fitting on both the bird-eye path and the Hough fallback; display
 points interpolate between lane updates to avoid six-frame jumps.
 
+The right sidebar includes a lightweight surround-location display. It keeps
+the ego vehicle at the center, draws the current front/rear lane corridors,
+and places the largest tracked vehicles and pedestrians around it by camera
+direction and apparent image distance. Track numbers come from ByteTrack. This
+is a low-cost ADAS visualization rather than metric BEV; real-world positions
+require camera intrinsics, extrinsics and ground-plane calibration.
+
+To keep the Cortex-A55 UI responsive, the camera textures and safety overlays
+still refresh every displayed frame, lane extraction alternates front/rear at
+one update every two displayed frames, and dashboard text refreshes every
+third frame. On the test board the FPGA-style composite path measured roughly
+12-14 FPS with the GLES UI and about 19 FPS headless, depending on the scene.
+
 `run.sh` uses `taskset -c 2,3` and two OpenCV worker threads. Linux CPU IDs
 2 and 3 are the third and fourth Cortex-A55 cores. RKNN Runtime invokes the
 NPU independently; CPU affinity does not assign NPU cores on RK3568.

@@ -606,8 +606,100 @@ void draw_tile_label(cv::Mat& frame, int index) {
   caption(frame, kTitles[index], 16, 25, cv::Scalar(235, 245, 250), 0.48);
 }
 
+void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
+                       const std::array<std::vector<adas::Detection>, 4>& detections,
+                       const adas::LaneResult& front_lane,
+                       const adas::LaneResult& rear_lane) {
+  cv::rectangle(canvas, area, cv::Scalar(13, 20, 27), cv::FILLED);
+  cv::rectangle(canvas, area, cv::Scalar(54, 75, 88), 1);
+  const cv::Point ego(area.x + area.width / 2, area.y + area.height / 2);
+  const cv::Scalar grid(43, 59, 69);
+  for (int radius = 18; radius <= 54; radius += 18)
+    cv::ellipse(canvas, ego, cv::Size(radius * 2, radius), 0, 0, 360, grid, 1, cv::LINE_AA);
+
+  const int front_shift = front_lane.valid
+      ? cvRound(-front_lane.offset_ratio * 18.0f) : 0;
+  const int rear_shift = rear_lane.valid
+      ? cvRound(-rear_lane.offset_ratio * 18.0f) : 0;
+  const cv::Scalar front_color = front_lane.valid
+      ? cv::Scalar(95, 235, 130) : cv::Scalar(65, 80, 88);
+  const cv::Scalar rear_color = rear_lane.valid
+      ? cv::Scalar(95, 205, 235) : cv::Scalar(65, 80, 88);
+  cv::line(canvas, cv::Point(ego.x - 22, ego.y - 15),
+           cv::Point(ego.x - 15 + front_shift, area.y + 5), front_color, 2, cv::LINE_AA);
+  cv::line(canvas, cv::Point(ego.x + 22, ego.y - 15),
+           cv::Point(ego.x + 15 + front_shift, area.y + 5), front_color, 2, cv::LINE_AA);
+  cv::line(canvas, cv::Point(ego.x - 22, ego.y + 15),
+           cv::Point(ego.x - 15 + rear_shift, area.y + area.height - 5), rear_color, 2,
+           cv::LINE_AA);
+  cv::line(canvas, cv::Point(ego.x + 22, ego.y + 15),
+           cv::Point(ego.x + 15 + rear_shift, area.y + area.height - 5), rear_color, 2,
+           cv::LINE_AA);
+  for (int y = area.y + 8; y < area.y + area.height - 8; y += 12)
+    cv::line(canvas, cv::Point(ego.x, y), cv::Point(ego.x, std::min(y + 5, area.y + area.height - 8)),
+             cv::Scalar(82, 100, 108), 1);
+
+  cv::rectangle(canvas, cv::Rect(ego.x - 9, ego.y - 15, 18, 30),
+                cv::Scalar(70, 235, 145), 2);
+  cv::rectangle(canvas, cv::Rect(ego.x - 6, ego.y - 10, 12, 8),
+                cv::Scalar(65, 85, 100), cv::FILLED);
+  cv::putText(canvas, "F", cv::Point(ego.x - 3, area.y + 11),
+              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
+  cv::putText(canvas, "B", cv::Point(ego.x - 3, area.y + area.height - 4),
+              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
+  cv::putText(canvas, "L", cv::Point(area.x + 4, ego.y + 3),
+              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
+  cv::putText(canvas, "R", cv::Point(area.x + area.width - 11, ego.y + 3),
+              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
+
+  for (int camera = 0; camera < 4; ++camera) {
+    std::vector<const adas::Detection*> objects;
+    for (const adas::Detection& detection : detections[camera])
+      if (detection.class_id >= 0 && detection.class_id <= 6) objects.push_back(&detection);
+    std::sort(objects.begin(), objects.end(),
+              [](const adas::Detection* left, const adas::Detection* right) {
+                return left->box.area() > right->box.area();
+              });
+    if (objects.size() > 4) objects.resize(4);
+    for (const adas::Detection* object : objects) {
+      const adas::Detection& detection = *object;
+      const float nx = std::max(-1.0f, std::min(1.0f,
+          (detection.box.x + detection.box.width * 0.5f) / kTileW * 2.0f - 1.0f));
+      const float ny = std::max(-1.0f, std::min(1.0f,
+          (detection.box.y + detection.box.height * 0.5f) / kTileH * 2.0f - 1.0f));
+      const float size_ratio = std::sqrt(std::max(1.0f, detection.box.area()) /
+                                         static_cast<float>(kTileW * kTileH));
+      const float far = 1.0f - std::max(0.0f, std::min(1.0f, size_ratio * 4.0f));
+      const int longitudinal = 22 + static_cast<int>(far * (area.height / 2 - 30));
+      const int lateral = static_cast<int>(nx * (area.width / 2 - 35));
+      cv::Point position = ego;
+      if (camera == 0) position += cv::Point(lateral, -longitudinal);
+      if (camera == 1) position += cv::Point(-lateral, longitudinal);
+      if (camera == 2) position += cv::Point(-longitudinal, static_cast<int>(ny * 32));
+      if (camera == 3) position += cv::Point(longitudinal, static_cast<int>(ny * 32));
+      position.x = std::max(area.x + 7, std::min(area.x + area.width - 8, position.x));
+      position.y = std::max(area.y + 7, std::min(area.y + area.height - 8, position.y));
+      const cv::Scalar color = detection.class_id <= 1
+          ? cv::Scalar(225, 75, 225) : cv::Scalar(60, 190, 255);
+      if (detection.class_id <= 1) {
+        cv::circle(canvas, position, 4, color, cv::FILLED);
+      } else {
+        const bool side = camera >= 2;
+        cv::rectangle(canvas, cv::Rect(position.x - (side ? 6 : 4),
+                                      position.y - (side ? 4 : 6),
+                                      side ? 12 : 8, side ? 8 : 12), color, 2);
+      }
+      if (detection.track_id >= 0)
+        cv::putText(canvas, std::to_string(detection.track_id), position + cv::Point(6, -3),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.28, color, 1, cv::LINE_AA);
+    }
+  }
+}
+
 void draw_sidebar(cv::Mat& canvas, double fps, double npu_ms, const adas::SignalResult& signal,
-                  const std::array<std::vector<adas::Detection>, 4>& detections, int frame_index,
+                  const std::array<std::vector<adas::Detection>, 4>& detections,
+                  const adas::LaneResult& front_lane,
+                  const adas::LaneResult& rear_lane, int frame_index,
                   const std::string& scene_name) {
   const int x = 2 * kTileW + 16;
   const int w = kSideW - 32;
@@ -663,13 +755,16 @@ void draw_sidebar(cv::Mat& canvas, double fps, double npu_ms, const adas::Signal
   caption(canvas, clip.str(), x + 14, kHeaderH + 675,
           cv::Scalar(130, 155, 170), 0.43);
 
-  panel(canvas, x, kHeaderH + 696, w, 126);
-  caption(canvas, "导航", x + 14, kHeaderH + 722,
+  const int map_y = kHeaderH + 696;
+  panel(canvas, x, map_y, w, 126);
+  caption(canvas, "四路目标定位", x + 14, kHeaderH + 722,
           cv::Scalar(150, 190, 205), 0.48);
-  caption(canvas, "尚未配置路线", x + 14, kHeaderH + 765,
-          cv::Scalar(235, 240, 245), 0.63);
-  caption(canvas, "信号灯状态来自模型输出", x + 14, kHeaderH + 800,
-          cv::Scalar(140, 165, 180), 0.48);
+  caption(canvas, "ByteTrack 俯视示意", x + 14, kHeaderH + 765,
+          cv::Scalar(235, 240, 245), 0.50);
+  caption(canvas, "非真实世界坐标", x + 14, kHeaderH + 798,
+          cv::Scalar(140, 165, 180), 0.43);
+  draw_surround_map(canvas, cv::Rect(x + 196, map_y + 9, w - 210, 108), detections,
+                    front_lane, rear_lane);
 
   panel(canvas, x, kHeaderH + 834, w, 164);
   caption(canvas, "摄像头 / 模型", x + 14, kHeaderH + 862,
@@ -866,6 +961,10 @@ int main(int argc, char** argv) {
   std::array<cv::Mat, 4> source_images;
   while (true) {
     const auto frame_start = std::chrono::steady_clock::now();
+    double capture_ms = 0.0;
+    double lane_ms = 0.0;
+    double compose_ms = 0.0;
+    double render_ms = 0.0;
     const bool calibration_paused = calibration_target != CalibrationTarget::NONE &&
                                     !source_images[0].empty();
     std::array<cv::Mat, 4> frames;
@@ -875,6 +974,8 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 4; ++i) if (!streams[i].read(source_images[i])) ok = false;
     }
     for (int i = 0; i < 4; ++i) frames[i] = source_images[i].clone();
+    capture_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - frame_start).count();
     if (!ok) {
       if (options.once) break;
       for (int i = 0; i < 4; ++i) streams[i].reset();
@@ -927,8 +1028,11 @@ int main(int argc, char** argv) {
         signal = signal_logic.update(detections[0], frames[0].cols, frames[0].rows);
       } else {
         const bool fpga_composite = !options.legacy_mosaic;
+        const auto compose_start = std::chrono::steady_clock::now();
         cv::Mat inference_image = fpga_composite
             ? make_fpga_composite(frames) : make_mosaic(frames);
+        compose_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - compose_start).count();
         const auto captured_at = std::chrono::steady_clock::now();
         inference_future = std::async(std::launch::async,
             [&detector, inference_image, captured_at, fpga_composite]() {
@@ -952,15 +1056,17 @@ int main(int argc, char** argv) {
         }
       }
     }
-    // Update one lane view per displayed frame. Each view therefore runs at
-    // half the UI rate without coupling lane responsiveness to NPU cadence.
-    if (shown_frames % 2 == 0) {
+    const auto lane_start = std::chrono::steady_clock::now();
+    // Lane extraction is the largest CPU stage. Update one camera every two
+    // displayed frames; the stabilized result remains visible between
+    // updates, giving each lane about 2.5-3.5 fresh updates per second.
+    if (shown_frames % 4 == 0) {
       front_lane_target = stabilize_lane(
           front_lane_detector.detect(frames[0]), front_lane_target,
           front_lane_missed_updates,
           lane_blocked_by_vehicle(detections[0], frames[0].cols, frames[0].rows));
       front_lane_target = front_lane_warning.update(front_lane_target);
-    } else {
+    } else if (shown_frames % 4 == 2) {
       rear_lane_target = stabilize_lane(
           rear_lane_detector.detect(frames[1]), rear_lane_target,
           rear_lane_missed_updates,
@@ -969,6 +1075,8 @@ int main(int argc, char** argv) {
     }
     lane = front_lane_target;
     rear_lane = rear_lane_target;
+    lane_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - lane_start).count();
     front_risk = front_risk_estimator.update(
         detections[0], frames[0].cols, frames[0].rows, &lane, fresh_measurement[0]);
     rear_risk = rear_risk_estimator.update(
@@ -978,6 +1086,7 @@ int main(int argc, char** argv) {
     right_blind = right_blind_monitor.update(
         detections[3], frames[3].cols, frames[3].rows, fresh_measurement[3]);
     }
+    const auto render_start = std::chrono::steady_clock::now();
     adas::draw_overlay(frames[0], detections[0], lane, signal, front_risk,
                        drive, display_fps, npu_ms);
     draw_lane_geometry(frames[1], rear_lane);
@@ -998,14 +1107,23 @@ int main(int argc, char** argv) {
     } else {
       for (int i = 0; i < 4; ++i) draw_tile(canvas, frames[i], i);
     }
-    draw_sidebar(canvas, display_fps, npu_ms, signal, detections,
-                 source_frame_index, options.scene.substr(options.scene.find_last_of("/\\") + 1));
-    draw_bottom_left(canvas, display_fps, npu_ms, detections,
-                     source_frame_index, options.separate,
-                     !options.legacy_mosaic, scene_index,
-                     static_cast<int>(scene_paths.size()),
-                     options.scene.substr(options.scene.find_last_of("/\\") + 1));
-    draw_progress_bar(canvas, source_frame_index, source_frames, calibration_paused);
+    // Text rasterization is expensive on Cortex-A55. Camera textures and all
+    // safety overlays still refresh every frame; dashboard text and timeline
+    // refresh at one third of the video rate.
+    const bool refresh_dashboard = shown_frames < 2 || shown_frames % 3 == 0;
+    if (refresh_dashboard) {
+      draw_sidebar(canvas, display_fps, npu_ms, signal, detections, lane, rear_lane,
+                   source_frame_index,
+                   options.scene.substr(options.scene.find_last_of("/\\") + 1));
+      draw_bottom_left(canvas, display_fps, npu_ms, detections,
+                       source_frame_index, options.separate,
+                       !options.legacy_mosaic, scene_index,
+                       static_cast<int>(scene_paths.size()),
+                       options.scene.substr(options.scene.find_last_of("/\\") + 1));
+      draw_progress_bar(canvas, source_frame_index, source_frames, calibration_paused);
+    }
+    render_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - render_start).count();
     const int snapshot_frame = options.snapshot_frame >= 0 ? options.snapshot_frame :
         (options.max_frames > 0 ? std::min(4, options.max_frames - 1) : 4);
     if (!options.snapshot.empty() && shown_frames == snapshot_frame) {
@@ -1200,6 +1318,10 @@ int main(int argc, char** argv) {
     if (shown_frames % 30 == 0) std::cout << "shown=" << shown_frames
         << " source_frame=" << source_frame_index << " fps_1s=" << display_fps
         << " npu_ms=" << npu_ms << " lanes=" << lane.valid << ',' << rear_lane.valid
+        << " capture_ms=" << capture_ms << " lane_ms=" << lane_ms
+        << " compose_ms=" << compose_ms << " render_ms=" << render_ms
+        << " frame_ms=" << std::chrono::duration<double, std::milli>(
+               std::chrono::steady_clock::now() - frame_start).count()
         << " lane_offset=" << lane.offset_ratio << ',' << rear_lane.offset_ratio
         << " lane_departure=" << lane.departure << ',' << rear_lane.departure
         << " risk_target=" << front_risk.target << ',' << rear_risk.target
