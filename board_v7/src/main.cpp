@@ -5,6 +5,7 @@
 #include "adas/risk_estimator.hpp"
 #include "adas/rknn_detector.hpp"
 #include "adas/signal_logic.hpp"
+#include "adas/text_renderer.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -315,6 +316,7 @@ bool load_roi(const std::string& path, adas::LaneDetector& detector,
 }  // namespace
 
 int main(int argc, char** argv) {
+  adas::ui::initialize_text("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc");
   Options options;
   if (!parse(argc, argv, options)) return argc > 1 ? 1 : 0;
   cv::setNumThreads(options.cpu_threads);

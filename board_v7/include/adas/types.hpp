@@ -55,7 +55,7 @@ inline const char* decision_name(DriveDecision decision) {
   }
 }
 
-// cv::putText can only draw ASCII, so every on-frame caption stays English.
+// Short technical captions remain ASCII; the UI translates them where needed.
 inline const char* decision_caption(DriveDecision decision) {
   switch (decision) {
     case DriveDecision::GO: return "GREEN LIGHT";
@@ -68,6 +68,8 @@ inline const char* decision_caption(DriveDecision decision) {
 struct RiskResult {
   bool target = false;
   bool warning = false;
+  bool reliable = false;
+  int track_id = -1;
   float distance_m = -1.0f;
   float relative_speed_kmh = 0.0f;
   float ttc_s = -1.0f;

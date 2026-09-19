@@ -48,6 +48,21 @@ NPU independently; CPU affinity does not assign NPU cores on RK3568.
 Inference defaults to every second video frame to keep the UI responsive.
 The V7 P2 decoder checks for four 21-class score outputs before running.
 
+## Warning logic used by the four-view demo
+
+- Lane departure is measured relative to the calibrated ROI center. A warning
+  needs three reliable lane updates above the entry threshold and clears only
+  after four updates below the lower exit threshold. A lane inferred from one
+  visible marking may be drawn, but cannot start a warning.
+- Front/rear collision selection uses the detected lane polygon and keeps the
+  same ByteTrack ID across detection intervals. Distance, closing speed and TTC
+  update only on fresh NPU measurements; target changes reset the speed history.
+- The front wide-angle and rear telephoto NVIDIA cameras use separate focal
+  scales. Collision alerts and blind-spot alerts use consecutive-update
+  confirmation and hysteresis instead of a one-frame trigger.
+- The 1920x1080 dashboard is rendered in Chinese. Technical labels such as
+  FPS, NPU, TTC, YOLOv8 and detector class names remain in English.
+
 The eight light classes are displayed. Forward driving prompts use only
 circle and straight detections because left/right applicability requires lane
 or navigation context. These prompts are for demonstration, not vehicle

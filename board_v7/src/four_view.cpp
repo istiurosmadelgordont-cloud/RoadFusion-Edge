@@ -6,6 +6,8 @@
 #include "adas/risk_estimator.hpp"
 #include "adas/rknn_detector.hpp"
 #include "adas/signal_logic.hpp"
+#include "adas/warning_logic.hpp"
+#include "adas/text_renderer.hpp"
 #ifdef ADAS_HAVE_GLES
 #include "adas/gl_presenter.hpp"
 #endif
@@ -44,7 +46,7 @@ const int kSideW = 640;
 const int kCanvasW = 2 * kTileW + kSideW;
 const int kCanvasH = 1080;
 const char* kFiles[] = {"front.mp4", "rear.mp4", "left.mp4", "right.mp4"};
-const char* kTitles[] = {"FRONT / YOLO V7", "REAR / YOLO V7", "LEFT CROSS / YOLO V7", "RIGHT CROSS / YOLO V7"};
+const char* kTitles[] = {"前视 / YOLO V7", "后视 / YOLO V7", "左侧 / YOLO V7", "右侧 / YOLO V7"};
 const cv::Rect kPrevSceneButton(834, 936, 196, 48);
 const cv::Rect kNextSceneButton(1048, 936, 196, 48);
 
@@ -298,10 +300,9 @@ void draw_roi_status(cv::Mat& frame, const std::vector<cv::Point2f>& points,
     for (const cv::Point& point : polygon)
       cv::circle(frame, point, 3, cv::Scalar(80, 255, 180), cv::FILLED, cv::LINE_AA);
   }
-  cv::putText(frame, lane.valid ? "CALIBRATED / LANE FOUND" : "CALIBRATED / SEARCHING LANE",
-              cv::Point(12, frame.rows - 12), cv::FONT_HERSHEY_SIMPLEX, 0.52,
-              lane.valid ? cv::Scalar(80, 255, 180) : cv::Scalar(0, 180, 255),
-              2, cv::LINE_AA);
+  adas::ui::draw_text(frame, lane.valid ? "已标定 / 检测到车道" : "已标定 / 正在搜索车道",
+                      cv::Point(12, frame.rows - 12), 15,
+                      lane.valid ? cv::Scalar(80, 255, 180) : cv::Scalar(0, 180, 255));
 }
 
 void draw_lane_geometry(cv::Mat& frame, const adas::LaneResult& lane) {
@@ -375,13 +376,17 @@ adas::LaneResult stabilize_lane(const adas::LaneResult& measured,
   }
   if (!geometry_plausible) {
     ++missed_updates;
-    // Keep rejecting a valid-but-implausible narrow lane for as long as the
-    // occluding vehicle remains. A complete detector miss is held for only a
-    // bounded time so a genuinely lost road is still reported.
-    if (previous.valid && (measured.valid || vehicle_occlusion || missed_updates <= 10)) {
+    // Hold short occlusions, but accept a persistent new geometry after a few
+    // updates so a real lane change cannot remain stuck on the old lane.
+    const int hold_updates = vehicle_occlusion ? 5 : 2;
+    if (previous.valid && missed_updates <= hold_updates) {
       adas::LaneResult held = previous;
       held.partial = true;
       return held;
+    }
+    if (measured.valid) {
+      missed_updates = 0;
+      return measured;
     }
     return measured;
   }
@@ -408,9 +413,8 @@ bool lane_blocked_by_vehicle(const std::vector<adas::Detection>& detections,
 void draw_calibration(cv::Mat& frame, const std::vector<cv::Point2f>& points,
                       const std::string& camera) {
   cv::rectangle(frame, cv::Rect(0, 28, frame.cols, 34), cv::Scalar(20, 90, 170), cv::FILLED);
-  cv::putText(frame, "CALIBRATE " + camera + ": click 4 points ON lane marks",
-              cv::Point(12, 52), cv::FONT_HERSHEY_SIMPLEX, 0.6,
-              cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+  adas::ui::draw_text(frame, "标定" + camera + "：请在车道线上点击4个点",
+                      cv::Point(12, 52), 17, cv::Scalar(255, 255, 255));
   for (size_t i = 0; i < points.size(); ++i) {
     const cv::Point point(static_cast<int>(points[i].x * frame.cols),
                           static_cast<int>(points[i].y * frame.rows));
@@ -422,8 +426,15 @@ void draw_calibration(cv::Mat& frame, const std::vector<cv::Point2f>& points,
 
 void caption(cv::Mat& canvas, const std::string& text, int x, int y,
              const cv::Scalar& color = cv::Scalar(225, 235, 240), double scale = 0.55) {
-  cv::putText(canvas, text, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX,
-              scale, color, 1, cv::LINE_AA);
+  const bool utf8 = std::any_of(text.begin(), text.end(), [](char c) {
+    return static_cast<unsigned char>(c) >= 0x80;
+  });
+  if (utf8)
+    adas::ui::draw_text(canvas, text, cv::Point(x, y),
+                        std::max(12, cvRound(scale * 28.0)), color);
+  else
+    cv::putText(canvas, text, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX,
+                scale, color, 1, cv::LINE_AA);
 }
 
 void panel(cv::Mat& canvas, int x, int y, int w, int h) {
@@ -456,22 +467,11 @@ void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections) 
   }
 }
 
-bool blind_spot_occupied(const std::vector<adas::Detection>& detections,
-                         int width, int height) {
-  for (const auto& detection : detections) {
-    if (detection.class_id < 0 || detection.class_id > 6) continue;
-    const float bottom = detection.box.y + detection.box.height;
-    const float area = detection.box.area() / std::max(1.0f, static_cast<float>(width * height));
-    if (bottom > height * 0.48f && area > 0.008f) return true;
-  }
-  return false;
-}
-
 void warning_banner(cv::Mat& frame, const std::string& text) {
   const cv::Rect area(8, frame.rows - 38, std::min(frame.cols - 16, 330), 30);
   cv::rectangle(frame, area, cv::Scalar(20, 35, 190), cv::FILLED);
-  cv::putText(frame, text, cv::Point(area.x + 8, area.y + 21),
-              cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+  adas::ui::draw_text(frame, text, cv::Point(area.x + 8, area.y + 22),
+                      16, cv::Scalar(255, 255, 255));
 }
 
 const cv::Rect kProgressBar(20, 1052, 1240, 14);
@@ -492,7 +492,7 @@ void draw_progress_bar(cv::Mat& canvas, int frame, int total, bool locked) {
   const double seconds = frame / 30.0;
   const double duration = total / 30.0;
   label << std::fixed << std::setprecision(1) << seconds << " / " << duration << " s"
-        << (locked ? "  CALIBRATION LOCK" : "  click / drag");
+        << (locked ? "  标定暂停" : "  点击 / 拖动");
   caption(canvas, label.str(), 1010, 1043, cv::Scalar(175, 205, 215), 0.43);
 }
 
@@ -560,71 +560,73 @@ void draw_sidebar(cv::Mat& canvas, double fps, double npu_ms, const adas::Signal
   const int x = 2 * kTileW + 16;
   const int w = kSideW - 32;
   panel(canvas, x, kHeaderH + 12, w, 74);
-  caption(canvas, "SYSTEM", x + 14, kHeaderH + 36, cv::Scalar(150, 190, 205), 0.48);
-  caption(canvas, "NPU ON   CPU 2-3   4 CAMERAS", x + 14, kHeaderH + 65,
+  caption(canvas, "系统状态", x + 14, kHeaderH + 36, cv::Scalar(150, 190, 205), 0.48);
+  caption(canvas, "NPU运行   CPU 2-3   四路摄像头", x + 14, kHeaderH + 65,
           cv::Scalar(100, 235, 175), 0.49);
 
   panel(canvas, x, kHeaderH + 98, w, 116);
-  caption(canvas, "PERFORMANCE", x + 14, kHeaderH + 121, cv::Scalar(150, 190, 205), 0.48);
+  caption(canvas, "运行性能", x + 14, kHeaderH + 121, cv::Scalar(150, 190, 205), 0.48);
   std::ostringstream perf;
-  perf << std::fixed << std::setprecision(1) << fps << " FPS (1s)";
-  caption(canvas, perf.str(), x + 14, kHeaderH + 169, cv::Scalar(240, 245, 250), 1.1);
+  perf << std::fixed << std::setprecision(1) << fps << " FPS（1秒）";
+  caption(canvas, perf.str(), x + 14, kHeaderH + 169, cv::Scalar(240, 245, 250), 0.92);
   std::ostringstream npu;
   npu << "NPU " << std::fixed << std::setprecision(1) << npu_ms << " ms";
-  caption(canvas, npu.str(), x + 178, kHeaderH + 168, cv::Scalar(100, 220, 255), 0.48);
-  caption(canvas, "Four streams synchronized by frame", x + 14, kHeaderH + 197,
+  caption(canvas, npu.str(), x + 285, kHeaderH + 168, cv::Scalar(100, 220, 255), 0.48);
+  caption(canvas, "四路视频按帧同步", x + 14, kHeaderH + 197,
           cv::Scalar(130, 155, 170), 0.43);
 
   panel(canvas, x, kHeaderH + 226, w, 88);
-  caption(canvas, "FORWARD SIGNAL", x + 14, kHeaderH + 250, cv::Scalar(150, 190, 205), 0.48);
+  caption(canvas, "前方信号灯", x + 14, kHeaderH + 250, cv::Scalar(150, 190, 205), 0.48);
   const cv::Scalar sig_color = signal.state == adas::SignalState::RED ? cv::Scalar(70, 80, 255) :
       signal.state == adas::SignalState::GREEN ? cv::Scalar(80, 235, 100) : cv::Scalar(150, 170, 180);
-  caption(canvas, adas::signal_name(signal.state), x + 14, kHeaderH + 294, sig_color, 0.95);
+  const char* signal_text = signal.state == adas::SignalState::RED ? "红灯" :
+      signal.state == adas::SignalState::GREEN ? "绿灯" : "无";
+  caption(canvas, signal_text, x + 14, kHeaderH + 294, sig_color, 0.95);
 
   panel(canvas, x, kHeaderH + 326, w, 226);
-  caption(canvas, "DETECTIONS / FOUR VIEWS", x + 14, kHeaderH + 352,
+  caption(canvas, "四路检测结果", x + 14, kHeaderH + 352,
           cv::Scalar(150, 190, 205), 0.48);
-  const char* camera_names[] = {"FRONT", "REAR", "LEFT", "RIGHT"};
+  const char* camera_names[] = {"前视", "后视", "左侧", "右侧"};
   for (int i = 0; i < 4; ++i) {
     std::ostringstream row;
-    row << camera_names[i] << "   " << detections[i].size() << " objects";
+    row << camera_names[i] << "   " << detections[i].size() << " 个目标";
     caption(canvas, row.str(), x + 15, kHeaderH + 383 + i * 33,
             cv::Scalar(220, 235, 240), 0.51);
   }
   if (!detections[0].empty()) {
     const auto& d = detections[0].front();
     std::ostringstream row;
-    row << "Front top: " << d.name << ' ' << std::fixed << std::setprecision(2) << d.score;
+    row << "前视主要目标：" << d.name << ' ' << std::fixed << std::setprecision(2) << d.score;
     caption(canvas, row.str(), x + 15, kHeaderH + 531, box_color(d.class_id), 0.45);
   }
 
   panel(canvas, x, kHeaderH + 564, w, 120);
-  caption(canvas, "DATA STATUS", x + 14, kHeaderH + 590, cv::Scalar(150, 190, 205), 0.48);
-  caption(canvas, "Speed: --   Route: --", x + 14, kHeaderH + 622,
+  caption(canvas, "数据状态", x + 14, kHeaderH + 590, cv::Scalar(150, 190, 205), 0.48);
+  caption(canvas, "车速：--   路线：--", x + 14, kHeaderH + 622,
           cv::Scalar(220, 225, 235), 0.51);
-  caption(canvas, "One NPU call for all views", x + 14, kHeaderH + 650,
+  caption(canvas, "四路共用一次 NPU 推理", x + 14, kHeaderH + 650,
           cv::Scalar(150, 180, 195), 0.46);
   std::ostringstream clip;
-  clip << scene_name.substr(0, 8) << "   frame " << frame_index;
+  clip << scene_name.substr(0, 8) << "   帧 " << frame_index;
   caption(canvas, clip.str(), x + 14, kHeaderH + 675,
           cv::Scalar(130, 155, 170), 0.43);
 
   panel(canvas, x, kHeaderH + 696, w, 126);
-  caption(canvas, "NAVIGATION", x + 14, kHeaderH + 722,
+  caption(canvas, "导航", x + 14, kHeaderH + 722,
           cv::Scalar(150, 190, 205), 0.48);
-  caption(canvas, "Route: not configured", x + 14, kHeaderH + 765,
+  caption(canvas, "尚未配置路线", x + 14, kHeaderH + 765,
           cv::Scalar(235, 240, 245), 0.63);
-  caption(canvas, "Signal state is model output only", x + 14, kHeaderH + 800,
+  caption(canvas, "信号灯状态来自模型输出", x + 14, kHeaderH + 800,
           cv::Scalar(140, 165, 180), 0.48);
 
   panel(canvas, x, kHeaderH + 834, w, 164);
-  caption(canvas, "CAMERA / MODEL", x + 14, kHeaderH + 862,
+  caption(canvas, "摄像头 / 模型", x + 14, kHeaderH + 862,
           cv::Scalar(150, 190, 205), 0.48);
-  caption(canvas, "4 synchronized 30 FPS streams", x + 14, kHeaderH + 902,
+  caption(canvas, "四路同步 30 FPS 视频", x + 14, kHeaderH + 902,
           cv::Scalar(235, 240, 245), 0.59);
-  caption(canvas, "YOLOv8n P2  |  21 classes  |  RK3568 NPU", x + 14,
+  caption(canvas, "YOLOv8n P2  |  21类  |  RK3568 NPU", x + 14,
           kHeaderH + 937, cv::Scalar(160, 215, 220), 0.54);
-  caption(canvas, "Detected positions are image-space only", x + 14,
+  caption(canvas, "目标位置当前为图像坐标", x + 14,
           kHeaderH + 974, cv::Scalar(140, 165, 180), 0.48);
 }
 
@@ -636,54 +638,54 @@ void draw_bottom_left(cv::Mat& canvas, double fps, double npu_ms,
   panel(canvas, 14, y, 390, kFooterH - 26);
   panel(canvas, 417, y, 390, kFooterH - 26);
   panel(canvas, 820, y, 446, kFooterH - 26);
-  caption(canvas, "CURRENT OBSERVATIONS", 28, y + 29,
+  caption(canvas, "当前检测", 28, y + 29,
           cv::Scalar(150, 190, 205), 0.51);
-  const char* labels[] = {"FRONT", "REAR", "LEFT", "RIGHT"};
+  const char* labels[] = {"前视", "后视", "左侧", "右侧"};
   for (int i = 0; i < 4; ++i) {
     std::ostringstream row;
-    row << labels[i] << ": " << detections[i].size() << " objects";
+    row << labels[i] << "：" << detections[i].size() << " 个目标";
     if (!detections[i].empty())
-      row << "  top " << detections[i].front().name;
+      row << "  主要 " << detections[i].front().name;
     caption(canvas, row.str(), 28, y + 68 + i * 38,
             cv::Scalar(220, 230, 235), 0.49);
   }
-  caption(canvas, "Labels refresh on each NPU call", 28, y + 239,
+  caption(canvas, "标签随每次 NPU 推理刷新", 28, y + 239,
           cv::Scalar(130, 160, 175), 0.45);
 
-  caption(canvas, "SYSTEM", 431, y + 29,
+  caption(canvas, "系统", 431, y + 29,
           cv::Scalar(150, 190, 205), 0.51);
   std::ostringstream rate;
-  rate << "FPS (last 1s) " << std::fixed << std::setprecision(1) << fps;
+  rate << "FPS（近1秒） " << std::fixed << std::setprecision(1) << fps;
   caption(canvas, rate.str(), 431, y + 69, cv::Scalar(120, 235, 175), 0.56);
   std::ostringstream npu;
-  npu << "NPU call       " << std::fixed << std::setprecision(1) << npu_ms << " ms";
+  npu << "NPU耗时       " << std::fixed << std::setprecision(1) << npu_ms << " ms";
   caption(canvas, npu.str(), 431, y + 105, cv::Scalar(225, 235, 240), 0.53);
-  caption(canvas, "CPU affinity     2,3", 431, y + 141,
+  caption(canvas, "CPU绑定          2,3", 431, y + 141,
           cv::Scalar(225, 235, 240), 0.53);
   std::ostringstream sync;
-  sync << "Source frame   " << frame_index;
+  sync << "源视频帧       " << frame_index;
   caption(canvas, sync.str(), 431, y + 177,
           cv::Scalar(225, 235, 240), 0.53);
-  caption(canvas, separate ? "Mode: separate round-robin" : "Mode: single-call mosaic",
+  caption(canvas, separate ? "推理：分路轮询" : "推理：四路拼接单次调用",
           431, y + 225, cv::Scalar(130, 190, 220), 0.49);
 
-  caption(canvas, "CONTROLS", 834, y + 29,
+  caption(canvas, "操作", 834, y + 29,
           cv::Scalar(150, 190, 205), 0.51);
-  caption(canvas, "Q / ESC     Close demo", 834, y + 75,
+  caption(canvas, "Q / ESC     关闭演示", 834, y + 75,
           cv::Scalar(230, 238, 242), 0.59);
-  caption(canvas, "C / R          Calibrate front / rear lane", 834, y + 117,
+  caption(canvas, "C / R          标定前视 / 后视车道", 834, y + 117,
           cv::Scalar(230, 238, 242), 0.55);
   cv::rectangle(canvas, kPrevSceneButton, cv::Scalar(38, 67, 88), cv::FILLED);
   cv::rectangle(canvas, kPrevSceneButton, cv::Scalar(95, 175, 215), 2);
   cv::rectangle(canvas, kNextSceneButton, cv::Scalar(38, 67, 88), cv::FILLED);
   cv::rectangle(canvas, kNextSceneButton, cv::Scalar(95, 175, 215), 2);
-  caption(canvas, "<  PREV SCENE", kPrevSceneButton.x + 24, kPrevSceneButton.y + 31,
+  caption(canvas, "<  上一场景", kPrevSceneButton.x + 24, kPrevSceneButton.y + 31,
           cv::Scalar(220, 240, 250), 0.52);
-  caption(canvas, "NEXT SCENE  >", kNextSceneButton.x + 22, kNextSceneButton.y + 31,
+  caption(canvas, "下一场景  >", kNextSceneButton.x + 22, kNextSceneButton.y + 31,
           cv::Scalar(220, 240, 250), 0.52);
   std::ostringstream scene;
-  scene << "Scene " << (scene_index + 1) << '/' << scene_count << "  "
-        << scene_name.substr(0, 8) << "   keys [ / ]";
+  scene << "场景 " << (scene_index + 1) << '/' << scene_count << "  "
+        << scene_name.substr(0, 8) << "   按键 [ / ]";
   caption(canvas, scene.str(), 834, y + 226, cv::Scalar(150, 205, 215), 0.47);
 }
 
@@ -692,6 +694,8 @@ void draw_bottom_left(cv::Mat& canvas, double fps, double npu_ms,
 int main(int argc, char** argv) {
   Options options;
   if (!parse(argc, argv, options)) return 1;
+  if (!adas::ui::initialize_text("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"))
+    std::cerr << "Chinese font unavailable; UI text will use fallback rendering\n";
   cv::setNumThreads(options.cpu_threads);
   std::vector<std::string> scene_paths;
   const char* bundled_scenes[] = {
@@ -738,8 +742,18 @@ int main(int argc, char** argv) {
   std::vector<cv::Point2f> rear_roi_points;
   load_roi("config/front_lane_roi.txt", front_lane_detector, &front_roi_points);
   load_roi("config/rear_lane_roi.txt", rear_lane_detector, &rear_roi_points);
-  adas::RiskEstimator front_risk_estimator;
-  adas::RiskEstimator rear_risk_estimator;
+  adas::LaneDepartureMonitor front_lane_warning;
+  adas::LaneDepartureMonitor rear_lane_warning;
+  front_lane_warning.set_reference_from_roi(front_roi_points);
+  rear_lane_warning.set_reference_from_roi(rear_roi_points);
+  adas::RiskConfig front_risk_config;
+  front_risk_config.focal_scale = 0.30f;  // NVIDIA front wide, about 120 degrees.
+  adas::RiskConfig rear_risk_config;
+  rear_risk_config.focal_scale = 1.87f;   // NVIDIA rear tele, about 30 degrees.
+  adas::RiskEstimator front_risk_estimator(front_risk_config);
+  adas::RiskEstimator rear_risk_estimator(rear_risk_config);
+  adas::BlindSpotMonitor left_blind_monitor;
+  adas::BlindSpotMonitor right_blind_monitor;
   std::array<adas::ByteTracker, 4> trackers;
   adas::SignalResult signal;
   adas::DriveResult drive;
@@ -751,7 +765,10 @@ int main(int argc, char** argv) {
   int rear_lane_missed_updates = 0;
   adas::RiskResult front_risk;
   adas::RiskResult rear_risk;
+  adas::BlindSpotResult left_blind;
+  adas::BlindSpotResult right_blind;
   std::array<std::vector<adas::Detection>, 4> detections;
+  std::array<bool, 4> fresh_measurement{{false, false, false, false}};
   std::future<InferenceResult> inference_future;
   bool inference_running = false;
   double npu_ms = 0.0;
@@ -787,7 +804,7 @@ int main(int argc, char** argv) {
   cv::Mat canvas(kCanvasH, kCanvasW, CV_8UC3, cv::Scalar(19, 24, 29));
   cv::rectangle(canvas, cv::Rect(0, 0, kCanvasW, kHeaderH),
                 cv::Scalar(29, 36, 43), cv::FILLED);
-  caption(canvas, "ROADFUSION EDGE  |  NVIDIA PHYSICALAI  |  FOUR CAMERA",
+  caption(canvas, "ROADFUSION EDGE  |  NVIDIA PHYSICALAI  |  四路智能驾驶辅助",
           20, 31, cv::Scalar(235, 240, 245), 0.62);
   std::array<cv::Mat, 4> source_images;
   while (true) {
@@ -795,6 +812,7 @@ int main(int argc, char** argv) {
     const bool calibration_paused = calibration_target != CalibrationTarget::NONE &&
                                     !source_images[0].empty();
     std::array<cv::Mat, 4> frames;
+    fresh_measurement.fill(false);
     bool ok = true;
     if (!calibration_paused) {
       for (int i = 0; i < 4; ++i) if (!streams[i].read(source_images[i])) ok = false;
@@ -814,8 +832,12 @@ int main(int argc, char** argv) {
       front_lane_target = adas::LaneResult();
       rear_lane_target = adas::LaneResult();
       front_lane_missed_updates = rear_lane_missed_updates = 0;
-      front_risk_estimator = adas::RiskEstimator();
-      rear_risk_estimator = adas::RiskEstimator();
+      front_risk_estimator.reset();
+      rear_risk_estimator.reset();
+      front_lane_warning.reset();
+      rear_lane_warning.reset();
+      left_blind_monitor.reset();
+      right_blind_monitor.reset();
       for (auto& tracker : trackers) tracker.reset();
       for (auto& view : detections) view.clear();
       continue;
@@ -826,8 +848,10 @@ int main(int argc, char** argv) {
       InferenceResult result = inference_future.get();
       const auto tracking_now = std::chrono::steady_clock::now();
       if (tracking_now - result.captured_at < std::chrono::milliseconds(500)) {
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 4; ++i) {
           detections[i] = trackers[i].update(result.detections[i], result.captured_at, tracking_now);
+          fresh_measurement[i] = true;
+        }
         npu_ms = result.npu_ms;
         signal = signal_logic.update(detections[0], frames[0].cols, frames[0].rows);
         drive = drive_logic.update(signal);
@@ -839,7 +863,10 @@ int main(int argc, char** argv) {
     if (shown_frames % options.detect_every == 0 && !inference_running) {
       if (options.separate) {
         const int camera = (shown_frames / options.detect_every) % 4;
-        detections[camera] = detector.detect(frames[camera], &npu_ms);
+        const auto measured_at = std::chrono::steady_clock::now();
+        detections[camera] = trackers[camera].update(
+            detector.detect(frames[camera], &npu_ms), measured_at, measured_at);
+        fresh_measurement[camera] = true;
         signal = signal_logic.update(detections[0], frames[0].cols, frames[0].rows);
       } else {
         std::array<cv::Mat, 4> inference_frames;
@@ -865,24 +892,31 @@ int main(int argc, char** argv) {
         }
       }
     }
-    // Interleave both lane detectors to keep total CPU cost near the previous
-    // front-only update rate.
-    if (shown_frames % 6 == 0) {
+    // Update one lane view per displayed frame. Each view therefore runs at
+    // half the UI rate without coupling lane responsiveness to NPU cadence.
+    if (shown_frames % 2 == 0) {
       front_lane_target = stabilize_lane(
           front_lane_detector.detect(frames[0]), front_lane_target,
           front_lane_missed_updates,
           lane_blocked_by_vehicle(detections[0], frames[0].cols, frames[0].rows));
-    }
-    if (shown_frames % 6 == 3) {
+      front_lane_target = front_lane_warning.update(front_lane_target);
+    } else {
       rear_lane_target = stabilize_lane(
           rear_lane_detector.detect(frames[1]), rear_lane_target,
           rear_lane_missed_updates,
           lane_blocked_by_vehicle(detections[1], frames[1].cols, frames[1].rows));
+      rear_lane_target = rear_lane_warning.update(rear_lane_target);
     }
-    lane = interpolate_lane(lane, front_lane_target, 0.38f);
-    rear_lane = interpolate_lane(rear_lane, rear_lane_target, 0.38f);
-    front_risk = front_risk_estimator.update(detections[0], frames[0].cols, frames[0].rows);
-    rear_risk = rear_risk_estimator.update(detections[1], frames[1].cols, frames[1].rows);
+    lane = front_lane_target;
+    rear_lane = rear_lane_target;
+    front_risk = front_risk_estimator.update(
+        detections[0], frames[0].cols, frames[0].rows, &lane, fresh_measurement[0]);
+    rear_risk = rear_risk_estimator.update(
+        detections[1], frames[1].cols, frames[1].rows, &rear_lane, fresh_measurement[1]);
+    left_blind = left_blind_monitor.update(
+        detections[2], frames[2].cols, frames[2].rows, fresh_measurement[2]);
+    right_blind = right_blind_monitor.update(
+        detections[3], frames[3].cols, frames[3].rows, fresh_measurement[3]);
     }
     adas::draw_overlay(frames[0], detections[0], lane, signal, front_risk,
                        drive, display_fps, npu_ms);
@@ -890,15 +924,15 @@ int main(int argc, char** argv) {
     draw_roi_status(frames[0], front_roi_points, lane);
     draw_roi_status(frames[1], rear_roi_points, rear_lane);
     for (int i = 1; i < 4; ++i) draw_boxes(frames[i], detections[i]);
-    if (rear_risk.warning) warning_banner(frames[1], "REAR CLOSING  TTC WARNING");
-    if (blind_spot_occupied(detections[2], frames[2].cols, frames[2].rows))
-      warning_banner(frames[2], "LEFT BLIND SPOT OCCUPIED");
-    if (blind_spot_occupied(detections[3], frames[3].cols, frames[3].rows))
-      warning_banner(frames[3], "RIGHT BLIND SPOT OCCUPIED");
+    if (rear_risk.warning) warning_banner(frames[1], "后车快速接近  TTC预警");
+    if (left_blind.occupied)
+      warning_banner(frames[2], "左侧盲区有目标");
+    if (right_blind.occupied)
+      warning_banner(frames[3], "右侧盲区有目标");
     if (calibration_target == CalibrationTarget::FRONT)
-      draw_calibration(frames[0], calibration_points, "FRONT");
+      draw_calibration(frames[0], calibration_points, "前视");
     if (calibration_target == CalibrationTarget::REAR)
-      draw_calibration(frames[1], calibration_points, "REAR");
+      draw_calibration(frames[1], calibration_points, "后视");
     if (gl_presenter) {
       for (int i = 0; i < 4; ++i) draw_tile_label(frames[i], i);
     } else {
@@ -935,10 +969,16 @@ int main(int argc, char** argv) {
       if (key == 'q' || key == 27) break;
       if (key == 'm') {
         options.separate = !options.separate;
+        for (auto& tracker : trackers) tracker.reset();
         for (auto& view : detections) view.clear();
         signal_logic = adas::SignalLogic();
         drive_logic.reset();
         signal = adas::SignalResult();
+        drive = adas::DriveResult();
+        front_risk_estimator.reset();
+        rear_risk_estimator.reset();
+        left_blind_monitor.reset();
+        right_blind_monitor.reset();
       }
       if (key == '[') scene_delta = -1;
       if (key == ']') scene_delta = 1;
@@ -965,8 +1005,12 @@ int main(int argc, char** argv) {
           for (auto& view : detections) view.clear();
           signal_logic = adas::SignalLogic();
           drive_logic.reset();
-          front_risk_estimator = adas::RiskEstimator();
-          rear_risk_estimator = adas::RiskEstimator();
+          front_risk_estimator.reset();
+          rear_risk_estimator.reset();
+          front_lane_warning.reset();
+          rear_lane_warning.reset();
+          left_blind_monitor.reset();
+          right_blind_monitor.reset();
           lane = adas::LaneResult();
           rear_lane = adas::LaneResult();
           front_lane_target = adas::LaneResult();
@@ -994,10 +1038,12 @@ int main(int argc, char** argv) {
               else
                 rear_roi_points = calibration_points;
               if (calibration_target == CalibrationTarget::FRONT) {
+                front_lane_warning.set_reference_from_roi(calibration_points);
                 lane = adas::LaneResult();
                 front_lane_target = adas::LaneResult();
                 front_lane_missed_updates = 0;
               } else {
+                rear_lane_warning.set_reference_from_roi(calibration_points);
                 rear_lane = adas::LaneResult();
                 rear_lane_target = adas::LaneResult();
                 rear_lane_missed_updates = 0;
@@ -1041,8 +1087,12 @@ int main(int argc, char** argv) {
           front_lane_target = adas::LaneResult();
           rear_lane_target = adas::LaneResult();
           front_lane_missed_updates = rear_lane_missed_updates = 0;
-          front_risk_estimator = adas::RiskEstimator();
-          rear_risk_estimator = adas::RiskEstimator();
+          front_risk_estimator.reset();
+          rear_risk_estimator.reset();
+          front_lane_warning.reset();
+          rear_lane_warning.reset();
+          left_blind_monitor.reset();
+          right_blind_monitor.reset();
           for (auto& tracker : trackers) tracker.reset();
           for (auto& view : detections) view.clear();
           presentation_times.clear();
@@ -1089,6 +1139,13 @@ int main(int argc, char** argv) {
     if (shown_frames % 30 == 0) std::cout << "shown=" << shown_frames
         << " source_frame=" << source_frame_index << " fps_1s=" << display_fps
         << " npu_ms=" << npu_ms << " lanes=" << lane.valid << ',' << rear_lane.valid
+        << " lane_offset=" << lane.offset_ratio << ',' << rear_lane.offset_ratio
+        << " lane_departure=" << lane.departure << ',' << rear_lane.departure
+        << " risk_target=" << front_risk.target << ',' << rear_risk.target
+        << " risk_warning=" << front_risk.warning << ',' << rear_risk.warning
+        << " distance_m=" << front_risk.distance_m << ',' << rear_risk.distance_m
+        << " ttc_s=" << front_risk.ttc_s << ',' << rear_risk.ttc_s
+        << " blind=" << left_blind.occupied << ',' << right_blind.occupied
         << std::endl;
   }
   if (inference_running) inference_future.wait();

@@ -52,7 +52,9 @@ traffic_green_circle  traffic_green_left   traffic_green_right  traffic_green_st
 - ByteTrack 风格的目标关联、短时预测和检测间隔补偿，降低框体滞后与闪烁。
 - 前后视角独立四点标定；标定时暂停画面，标定结果写入 `board_v7/config`。
 - IPM 鸟瞰空间二次曲线拟合、逐帧插值、车辆遮挡保持，以及车道宽度突变抑制。
-- 前后碰撞/TTC 预警、左右盲区提示、交通灯状态与瞬时显示帧率。
+- 前后碰撞/TTC 预警、左右盲区提示、交通灯状态与瞬时显示帧率。预警逻辑使用
+  ByteTrack 目标锁定、连续帧确认和进入/退出回差，避免检测间隔预测框造成单帧误报。
+- 中文化 1920×1080 车载界面；保留 FPS、NPU、TTC、YOLOv8 和模型类别名等技术术语。
 - 1920×1080 OpenGL ES 界面；进程绑定 CPU 2、3，RKNN Runtime 独立调用 NPU。
 
 模型文件位于 `models/unified21_p2_v7_640_int8.rknn`。训练权重、Rockchip ONNX
