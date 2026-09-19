@@ -47,11 +47,12 @@ quadratic fitting on both the bird-eye path and the Hough fallback; display
 points interpolate between lane updates to avoid six-frame jumps.
 
 The right sidebar includes a lightweight surround-location display. It keeps
-the ego vehicle at the center, draws the current front/rear lane corridors,
-and places the largest tracked vehicles and pedestrians around it by camera
-direction and apparent image distance. Track numbers come from ByteTrack. This
-is a low-cost ADAS visualization rather than metric BEV; real-world positions
-require camera intrinsics, extrinsics and ground-plane calibration.
+the ego vehicle near the bottom of a perspective road, draws the current
+front/rear lane corridors and forward traffic light, and places top-down car
+icons and pedestrians around it by camera direction and apparent image
+distance. Tracks come from ByteTrack. This is a low-cost ADAS visualization
+rather than metric BEV; real-world positions require camera intrinsics,
+extrinsics and ground-plane calibration.
 
 To keep the Cortex-A55 UI responsive, the camera textures and safety overlays
 still refresh every displayed frame, lane extraction alternates front/rear at

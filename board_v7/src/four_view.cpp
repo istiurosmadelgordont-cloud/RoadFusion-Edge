@@ -606,51 +606,74 @@ void draw_tile_label(cv::Mat& frame, int index) {
   caption(frame, kTitles[index], 16, 25, cv::Scalar(235, 245, 250), 0.48);
 }
 
+void draw_top_car(cv::Mat& canvas, const cv::Point& center, int width, int height,
+                  const cv::Scalar& body, bool horizontal, bool ego) {
+  const cv::Size size = horizontal ? cv::Size(height, width) : cv::Size(width, height);
+  const cv::Rect box(center.x - size.width / 2, center.y - size.height / 2,
+                     size.width, size.height);
+  cv::rectangle(canvas, box, body, ego ? 2 : cv::FILLED);
+  if (!ego) cv::rectangle(canvas, box, cv::Scalar(215, 225, 232), 1);
+  const cv::Rect glass = horizontal
+      ? cv::Rect(center.x - size.width / 4, center.y - size.height / 2 + 2,
+                 size.width / 2, std::max(2, size.height - 4))
+      : cv::Rect(center.x - size.width / 2 + 2, center.y - size.height / 4,
+                 std::max(2, size.width - 4), size.height / 3);
+  cv::rectangle(canvas, glass, cv::Scalar(45, 65, 78), cv::FILLED);
+  if (ego) {
+    cv::circle(canvas, cv::Point(box.x + 3, box.y + box.height - 3), 2,
+               cv::Scalar(45, 60, 245), cv::FILLED);
+    cv::circle(canvas, cv::Point(box.x + box.width - 3, box.y + box.height - 3), 2,
+               cv::Scalar(45, 60, 245), cv::FILLED);
+  }
+}
+
 void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
                        const std::array<std::vector<adas::Detection>, 4>& detections,
                        const adas::LaneResult& front_lane,
-                       const adas::LaneResult& rear_lane) {
-  cv::rectangle(canvas, area, cv::Scalar(13, 20, 27), cv::FILLED);
-  cv::rectangle(canvas, area, cv::Scalar(54, 75, 88), 1);
-  const cv::Point ego(area.x + area.width / 2, area.y + area.height / 2);
-  const cv::Scalar grid(43, 59, 69);
-  for (int radius = 18; radius <= 54; radius += 18)
-    cv::ellipse(canvas, ego, cv::Size(radius * 2, radius), 0, 0, 360, grid, 1, cv::LINE_AA);
-
+                       const adas::LaneResult& rear_lane,
+                       const adas::SignalResult& signal) {
+  cv::rectangle(canvas, area, cv::Scalar(38, 41, 45), cv::FILLED);
+  cv::rectangle(canvas, area, cv::Scalar(70, 78, 84), 1);
+  const cv::Point ego(area.x + area.width / 2, area.y + area.height * 72 / 100);
   const int front_shift = front_lane.valid
       ? cvRound(-front_lane.offset_ratio * 18.0f) : 0;
   const int rear_shift = rear_lane.valid
       ? cvRound(-rear_lane.offset_ratio * 18.0f) : 0;
-  const cv::Scalar front_color = front_lane.valid
-      ? cv::Scalar(95, 235, 130) : cv::Scalar(65, 80, 88);
-  const cv::Scalar rear_color = rear_lane.valid
-      ? cv::Scalar(95, 205, 235) : cv::Scalar(65, 80, 88);
-  cv::line(canvas, cv::Point(ego.x - 22, ego.y - 15),
-           cv::Point(ego.x - 15 + front_shift, area.y + 5), front_color, 2, cv::LINE_AA);
-  cv::line(canvas, cv::Point(ego.x + 22, ego.y - 15),
-           cv::Point(ego.x + 15 + front_shift, area.y + 5), front_color, 2, cv::LINE_AA);
-  cv::line(canvas, cv::Point(ego.x - 22, ego.y + 15),
-           cv::Point(ego.x - 15 + rear_shift, area.y + area.height - 5), rear_color, 2,
-           cv::LINE_AA);
-  cv::line(canvas, cv::Point(ego.x + 22, ego.y + 15),
-           cv::Point(ego.x + 15 + rear_shift, area.y + area.height - 5), rear_color, 2,
-           cv::LINE_AA);
-  for (int y = area.y + 8; y < area.y + area.height - 8; y += 12)
-    cv::line(canvas, cv::Point(ego.x, y), cv::Point(ego.x, std::min(y + 5, area.y + area.height - 8)),
-             cv::Scalar(82, 100, 108), 1);
 
-  cv::rectangle(canvas, cv::Rect(ego.x - 9, ego.y - 15, 18, 30),
-                cv::Scalar(70, 235, 145), 2);
-  cv::rectangle(canvas, cv::Rect(ego.x - 6, ego.y - 10, 12, 8),
-                cv::Scalar(65, 85, 100), cv::FILLED);
-  cv::putText(canvas, "F", cv::Point(ego.x - 3, area.y + 11),
-              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
-  cv::putText(canvas, "B", cv::Point(ego.x - 3, area.y + area.height - 4),
-              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
-  cv::putText(canvas, "L", cv::Point(area.x + 4, ego.y + 3),
-              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
-  cv::putText(canvas, "R", cv::Point(area.x + area.width - 11, ego.y + 3),
-              cv::FONT_HERSHEY_SIMPLEX, 0.30, cv::Scalar(120, 160, 180), 1, cv::LINE_AA);
+  const std::vector<cv::Point> road = {
+      cv::Point(ego.x - 18 + front_shift, area.y + 4),
+      cv::Point(ego.x + 18 + front_shift, area.y + 4),
+      cv::Point(ego.x + 48, ego.y + 22), cv::Point(ego.x - 48, ego.y + 22)};
+  cv::fillConvexPoly(canvas, road, cv::Scalar(29, 33, 37));
+  const cv::Scalar lane_color = front_lane.valid
+      ? cv::Scalar(205, 180, 80) : cv::Scalar(95, 105, 110);
+  cv::line(canvas, cv::Point(ego.x - 30, ego.y + 17),
+           cv::Point(ego.x - 14 + front_shift, area.y + 4), lane_color, 2, cv::LINE_AA);
+  cv::line(canvas, cv::Point(ego.x + 30, ego.y + 17),
+           cv::Point(ego.x + 14 + front_shift, area.y + 4), lane_color, 2, cv::LINE_AA);
+  const cv::Scalar rear_color = rear_lane.valid
+      ? cv::Scalar(160, 145, 80) : cv::Scalar(75, 82, 86);
+  cv::line(canvas, cv::Point(ego.x - 30, ego.y + 17),
+           cv::Point(ego.x - 19 + rear_shift, area.y + area.height - 3), rear_color, 1,
+           cv::LINE_AA);
+  cv::line(canvas, cv::Point(ego.x + 30, ego.y + 17),
+           cv::Point(ego.x + 19 + rear_shift, area.y + area.height - 3), rear_color, 1,
+           cv::LINE_AA);
+
+  for (int y = area.y + 12; y < ego.y - 18; y += 13)
+    cv::line(canvas, cv::Point(ego.x + front_shift / 2, y),
+             cv::Point(ego.x + front_shift / 2, y + 5), cv::Scalar(105, 110, 112), 1);
+
+  const cv::Rect light(ego.x - 5 + front_shift, area.y + 3, 10, 27);
+  cv::rectangle(canvas, light, cv::Scalar(9, 13, 16), cv::FILLED);
+  cv::rectangle(canvas, light, cv::Scalar(100, 110, 115), 1);
+  const cv::Scalar off(42, 47, 49);
+  cv::circle(canvas, cv::Point(light.x + 5, light.y + 5), 3,
+             signal.state == adas::SignalState::RED ? cv::Scalar(45, 55, 255) : off, cv::FILLED);
+  cv::circle(canvas, cv::Point(light.x + 5, light.y + 13), 3, off, cv::FILLED);
+  cv::circle(canvas, cv::Point(light.x + 5, light.y + 21), 3,
+             signal.state == adas::SignalState::GREEN ? cv::Scalar(65, 235, 90) : off,
+             cv::FILLED);
 
   for (int camera = 0; camera < 4; ++camera) {
     std::vector<const adas::Detection*> objects;
@@ -660,40 +683,43 @@ void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
               [](const adas::Detection* left, const adas::Detection* right) {
                 return left->box.area() > right->box.area();
               });
-    if (objects.size() > 4) objects.resize(4);
+    const size_t limit = camera == 0 ? 3 : 2;
+    if (objects.size() > limit) objects.resize(limit);
     for (const adas::Detection* object : objects) {
       const adas::Detection& detection = *object;
       const float nx = std::max(-1.0f, std::min(1.0f,
           (detection.box.x + detection.box.width * 0.5f) / kTileW * 2.0f - 1.0f));
       const float ny = std::max(-1.0f, std::min(1.0f,
           (detection.box.y + detection.box.height * 0.5f) / kTileH * 2.0f - 1.0f));
-      const float size_ratio = std::sqrt(std::max(1.0f, detection.box.area()) /
-                                         static_cast<float>(kTileW * kTileH));
-      const float far = 1.0f - std::max(0.0f, std::min(1.0f, size_ratio * 4.0f));
-      const int longitudinal = 22 + static_cast<int>(far * (area.height / 2 - 30));
-      const int lateral = static_cast<int>(nx * (area.width / 2 - 35));
+      const float apparent = std::max(0.0f, std::min(1.0f,
+          std::sqrt(std::max(1.0f, detection.box.area()) /
+                    static_cast<float>(kTileW * kTileH)) * 4.0f));
+      const float far = 1.0f - apparent;
       cv::Point position = ego;
-      if (camera == 0) position += cv::Point(lateral, -longitudinal);
-      if (camera == 1) position += cv::Point(-lateral, longitudinal);
-      if (camera == 2) position += cv::Point(-longitudinal, static_cast<int>(ny * 32));
-      if (camera == 3) position += cv::Point(longitudinal, static_cast<int>(ny * 32));
-      position.x = std::max(area.x + 7, std::min(area.x + area.width - 8, position.x));
-      position.y = std::max(area.y + 7, std::min(area.y + area.height - 8, position.y));
-      const cv::Scalar color = detection.class_id <= 1
-          ? cv::Scalar(225, 75, 225) : cv::Scalar(60, 190, 255);
-      if (detection.class_id <= 1) {
-        cv::circle(canvas, position, 4, color, cv::FILLED);
+      if (camera == 0) {
+        position.x += cvRound(nx * (24.0f + apparent * 28.0f));
+        position.y = area.y + 34 + cvRound(apparent * (ego.y - area.y - 59));
+      } else if (camera == 1) {
+        position.x -= cvRound(nx * 34.0f);
+        position.y = ego.y + 21 + cvRound(far * 7.0f);
       } else {
-        const bool side = camera >= 2;
-        cv::rectangle(canvas, cv::Rect(position.x - (side ? 6 : 4),
-                                      position.y - (side ? 4 : 6),
-                                      side ? 12 : 8, side ? 8 : 12), color, 2);
+        const int side_distance = 52 + cvRound(far * (area.width / 2 - 65));
+        position.x += camera == 2 ? -side_distance : side_distance;
+        position.y += cvRound(ny * 22.0f);
       }
-      if (detection.track_id >= 0)
-        cv::putText(canvas, std::to_string(detection.track_id), position + cv::Point(6, -3),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.28, color, 1, cv::LINE_AA);
+      position.x = std::max(area.x + 9, std::min(area.x + area.width - 10, position.x));
+      position.y = std::max(area.y + 9, std::min(area.y + area.height - 10, position.y));
+      if (detection.class_id <= 1) {
+        cv::circle(canvas, position, 5, cv::Scalar(220, 80, 220), cv::FILLED);
+      } else {
+        const int icon_width = 9 + cvRound(apparent * 5.0f);
+        const int icon_height = 15 + cvRound(apparent * 8.0f);
+        draw_top_car(canvas, position, icon_width, icon_height,
+                     cv::Scalar(165, 172, 176), camera >= 2, false);
+      }
     }
   }
+  draw_top_car(canvas, ego, 18, 29, cv::Scalar(100, 230, 150), false, true);
 }
 
 void draw_sidebar(cv::Mat& canvas, double fps, double npu_ms, const adas::SignalResult& signal,
@@ -764,7 +790,7 @@ void draw_sidebar(cv::Mat& canvas, double fps, double npu_ms, const adas::Signal
   caption(canvas, "非真实世界坐标", x + 14, kHeaderH + 798,
           cv::Scalar(140, 165, 180), 0.43);
   draw_surround_map(canvas, cv::Rect(x + 196, map_y + 9, w - 210, 108), detections,
-                    front_lane, rear_lane);
+                    front_lane, rear_lane, signal);
 
   panel(canvas, x, kHeaderH + 834, w, 164);
   caption(canvas, "摄像头 / 模型", x + 14, kHeaderH + 862,
