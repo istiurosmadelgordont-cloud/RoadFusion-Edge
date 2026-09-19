@@ -379,6 +379,15 @@ int main(int argc, char** argv) {
       if (frame.empty()) break;
       if (frame_index == 0 || (frame_index + 1) % options.lane_interval == 0) {
         lane = lane_detector.detect(frame);
+        if (options.dump_detections && lane.valid && !lane.left.empty() && !lane.right.empty()) {
+          std::cout << "lane_frame=" << frame_index
+                    << " left_bottom=" << lane.left.front().x << ',' << lane.left.front().y
+                    << " left_top=" << lane.left.back().x << ',' << lane.left.back().y
+                    << " right_top=" << lane.right.front().x << ',' << lane.right.front().y
+                    << " right_bottom=" << lane.right.back().x << ',' << lane.right.back().y
+                    << " offset_ratio=" << lane.offset_ratio
+                    << " partial=" << lane.partial << std::endl;
+        }
       }
       if (calibration.detection_enabled) {
         if (frame_index % options.detection_interval == 0) detections = detector.detect(frame, &npu_ms);

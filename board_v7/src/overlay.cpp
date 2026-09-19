@@ -102,8 +102,8 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
     std::vector<std::vector<cv::Point>> polygons(1, lane.polygon);
     cv::fillPoly(layer, polygons, lane.departure ? cv::Scalar(0, 70, 255) : cv::Scalar(20, 190, 70));
     cv::addWeighted(layer, 0.27, frame, 0.73, 0, frame);
-    cv::polylines(frame, lane.left, false, cv::Scalar(255, 230, 0), 5, cv::LINE_AA);
-    cv::polylines(frame, lane.right, false, cv::Scalar(255, 230, 0), 5, cv::LINE_AA);
+    cv::polylines(frame, lane.left, false, cv::Scalar(40, 255, 80), 5, cv::LINE_AA);
+    cv::polylines(frame, lane.right, false, cv::Scalar(40, 255, 80), 5, cv::LINE_AA);
   }
   for (const Detection& detection : detections) {
     const cv::Scalar color = color_for(detection.class_id);

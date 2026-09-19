@@ -7,121 +7,60 @@
 namespace adas {
 namespace {
 
-struct BirdCurves {
-  bool left_valid = false;
-  bool right_valid = false;
-  bool left_inferred = false;
-  bool right_inferred = false;
-  cv::Vec3d left{};
-  cv::Vec3d right{};
-};
-
-bool fit_quadratic(const std::vector<cv::Point>& points, cv::Vec3d& coefficients) {
-  if (points.size() < 30) return false;
-  int min_y = points.front().y;
-  int max_y = points.front().y;
-  for (const cv::Point& point : points) {
-    min_y = std::min(min_y, point.y);
-    max_y = std::max(max_y, point.y);
-  }
-  if (max_y - min_y < 90) return false;
-  cv::Mat design(static_cast<int>(points.size()), 3, CV_64F);
-  cv::Mat values(static_cast<int>(points.size()), 1, CV_64F);
-  for (size_t i = 0; i < points.size(); ++i) {
-    const double y = points[i].y;
-    design.at<double>(static_cast<int>(i), 0) = y * y;
-    design.at<double>(static_cast<int>(i), 1) = y;
-    design.at<double>(static_cast<int>(i), 2) = 1.0;
-    values.at<double>(static_cast<int>(i), 0) = points[i].x;
-  }
-  cv::Mat solved;
-  if (!cv::solve(design, values, solved, cv::DECOMP_SVD)) return false;
-  coefficients = cv::Vec3d(solved.at<double>(0), solved.at<double>(1), solved.at<double>(2));
-  return true;
+double curve_x(const cv::Vec3d& fit, double y) {
+  return fit[0] * y * y + fit[1] * y + fit[2];
 }
 
-void search_side(const std::vector<cv::Point>& pixels, bool left, int width, int height,
-                 cv::Mat& visualization, std::vector<cv::Point>& selected) {
-  std::vector<int> histogram(width, 0);
-  for (const cv::Point& point : pixels) {
-    if (point.y >= height / 2) ++histogram[point.x];
-  }
-  const int begin = left ? 0 : width / 2;
-  const int end = left ? width / 2 : width;
-  int current_x = left ? width / 4 : width * 3 / 4;
-  for (int x = begin; x < end; ++x) {
-    if (histogram[x] > histogram[current_x]) current_x = x;
-  }
-
-  const int windows = 9;
-  const int window_height = std::max(1, height / windows);
-  const int margin = std::max(28, width / 14);
-  for (int window = 0; window < windows; ++window) {
-    const int y_high = height - window * window_height;
-    const int y_low = std::max(0, y_high - window_height);
-    const int x_low = std::max(0, current_x - margin);
-    const int x_high = std::min(width - 1, current_x + margin);
-    cv::rectangle(visualization, cv::Rect(x_low, y_low, std::max(1, x_high - x_low),
-                  std::max(1, y_high - y_low)), cv::Scalar(0, 190, 0), 1);
-    long x_sum = 0;
-    int count = 0;
-    for (const cv::Point& point : pixels) {
-      if (point.y >= y_low && point.y < y_high && point.x >= x_low && point.x < x_high) {
-        selected.push_back(point);
-        x_sum += point.x;
-        ++count;
-      }
-    }
-    if (count >= 18) current_x = static_cast<int>(x_sum / count);
-  }
+float percentile(std::vector<float> values, float q) {
+  if (values.empty()) return 0.0f;
+  const size_t index = std::min(values.size() - 1,
+      static_cast<size_t>(q * static_cast<float>(values.size() - 1)));
+  std::nth_element(values.begin(), values.begin() + index, values.end());
+  return values[index];
 }
 
-BirdCurves make_curve_fit(const cv::Mat& bird_eye, cv::Mat& visualization) {
-  BirdCurves model;
-  cv::cvtColor(bird_eye, visualization, cv::COLOR_GRAY2BGR);
-  std::vector<cv::Point> pixels;
-  cv::findNonZero(bird_eye, pixels);
-  std::vector<cv::Point> left_points;
-  std::vector<cv::Point> right_points;
-  search_side(pixels, true, bird_eye.cols, bird_eye.rows, visualization, left_points);
-  search_side(pixels, false, bird_eye.cols, bird_eye.rows, visualization, right_points);
-  for (const cv::Point& point : left_points) visualization.at<cv::Vec3b>(point) = cv::Vec3b(255, 60, 30);
-  for (const cv::Point& point : right_points) visualization.at<cv::Vec3b>(point) = cv::Vec3b(30, 40, 255);
-  cv::Vec3d left_curve, right_curve;
-  const bool left_ok = fit_quadratic(left_points, left_curve);
-  const bool right_ok = fit_quadratic(right_points, right_curve);
-  bool left_inferred = false;
-  bool right_inferred = false;
-  if (left_ok && !right_ok) {
-    right_curve = left_curve;
-    right_curve[2] += bird_eye.cols * 0.50;
-    right_inferred = true;
-  } else if (!left_ok && right_ok) {
-    left_curve = right_curve;
-    left_curve[2] -= bird_eye.cols * 0.50;
-    left_inferred = true;
-  }
-  model.left_valid = left_ok || left_inferred;
-  model.right_valid = right_ok || right_inferred;
-  model.left_inferred = left_inferred;
-  model.right_inferred = right_inferred;
-  model.left = left_curve;
-  model.right = right_curve;
-  for (int y = 0; y < bird_eye.rows; ++y) {
-    if (left_ok || left_inferred) {
-      const int x = static_cast<int>(left_curve[0] * y * y + left_curve[1] * y + left_curve[2]);
-      if (x >= 0 && x < bird_eye.cols && (!left_inferred || y % 8 < 4))
-        cv::circle(visualization, cv::Point(x, y), 2,
-                   left_inferred ? cv::Scalar(120, 120, 120) : cv::Scalar(255, 255, 0), cv::FILLED);
+cv::Mat width_feature_mask(const cv::Mat& frame) {
+  cv::Mat hls, light, blurred;
+  cv::cvtColor(frame, hls, cv::COLOR_BGR2HLS);
+  cv::extractChannel(hls, light, 1);
+  cv::GaussianBlur(light, blurred, cv::Size(3, 3), 0);
+  cv::Mat source;
+  blurred.convertTo(source, CV_32F);
+  cv::Mat best = cv::Mat::zeros(source.size(), CV_32F);
+  const int widths[] = {3, 5, 7, 9, 11};
+  for (int stripe : widths) {
+    const int flank = std::max(2, stripe);
+    cv::Mat kernel(1, flank * 2 + stripe, CV_32F);
+    for (int x = 0; x < kernel.cols; ++x) {
+      kernel.at<float>(0, x) = x >= flank && x < flank + stripe
+          ? 1.0f / stripe : -0.5f / flank;
     }
-    if (right_ok || right_inferred) {
-      const int x = static_cast<int>(right_curve[0] * y * y + right_curve[1] * y + right_curve[2]);
-      if (x >= 0 && x < bird_eye.cols && (!right_inferred || y % 8 < 4))
-        cv::circle(visualization, cv::Point(x, y), 2,
-                   right_inferred ? cv::Scalar(120, 120, 120) : cv::Scalar(0, 255, 255), cv::FILLED);
-    }
+    cv::Mat response;
+    cv::filter2D(source, response, CV_32F, kernel, cv::Point(-1, -1), 0,
+                 cv::BORDER_REPLICATE);
+    cv::max(best, response, best);
   }
-  return model;
+  std::vector<float> positive;
+  positive.reserve(best.total() / 6);
+  for (int y = 0; y < best.rows; y += 2) {
+    const float* row = best.ptr<float>(y);
+    for (int x = 0; x < best.cols; x += 2)
+      if (row[x] > 0.0f) positive.push_back(row[x]);
+  }
+  const float threshold = std::max(7.0f, std::min(22.0f, percentile(positive, 0.68f)));
+  cv::Mat mask;
+  cv::compare(best, threshold, mask, cv::CMP_GE);
+  cv::morphologyEx(mask, mask, cv::MORPH_OPEN,
+                   cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1, 3)));
+  return mask;
+}
+
+void scale_points(std::vector<cv::Point>& points, float inverse) {
+  if (std::abs(inverse - 1.0f) < 1e-5f) return;
+  for (cv::Point& point : points) {
+    point.x = cvRound(point.x * inverse);
+    point.y = cvRound(point.y * inverse);
+  }
 }
 
 }  // namespace
@@ -129,9 +68,11 @@ BirdCurves make_curve_fit(const cv::Mat& bird_eye, cv::Mat& visualization) {
 LaneDetector::LaneDetector(const LaneConfig& config) : config_(config) {}
 
 void LaneDetector::reset() {
-  has_left_ = has_right_ = false;
-  has_left_curve_ = has_right_curve_ = false;
-  left_missing_ = right_missing_ = 0;
+  has_curves_ = false;
+  missed_ = 0;
+  has_road_light_ = false;
+  has_direct_ = false;
+  direct_missed_ = 0;
 }
 
 void LaneDetector::set_roi(const cv::Point2f& tl, const cv::Point2f& tr,
@@ -143,210 +84,440 @@ void LaneDetector::set_roi(const cv::Point2f& tl, const cv::Point2f& tr,
   reset();
 }
 
-bool LaneDetector::fit_side(const std::vector<cv::Vec4i>& lines, bool left, int width, int height,
-                            cv::Vec4f& result) const {
-  std::vector<cv::Point2f> points;
-  for (const cv::Vec4i& line : lines) {
-    const float dx = static_cast<float>(line[2] - line[0]);
-    const float dy = static_cast<float>(line[3] - line[1]);
-    if (std::abs(dx) < 2.0f || std::sqrt(dx * dx + dy * dy) < height * 0.035f) continue;
-    const float slope = dy / dx;
-    if ((left && slope > -0.40f) || (!left && slope < 0.40f) || std::abs(slope) > 5.0f) continue;
-    const float mid_x = 0.5f * (line[0] + line[2]);
-    if ((left && mid_x > width * 0.62f) || (!left && mid_x < width * 0.38f)) continue;
-    points.emplace_back(static_cast<float>(line[0]), static_cast<float>(line[1]));
-    points.emplace_back(static_cast<float>(line[2]), static_cast<float>(line[3]));
+cv::Mat LaneDetector::threshold_lane_paint(const cv::Mat& frame) {
+  cv::Mat gray, equalized, blurred, hls, hsv;
+  cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+  cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+  clahe->apply(gray, equalized);
+  cv::GaussianBlur(equalized, blurred, cv::Size(5, 5), 0);
+  cv::cvtColor(frame, hls, cv::COLOR_BGR2HLS);
+  cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
+
+  cv::Mat light;
+  cv::extractChannel(hls, light, 1);
+  std::vector<unsigned char> samples;
+  samples.reserve(light.total() / 16);
+  for (int y = 0; y < light.rows; y += 4) {
+    const unsigned char* row = light.ptr<unsigned char>(y);
+    for (int x = 0; x < light.cols; x += 4)
+      if (row[x] > 15) samples.push_back(row[x]);
   }
-  if (points.size() < 4) return false;
-  cv::Vec4f fit;
-  cv::fitLine(points, fit, cv::DIST_L2, 0, 0.01, 0.01);
-  if (std::abs(fit[1]) < 1e-4f) return false;
-  const float y_top = height * std::min(config_.top_left.y, config_.top_right.y);
-  const float y_bottom = height * std::max(config_.bottom_left.y, config_.bottom_right.y);
-  const float x_top = fit[2] + (y_top - fit[3]) * fit[0] / fit[1];
-  const float x_bottom = fit[2] + (y_bottom - fit[3]) * fit[0] / fit[1];
-  result = cv::Vec4f(x_top, y_top, x_bottom, y_bottom);
-  const bool direction_ok = left ? (x_bottom < x_top - width * 0.03f)
-                                 : (x_bottom > x_top + width * 0.03f);
-  return direction_ok && x_top > width * 0.18f && x_top < width * 0.82f &&
-         x_bottom > -width * 0.05f && x_bottom < width * 1.05f;
+  float measured = 0.0f;
+  if (!samples.empty()) {
+    const size_t middle = samples.size() / 2;
+    std::nth_element(samples.begin(), samples.begin() + middle, samples.end());
+    measured = samples[middle];
+  }
+  if (!has_road_light_) {
+    road_light_ = measured;
+    has_road_light_ = true;
+  } else {
+    road_light_ = road_light_ * 0.85f + measured * 0.15f;
+  }
+  const int white_min = cvRound(std::max(55.0f, std::min(180.0f, road_light_ + 20.0f)));
+  const int yellow_min = cvRound(std::max(45.0f, std::min(85.0f, road_light_ * 0.65f)));
+
+  cv::Mat white, yellow;
+  cv::inRange(hls, cv::Scalar(0, white_min, 0), cv::Scalar(180, 255, 150), white);
+  cv::inRange(hsv, cv::Scalar(12, 65, yellow_min), cv::Scalar(42, 255, 255), yellow);
+  cv::Mat width_mask = width_feature_mask(frame);
+  cv::Mat nearby_width;
+  cv::dilate(width_mask, nearby_width, cv::Mat::ones(3, 3, CV_8U));
+  cv::bitwise_and(white, nearby_width, white);
+
+  cv::Mat sobel, magnitude, gradient;
+  cv::Sobel(blurred, sobel, CV_32F, 1, 0, 3);
+  cv::absdiff(sobel, cv::Scalar(0), magnitude);
+  double max_magnitude = 0.0;
+  cv::minMaxLoc(magnitude, nullptr, &max_magnitude);
+  magnitude.convertTo(gradient, CV_8U, 255.0 / std::max(1.0, max_magnitude));
+  cv::inRange(gradient, cv::Scalar(28), cv::Scalar(255), gradient);
+  cv::Mat paint, paint_near;
+  cv::bitwise_or(white, yellow, paint);
+  cv::dilate(paint, paint_near, cv::Mat::ones(3, 3, CV_8U));
+  cv::bitwise_and(gradient, paint_near, gradient);
+  cv::Mat yellow_support;
+  cv::bitwise_or(nearby_width, gradient, yellow_support);
+  cv::bitwise_and(yellow, yellow_support, yellow);
+  cv::Mat binary;
+  cv::bitwise_or(white, yellow, binary);
+  cv::bitwise_or(binary, gradient, binary);
+  cv::morphologyEx(binary, binary, cv::MORPH_CLOSE,
+                   cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 5)));
+  return binary;
 }
 
-cv::Vec4f LaneDetector::smooth(const cv::Vec4f& current, cv::Vec4f& previous,
-                               bool& has_previous) const {
-  if (!has_previous) {
-    previous = current;
-    has_previous = true;
-    return current;
+bool LaneDetector::collect_sliding(const cv::Mat& warped, std::vector<cv::Point>& left,
+                                   std::vector<cv::Point>& right, cv::Mat& debug) const {
+  const int w = warped.cols, h = warped.rows;
+  std::vector<int> histogram(w, 0);
+  for (int y = h / 2; y < h; ++y) {
+    const unsigned char* row = warped.ptr<unsigned char>(y);
+    for (int x = 0; x < w; ++x) if (row[x]) ++histogram[x];
   }
-  previous = previous * config_.smoothing + current * (1.0f - config_.smoothing);
-  return previous;
+  const int left_begin = cvRound(w * 0.08), right_end = cvRound(w * 0.92);
+  int left_x = left_begin, right_x = w / 2;
+  for (int x = left_begin; x < w / 2; ++x)
+    if (histogram[x] > histogram[left_x]) left_x = x;
+  for (int x = w / 2; x < right_end; ++x)
+    if (histogram[x] > histogram[right_x]) right_x = x;
+  if (histogram[left_x] < 3 || histogram[right_x] < 3) return false;
+
+  std::vector<cv::Point> pixels;
+  cv::findNonZero(warped, pixels);
+  const int windows = 9, window_h = std::max(1, h / windows);
+  const int margin = std::max(28, cvRound(w * 0.075));
+  const int min_pixels = std::max(10, w / 90);
+  for (int window = 0; window < windows; ++window) {
+    const int high = h - window * window_h, low = std::max(0, high - window_h);
+    std::vector<int> lx, rx;
+    for (const cv::Point& point : pixels) {
+      if (point.y < low || point.y >= high) continue;
+      if (std::abs(point.x - left_x) < margin) { left.push_back(point); lx.push_back(point.x); }
+      if (std::abs(point.x - right_x) < margin) { right.push_back(point); rx.push_back(point.x); }
+    }
+    auto recenter = [min_pixels](std::vector<int>& xs, int& center) {
+      if (static_cast<int>(xs.size()) < min_pixels) return;
+      const size_t middle = xs.size() / 2;
+      std::nth_element(xs.begin(), xs.begin() + middle, xs.end());
+      center = xs[middle];
+    };
+    recenter(lx, left_x); recenter(rx, right_x);
+    const int left_low = std::max(0, left_x - margin), left_high = std::min(w, left_x + margin);
+    const int right_low = std::max(0, right_x - margin), right_high = std::min(w, right_x + margin);
+    cv::rectangle(debug, cv::Rect(left_low, low, std::max(1, left_high - left_low),
+                  std::min(window_h, h - low)), cv::Scalar(0, 210, 0), 1);
+    cv::rectangle(debug, cv::Rect(right_low, low, std::max(1, right_high - right_low),
+                  std::min(window_h, h - low)), cv::Scalar(0, 210, 0), 1);
+  }
+  const int minimum = std::max(65, cvRound(w * h * 0.00009));
+  return static_cast<int>(left.size()) >= minimum && static_cast<int>(right.size()) >= minimum;
+}
+
+bool LaneDetector::collect_tracked(const cv::Mat& warped, std::vector<cv::Point>& left,
+                                   std::vector<cv::Point>& right, cv::Mat& debug) const {
+  const int w = warped.cols, h = warped.rows;
+  const int margin = std::max(18, cvRound(w * 0.045));
+  std::vector<cv::Point> pixels;
+  cv::findNonZero(warped, pixels);
+  for (const cv::Point& point : pixels) {
+    const double dl = std::abs(point.x - curve_x(previous_left_curve_, point.y));
+    const double dr = std::abs(point.x - curve_x(previous_right_curve_, point.y));
+    if (dl < margin && dl <= dr) left.push_back(point);
+    else if (dr < margin && dr < dl) right.push_back(point);
+  }
+  const int minimum = std::max(55, cvRound(w * h * 0.000075));
+  auto span = [](const std::vector<cv::Point>& points) {
+    if (points.empty()) return 0;
+    int low = points.front().y, high = low;
+    for (const cv::Point& point : points) { low = std::min(low, point.y); high = std::max(high, point.y); }
+    return high - low;
+  };
+  if (static_cast<int>(left.size()) < minimum || static_cast<int>(right.size()) < minimum ||
+      span(left) < h * 0.48 || span(right) < h * 0.48) return false;
+  for (int y = 0; y < h; y += std::max(1, h / 9)) {
+    const int lx = cvRound(curve_x(previous_left_curve_, y));
+    const int rx = cvRound(curve_x(previous_right_curve_, y));
+    cv::rectangle(debug, cv::Point(lx - margin, y),
+                  cv::Point(lx + margin, std::min(h - 1, y + h / 9)), cv::Scalar(0, 210, 0), 1);
+    cv::rectangle(debug, cv::Point(rx - margin, y),
+                  cv::Point(rx + margin, std::min(h - 1, y + h / 9)), cv::Scalar(0, 210, 0), 1);
+  }
+  return true;
+}
+
+bool LaneDetector::robust_fit(const std::vector<cv::Point>& input, int width, int height,
+                              cv::Vec3d& fit) const {
+  std::vector<cv::Point> points = input;
+  for (int iteration = 0; iteration < 3; ++iteration) {
+    if (points.size() < 35) return false;
+    cv::Mat design(static_cast<int>(points.size()), 3, CV_64F);
+    cv::Mat values(static_cast<int>(points.size()), 1, CV_64F);
+    int min_y = height, max_y = 0;
+    for (size_t i = 0; i < points.size(); ++i) {
+      const double y = points[i].y;
+      design.at<double>(static_cast<int>(i), 0) = y * y;
+      design.at<double>(static_cast<int>(i), 1) = y;
+      design.at<double>(static_cast<int>(i), 2) = 1.0;
+      values.at<double>(static_cast<int>(i), 0) = points[i].x;
+      min_y = std::min(min_y, points[i].y); max_y = std::max(max_y, points[i].y);
+    }
+    if (max_y - min_y < height * 0.35) return false;
+    cv::Mat solved;
+    if (!cv::solve(design, values, solved, cv::DECOMP_SVD)) return false;
+    fit = cv::Vec3d(solved.at<double>(0), solved.at<double>(1), solved.at<double>(2));
+    if (iteration == 2) break;
+    std::vector<float> residuals;
+    residuals.reserve(points.size());
+    for (const cv::Point& point : points)
+      residuals.push_back(static_cast<float>(std::abs(point.x - curve_x(fit, point.y))));
+    const float limit = std::max(width * 0.012f, percentile(residuals, 0.5f) * 2.5f);
+    std::vector<cv::Point> kept;
+    kept.reserve(points.size());
+    for (size_t i = 0; i < points.size(); ++i)
+      if (residuals[i] < limit) kept.push_back(points[i]);
+    points.swap(kept);
+  }
+  return true;
+}
+
+bool LaneDetector::validate_fits(const cv::Vec3d& left, const cv::Vec3d& right,
+                                 int width, int height) const {
+  double min_width = 1e9, max_width = 0.0, sum = 0.0;
+  for (int i = 0; i < 7; ++i) {
+    const double y = i * (height - 1) / 6.0;
+    const double lane_width = curve_x(right, y) - curve_x(left, y);
+    if (!std::isfinite(lane_width) || lane_width <= width * 0.16 || lane_width >= width * 0.72)
+      return false;
+    min_width = std::min(min_width, lane_width); max_width = std::max(max_width, lane_width); sum += lane_width;
+  }
+  const double variation = (max_width - min_width) / std::max(1.0, sum / 7.0);
+  return variation <= 0.48 && curve_x(left, height - 1) < width * 0.56 &&
+         curve_x(right, height - 1) > width * 0.44;
+}
+
+LaneResult LaneDetector::make_curve_result(const cv::Mat& binary, const cv::Mat& bird,
+                                           const cv::Mat& debug, const cv::Mat& inverse,
+                                           const cv::Vec3d& left, const cv::Vec3d& right,
+                                           int width, int height, float scale,
+                                           float reference_x, bool partial) const {
+  LaneResult result;
+  result.binary = binary; result.bird_eye = bird; result.curve_fit = debug;
+  std::vector<cv::Point2f> left_bird, right_bird;
+  for (int i = 0; i < 32; ++i) {
+    const float yl = (height - 1) * (1.0f - i / 31.0f);
+    const float yr = (height - 1) * (i / 31.0f);
+    left_bird.emplace_back(static_cast<float>(curve_x(left, yl)), yl);
+    right_bird.emplace_back(static_cast<float>(curve_x(right, yr)), yr);
+  }
+  std::vector<cv::Point2f> left_image, right_image;
+  cv::perspectiveTransform(left_bird, left_image, inverse);
+  cv::perspectiveTransform(right_bird, right_image, inverse);
+  for (const cv::Point2f& point : left_image)
+    result.left.emplace_back(cvRound(std::max(0.0f, std::min(point.x, width - 1.0f))),
+                             cvRound(std::max(0.0f, std::min(point.y, height - 1.0f))));
+  for (const cv::Point2f& point : right_image)
+    result.right.emplace_back(cvRound(std::max(0.0f, std::min(point.x, width - 1.0f))),
+                              cvRound(std::max(0.0f, std::min(point.y, height - 1.0f))));
+  result.polygon = result.left;
+  result.polygon.insert(result.polygon.end(), result.right.begin(), result.right.end());
+  const double left_bottom = curve_x(left, height - 1), right_bottom = curve_x(right, height - 1);
+  result.offset_ratio = static_cast<float>((reference_x - (left_bottom + right_bottom) * 0.5) /
+                                           std::max(1.0, right_bottom - left_bottom));
+  result.departure = std::abs(result.offset_ratio) > config_.departure_ratio;
+  result.valid = true;
+  result.partial = partial;
+  const float inverse_scale = 1.0f / scale;
+  scale_points(result.left, inverse_scale); scale_points(result.right, inverse_scale);
+  scale_points(result.polygon, inverse_scale);
+  return result;
+}
+
+LaneResult LaneDetector::make_direct_result(const cv::Mat& binary, const cv::Mat& road,
+                                            int y_top, int y_bottom, float scale,
+                                            bool partial) const {
+  LaneResult result;
+  result.binary = binary;
+  result.bird_eye = road;
+  cv::cvtColor(road, result.curve_fit, cv::COLOR_GRAY2BGR);
+  for (int i = 0; i < 32; ++i) {
+    const double yl = y_bottom - i * (y_bottom - y_top) / 31.0;
+    const double yr = y_top + i * (y_bottom - y_top) / 31.0;
+    result.left.emplace_back(cvRound(direct_left_[0] * yl + direct_left_[1]), cvRound(yl));
+    result.right.emplace_back(cvRound(direct_right_[0] * yr + direct_right_[1]), cvRound(yr));
+  }
+  const double left_bottom = direct_left_[0] * y_bottom + direct_left_[1];
+  const double right_bottom = direct_right_[0] * y_bottom + direct_right_[1];
+  const double lane_width = right_bottom - left_bottom;
+  if (lane_width <= binary.cols * 0.04) return LaneResult();
+  result.polygon = result.left;
+  result.polygon.insert(result.polygon.end(), result.right.begin(), result.right.end());
+  result.offset_ratio = static_cast<float>((binary.cols * 0.5 -
+      (left_bottom + right_bottom) * 0.5) / lane_width);
+  result.departure = std::abs(result.offset_ratio) > config_.departure_ratio;
+  result.valid = true;
+  result.partial = partial;
+  cv::polylines(result.curve_fit, result.left, false, cv::Scalar(255, 80, 30), 3, cv::LINE_AA);
+  cv::polylines(result.curve_fit, result.right, false, cv::Scalar(20, 40, 255), 3, cv::LINE_AA);
+  const float inverse_scale = 1.0f / scale;
+  scale_points(result.left, inverse_scale); scale_points(result.right, inverse_scale);
+  scale_points(result.polygon, inverse_scale);
+  return result;
+}
+
+LaneResult LaneDetector::vanishing_fallback(const cv::Mat& binary, float scale) {
+  const int w = binary.cols, h = binary.rows;
+  const int y_min = cvRound(h * 0.43), y_bottom = cvRound(h * 0.90);
+  cv::Mat mask = cv::Mat::zeros(binary.size(), CV_8U);
+  const std::vector<cv::Point> area = {
+      cv::Point(cvRound(w * 0.05), y_bottom), cv::Point(cvRound(w * 0.30), y_min),
+      cv::Point(cvRound(w * 0.70), y_min), cv::Point(cvRound(w * 0.95), y_bottom)};
+  cv::fillConvexPoly(mask, area, cv::Scalar(255));
+  cv::Mat road;
+  cv::bitwise_and(binary, mask, road);
+  std::vector<cv::Vec4i> lines;
+  cv::HoughLinesP(road, lines, 1, CV_PI / 360.0, 14,
+                  std::max(12, w / 55), std::max(28, w / 16));
+  struct Candidate { double a, b, length; };
+  std::vector<Candidate> left, right;
+  for (const cv::Vec4i& line : lines) {
+    const double dy = line[3] - line[1];
+    if (std::abs(dy) < 5.0) continue;
+    const double a = (line[2] - line[0]) / dy;
+    if (std::abs(a) < 0.28 || std::abs(a) > 4.5) continue;
+    const double b = line[0] - a * line[1];
+    const double length = std::hypot(line[2] - line[0], line[3] - line[1]);
+    (a < 0.0 ? left : right).push_back({a, b, length});
+  }
+  bool found = false;
+  double best_score = -1e30, best_la = 0.0, best_lb = 0.0;
+  double best_ra = 0.0, best_rb = 0.0, best_vy = 0.0;
+  for (const Candidate& l : left) for (const Candidate& r : right) {
+    const double denominator = l.a - r.a;
+    if (std::abs(denominator) < 1e-4) continue;
+    const double vanish_y = (r.b - l.b) / denominator;
+    const double vanish_x = l.a * vanish_y + l.b;
+    const double lx = l.a * y_bottom + l.b, rx = r.a * y_bottom + r.b;
+    const double lane_width = rx - lx;
+    if (vanish_y <= h * 0.28 || vanish_y >= h * 0.68 ||
+        vanish_x <= w * 0.28 || vanish_x >= w * 0.72 ||
+        lx >= w * 0.50 || rx <= w * 0.50 ||
+        lane_width <= w * 0.16 || lane_width >= w * 0.68) continue;
+    const double center = (lx + rx) * 0.5;
+    const double score = l.length + r.length - std::abs(vanish_x - w * 0.5) * 0.9 -
+                         std::abs(center - w * 0.5) * 0.45 -
+                         std::abs(lane_width - w * 0.36) * 0.25;
+    if (!found || score > best_score) {
+      found = true; best_score = score; best_la = l.a; best_lb = l.b;
+      best_ra = r.a; best_rb = r.b; best_vy = vanish_y;
+    }
+  }
+  if (!found) {
+    if (!has_direct_ || direct_missed_ >= 3) {
+      has_direct_ = false; direct_missed_ = 0;
+      return LaneResult();
+    }
+    ++direct_missed_;
+    return make_direct_result(binary, road, direct_top_, y_bottom, scale, true);
+  }
+  int top = cvRound(std::max(h * 0.48, std::min(h * 0.68, best_vy + h * 0.055)));
+  if (has_direct_) {
+    double displacement = 0.0;
+    for (int y : {top, y_bottom}) {
+      displacement = std::max(displacement, std::abs(best_la * y + best_lb -
+          (direct_left_[0] * y + direct_left_[1])));
+      displacement = std::max(displacement, std::abs(best_ra * y + best_rb -
+          (direct_right_[0] * y + direct_right_[1])));
+    }
+    if (displacement > w * 0.18 && direct_missed_ < 3) {
+      ++direct_missed_;
+      return make_direct_result(binary, road, direct_top_, y_bottom, scale, true);
+    }
+    const double alpha = std::max(0.12, std::min(0.28, 0.12 + displacement / (w * 0.60)));
+    best_la = direct_left_[0] * (1.0 - alpha) + best_la * alpha;
+    best_lb = direct_left_[1] * (1.0 - alpha) + best_lb * alpha;
+    best_ra = direct_right_[0] * (1.0 - alpha) + best_ra * alpha;
+    best_rb = direct_right_[1] * (1.0 - alpha) + best_rb * alpha;
+    top = cvRound(direct_top_ * (1.0 - alpha) + top * alpha);
+  }
+  direct_left_ = cv::Vec2d(best_la, best_lb);
+  direct_right_ = cv::Vec2d(best_ra, best_rb);
+  direct_top_ = top; has_direct_ = true; direct_missed_ = 0;
+  return make_direct_result(binary, road, top, y_bottom, scale, false);
 }
 
 LaneResult LaneDetector::detect(const cv::Mat& frame) {
-  LaneResult result;
-  if (frame.empty()) return result;
-  cv::Mat work;
-  const float processing_scale = frame.cols > config_.processing_width
+  LaneResult empty;
+  if (frame.empty()) return empty;
+  const float scale = frame.cols > config_.processing_width
       ? config_.processing_width / static_cast<float>(frame.cols) : 1.0f;
-  if (processing_scale < 1.0f) {
-    cv::resize(frame, work, cv::Size(config_.processing_width,
-               static_cast<int>(std::round(frame.rows * processing_scale))), 0, 0, cv::INTER_AREA);
-  } else {
-    work = frame;
-  }
-  const int w = work.cols;
-  const int h = work.rows;
-  cv::Mat hls, white, yellow, binary, blurred, edges;
-  cv::cvtColor(work, hls, cv::COLOR_BGR2HLS);
-  cv::inRange(hls, cv::Scalar(0, 145, 0), cv::Scalar(180, 255, 255), white);
-  cv::inRange(hls, cv::Scalar(12, 70, 65), cv::Scalar(42, 230, 255), yellow);
-  cv::bitwise_or(white, yellow, binary);
+  cv::Mat work;
+  if (scale < 1.0f)
+    cv::resize(frame, work, cv::Size(config_.processing_width, cvRound(frame.rows * scale)), 0, 0, cv::INTER_AREA);
+  else work = frame;
+  const int w = work.cols, h = work.rows;
+  const int road_top = std::max(0, cvRound(std::min(config_.top_left.y, config_.top_right.y) * h) - 4);
+  cv::Mat binary = cv::Mat::zeros(h, w, CV_8U);
+  threshold_lane_paint(work.rowRange(road_top, h)).copyTo(binary.rowRange(road_top, h));
 
-  std::vector<cv::Point> roi = {
-      cv::Point(static_cast<int>(config_.top_left.x * w), static_cast<int>(config_.top_left.y * h)),
-      cv::Point(static_cast<int>(config_.top_right.x * w), static_cast<int>(config_.top_right.y * h)),
-      cv::Point(static_cast<int>(config_.bottom_right.x * w), static_cast<int>(config_.bottom_right.y * h)),
-      cv::Point(static_cast<int>(config_.bottom_left.x * w), static_cast<int>(config_.bottom_left.y * h))};
-  cv::Mat mask = cv::Mat::zeros(binary.size(), CV_8UC1);
-  cv::fillConvexPoly(mask, roi, cv::Scalar(255));
-  cv::bitwise_and(binary, mask, binary);
-  cv::GaussianBlur(binary, blurred, cv::Size(5, 5), 0);
-  cv::Canny(blurred, edges, 45, 130);
-  cv::bitwise_and(edges, mask, result.binary);
-
+  // The UI stores TL,TR,BR,BL. The PC estimator uses LN,LF,RF,RN.
   const cv::Point2f source[] = {
+      cv::Point2f(config_.bottom_left.x * w, config_.bottom_left.y * h),
       cv::Point2f(config_.top_left.x * w, config_.top_left.y * h),
       cv::Point2f(config_.top_right.x * w, config_.top_right.y * h),
-      cv::Point2f(config_.bottom_right.x * w, config_.bottom_right.y * h),
-      cv::Point2f(config_.bottom_left.x * w, config_.bottom_left.y * h)};
+      cv::Point2f(config_.bottom_right.x * w, config_.bottom_right.y * h)};
   const cv::Point2f target[] = {
-      cv::Point2f(w * 0.25f, 0.0f), cv::Point2f(w * 0.75f, 0.0f),
-      cv::Point2f(w * 0.75f, static_cast<float>(h - 1)),
-      cv::Point2f(w * 0.25f, static_cast<float>(h - 1))};
+      cv::Point2f(w * (290.0f / 1280.0f), h - 1.0f),
+      cv::Point2f(w * (290.0f / 1280.0f), 0.0f),
+      cv::Point2f(w * (990.0f / 1280.0f), 0.0f),
+      cv::Point2f(w * (990.0f / 1280.0f), h - 1.0f)};
   const cv::Mat perspective = cv::getPerspectiveTransform(source, target);
-  cv::warpPerspective(result.binary, result.bird_eye, perspective, result.binary.size(),
-                      cv::INTER_NEAREST, cv::BORDER_CONSTANT);
-  BirdCurves curves = make_curve_fit(result.bird_eye, result.curve_fit);
-  if (curves.left_valid && curves.right_valid) {
-    const double curve_smoothing = 0.64;
-    if (has_left_curve_) curves.left = previous_left_curve_ * curve_smoothing + curves.left * (1.0 - curve_smoothing);
-    if (has_right_curve_) curves.right = previous_right_curve_ * curve_smoothing + curves.right * (1.0 - curve_smoothing);
-    previous_left_curve_ = curves.left;
-    previous_right_curve_ = curves.right;
-    has_left_curve_ = has_right_curve_ = true;
+  const cv::Mat inverse = cv::getPerspectiveTransform(target, source);
+  std::vector<cv::Point2f> reference_source(1, cv::Point2f(w * 0.5f, source[0].y));
+  std::vector<cv::Point2f> reference_bird;
+  cv::perspectiveTransform(reference_source, reference_bird, perspective);
+  const float reference_x = reference_bird.front().x;
+  cv::Mat bird;
+  cv::warpPerspective(binary, bird, perspective, binary.size(), cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+  cv::Mat debug;
+  cv::cvtColor(bird, debug, cv::COLOR_GRAY2BGR);
 
-    std::vector<cv::Point2f> left_bird;
-    std::vector<cv::Point2f> right_bird;
-    const int curve_samples = 28;
-    for (int i = 0; i < curve_samples; ++i) {
-      const float y_left = (h - 1) * (1.0f - i / static_cast<float>(curve_samples - 1));
-      const float y_right = (h - 1) * (i / static_cast<float>(curve_samples - 1));
-      const float left_x = static_cast<float>(curves.left[0] * y_left * y_left + curves.left[1] * y_left + curves.left[2]);
-      const float right_x = static_cast<float>(curves.right[0] * y_right * y_right + curves.right[1] * y_right + curves.right[2]);
-      left_bird.emplace_back(left_x, y_left);
-      right_bird.emplace_back(right_x, y_right);
+  std::vector<cv::Point> left_points, right_points;
+  bool found = false;
+  if (has_curves_) {
+    found = collect_tracked(bird, left_points, right_points, debug);
+    if (!found && missed_ >= 5) {
+      left_points.clear(); right_points.clear();
+      found = collect_sliding(bird, left_points, right_points, debug);
     }
-    const cv::Mat inverse_perspective = cv::getPerspectiveTransform(target, source);
-    std::vector<cv::Point2f> left_projected;
-    std::vector<cv::Point2f> right_projected;
-    cv::perspectiveTransform(left_bird, left_projected, inverse_perspective);
-    cv::perspectiveTransform(right_bird, right_projected, inverse_perspective);
-    bool projected_ok = left_projected.size() == static_cast<size_t>(curve_samples) &&
-                        right_projected.size() == static_cast<size_t>(curve_samples);
-    for (int i = 0; projected_ok && i < curve_samples; ++i) {
-      projected_ok = std::isfinite(left_projected[i].x) && std::isfinite(left_projected[i].y) &&
-                     std::isfinite(right_projected[i].x) && std::isfinite(right_projected[i].y) &&
-                     left_projected[i].x > -w * 0.15f && left_projected[i].x < w * 1.15f &&
-                     right_projected[i].x > -w * 0.15f && right_projected[i].x < w * 1.15f;
-    }
-    if (projected_ok) {
-      for (const cv::Point2f& point : left_projected)
-        result.left.emplace_back(cvRound(point.x), cvRound(point.y));
-      for (const cv::Point2f& point : right_projected)
-        result.right.emplace_back(cvRound(point.x), cvRound(point.y));
-      result.polygon = result.left;
-      result.polygon.insert(result.polygon.end(), result.right.begin(), result.right.end());
-      const int bottom_width = result.right.back().x - result.left.front().x;
-      const int top_width = result.right.front().x - result.left.back().x;
-      if (bottom_width > w * 0.22f && bottom_width < w * 1.10f &&
-          top_width > w * 0.02f && top_width < bottom_width) {
-        result.valid = true;
-        result.partial = curves.left_inferred || curves.right_inferred;
-        const float lane_center = 0.5f * (result.left.front().x + result.right.back().x);
-        result.offset_ratio = (w * 0.5f - lane_center) / std::max(1.0f, static_cast<float>(bottom_width));
-        result.departure = std::abs(result.offset_ratio) > config_.departure_ratio;
-        if (processing_scale < 1.0f) {
-          const float inverse = 1.0f / processing_scale;
-          for (cv::Point& point : result.left) { point.x = cvRound(point.x * inverse); point.y = cvRound(point.y * inverse); }
-          for (cv::Point& point : result.right) { point.x = cvRound(point.x * inverse); point.y = cvRound(point.y * inverse); }
-          for (cv::Point& point : result.polygon) { point.x = cvRound(point.x * inverse); point.y = cvRound(point.y * inverse); }
-        }
-        return result;
+  } else {
+    found = collect_sliding(bird, left_points, right_points, debug);
+  }
+
+  cv::Vec3d left_fit, right_fit;
+  if (found) found = robust_fit(left_points, w, h, left_fit) &&
+                     robust_fit(right_points, w, h, right_fit) &&
+                     validate_fits(left_fit, right_fit, w, h);
+  if (found) {
+    for (const cv::Point& point : left_points) debug.at<cv::Vec3b>(point) = cv::Vec3b(255, 80, 30);
+    for (const cv::Point& point : right_points) debug.at<cv::Vec3b>(point) = cv::Vec3b(20, 40, 255);
+    if (has_curves_) {
+      double displacement = 0.0;
+      for (int i = 0; i < 5; ++i) {
+        const double y = i * (h - 1) / 4.0;
+        displacement = std::max(displacement, std::abs(curve_x(left_fit, y) - curve_x(previous_left_curve_, y)));
+        displacement = std::max(displacement, std::abs(curve_x(right_fit, y) - curve_x(previous_right_curve_, y)));
       }
-      result.left.clear();
-      result.right.clear();
-      result.polygon.clear();
+      if (displacement > w * 0.09 && missed_ < 2) found = false;
+      else {
+        const double alpha = std::max(0.16, std::min(0.34, 0.16 + displacement / (w * 0.30)));
+        left_fit = previous_left_curve_ * (1.0 - alpha) + left_fit * alpha;
+        right_fit = previous_right_curve_ * (1.0 - alpha) + right_fit * alpha;
+      }
     }
   }
-
-  std::vector<cv::Vec4i> lines;
-  cv::HoughLinesP(result.binary, lines, 1, CV_PI / 180.0, 22, h * 0.045, h * 0.055);
-  cv::Vec4f left, right;
-  const bool left_ok = fit_side(lines, true, w, h, left);
-  const bool right_ok = fit_side(lines, false, w, h, right);
-  if (left_ok) {
-    left = smooth(left, previous_left_, has_left_);
-    left_missing_ = 0;
-  } else if (++left_missing_ > config_.missing_hold_updates) {
-    has_left_ = false;
-  }
-  if (right_ok) {
-    right = smooth(right, previous_right_, has_right_);
-    right_missing_ = 0;
-  } else if (++right_missing_ > config_.missing_hold_updates) {
-    has_right_ = false;
-  }
-  if (!left_ok && has_left_) left = previous_left_;
-  if (!right_ok && has_right_) right = previous_right_;
-  const bool have_left = left_ok || has_left_;
-  const bool have_right = right_ok || has_right_;
-  if (!have_left && !have_right) return result;
-  result.partial = !left_ok || !right_ok;
-  if (!have_left) {
-    left = cv::Vec4f(config_.top_left.x * w, config_.top_left.y * h,
-                     config_.bottom_left.x * w, config_.bottom_left.y * h);
-    result.partial = true;
-  }
-  if (!have_right) {
-    right = cv::Vec4f(config_.top_right.x * w, config_.top_right.y * h,
-                      config_.bottom_right.x * w, config_.bottom_right.y * h);
-    result.partial = true;
+  if (found) {
+    previous_left_curve_ = left_fit; previous_right_curve_ = right_fit;
+    has_curves_ = true; missed_ = 0;
+    has_direct_ = false; direct_missed_ = 0;
+    for (int y = 0; y < h; ++y) {
+      const cv::Point lp(cvRound(curve_x(left_fit, y)), y), rp(cvRound(curve_x(right_fit, y)), y);
+      if (lp.x >= 0 && lp.x < w) cv::circle(debug, lp, 1, cv::Scalar(255, 120, 0), -1);
+      if (rp.x >= 0 && rp.x < w) cv::circle(debug, rp, 1, cv::Scalar(0, 80, 255), -1);
+    }
+    return make_curve_result(binary, bird, debug, inverse, left_fit, right_fit,
+                             w, h, scale, reference_x, false);
   }
 
-  const cv::Point lt(static_cast<int>(left[0]), static_cast<int>(left[1]));
-  const cv::Point lb(static_cast<int>(left[2]), static_cast<int>(left[3]));
-  const cv::Point rt(static_cast<int>(right[0]), static_cast<int>(right[1]));
-  const cv::Point rb(static_cast<int>(right[2]), static_cast<int>(right[3]));
-  const int top_width = rt.x - lt.x;
-  const int bottom_width = rb.x - lb.x;
-  if (bottom_width < w * 0.24f || bottom_width > w * 1.05f ||
-      top_width < w * 0.025f || top_width > w * 0.50f ||
-      top_width >= bottom_width) return result;
-  result.left = {lb, lt};
-  result.right = {rt, rb};
-  result.polygon = {lb, lt, rt, rb};
-  result.valid = true;
-  const float lane_center = 0.5f * (lb.x + rb.x);
-  result.offset_ratio = (w * 0.5f - lane_center) / std::max(1.0f, static_cast<float>(rb.x - lb.x));
-  result.departure = std::abs(result.offset_ratio) > config_.departure_ratio;
-  if (processing_scale < 1.0f) {
-    const float inverse = 1.0f / processing_scale;
-    for (cv::Point& point : result.left) { point.x = static_cast<int>(point.x * inverse); point.y = static_cast<int>(point.y * inverse); }
-    for (cv::Point& point : result.right) { point.x = static_cast<int>(point.x * inverse); point.y = static_cast<int>(point.y * inverse); }
-    for (cv::Point& point : result.polygon) { point.x = static_cast<int>(point.x * inverse); point.y = static_cast<int>(point.y * inverse); }
-  }
-  return result;
+  ++missed_;
+  if (has_curves_ && missed_ <= 5)
+    return make_curve_result(binary, bird, debug, inverse, previous_left_curve_, previous_right_curve_,
+                             w, h, scale, reference_x, true);
+  has_curves_ = false;
+  LaneResult direct = vanishing_fallback(binary, scale);
+  if (direct.valid) return direct;
+  empty.binary = binary; empty.bird_eye = bird; empty.curve_fit = debug;
+  return empty;
 }
 
 }  // namespace adas

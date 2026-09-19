@@ -240,6 +240,13 @@ struct InferenceResult {
   std::chrono::steady_clock::time_point captured_at{};
 };
 
+struct LaneTaskResult {
+  int camera = 0;
+  adas::LaneResult lane;
+  double elapsed_ms = 0.0;
+  std::chrono::steady_clock::time_point captured_at{};
+};
+
 enum class CalibrationTarget { NONE, FRONT, REAR };
 
 std::vector<cv::Point2f> order_roi(std::vector<cv::Point2f> points) {
@@ -317,8 +324,8 @@ void draw_lane_geometry(cv::Mat& frame, const adas::LaneResult& lane) {
   cv::fillPoly(layer, std::vector<std::vector<cv::Point>>(1, lane.polygon),
                lane.departure ? cv::Scalar(0, 70, 255) : cv::Scalar(20, 190, 70));
   cv::addWeighted(layer, 0.24, frame, 0.76, 0, frame);
-  cv::polylines(frame, lane.left, false, cv::Scalar(255, 230, 0), 4, cv::LINE_AA);
-  cv::polylines(frame, lane.right, false, cv::Scalar(255, 230, 0), 4, cv::LINE_AA);
+  cv::polylines(frame, lane.left, false, cv::Scalar(40, 255, 80), 5, cv::LINE_AA);
+  cv::polylines(frame, lane.right, false, cv::Scalar(40, 255, 80), 5, cv::LINE_AA);
 }
 
 cv::Point2f sample_lane_line(const std::vector<cv::Point>& line, float position) {
@@ -910,7 +917,7 @@ int main(int argc, char** argv) {
   adas::DriveConfig drive_config;
   adas::DriveDecisionLogic drive_logic(drive_config);
   adas::LaneConfig lane_config;
-  lane_config.processing_width = 480;
+  lane_config.processing_width = 640;
   adas::LaneDetector front_lane_detector(lane_config);
   adas::LaneDetector rear_lane_detector(lane_config);
   std::vector<cv::Point2f> front_roi_points;
@@ -946,6 +953,9 @@ int main(int argc, char** argv) {
   std::array<bool, 4> fresh_measurement{{false, false, false, false}};
   std::future<InferenceResult> inference_future;
   bool inference_running = false;
+  std::future<LaneTaskResult> lane_future;
+  bool lane_running = false;
+  int lane_task_sequence = 0;
   double npu_ms = 0.0;
   double display_fps = 0.0;
   std::deque<std::chrono::steady_clock::time_point> presentation_times;
@@ -985,10 +995,16 @@ int main(int argc, char** argv) {
   caption(canvas, "ROADFUSION EDGE  |  NVIDIA PHYSICALAI  |  四路智能驾驶辅助",
           20, 31, cv::Scalar(235, 240, 245), 0.62);
   std::array<cv::Mat, 4> source_images;
+  double last_lane_ms = 0.0;
+  const auto finish_lane_task = [&]() {
+    if (lane_running) {
+      lane_future.wait();
+      lane_running = false;
+    }
+  };
   while (true) {
     const auto frame_start = std::chrono::steady_clock::now();
     double capture_ms = 0.0;
-    double lane_ms = 0.0;
     double compose_ms = 0.0;
     double render_ms = 0.0;
     const bool calibration_paused = calibration_target != CalibrationTarget::NONE &&
@@ -1004,6 +1020,7 @@ int main(int argc, char** argv) {
         std::chrono::steady_clock::now() - frame_start).count();
     if (!ok) {
       if (options.once) break;
+      finish_lane_task();
       for (int i = 0; i < 4; ++i) streams[i].reset();
       source_frame_index = 0;
       skip_debt = 0.0;
@@ -1082,27 +1099,48 @@ int main(int argc, char** argv) {
         }
       }
     }
-    const auto lane_start = std::chrono::steady_clock::now();
-    // Lane extraction is the largest CPU stage. Update one camera every two
-    // displayed frames; the stabilized result remains visible between
-    // updates, giving each lane about 2.5-3.5 fresh updates per second.
-    if (shown_frames % 4 == 0) {
-      front_lane_target = stabilize_lane(
-          front_lane_detector.detect(frames[0]), front_lane_target,
-          front_lane_missed_updates,
-          lane_blocked_by_vehicle(detections[0], frames[0].cols, frames[0].rows));
-      front_lane_target = front_lane_warning.update(front_lane_target);
-    } else if (shown_frames % 4 == 2) {
-      rear_lane_target = stabilize_lane(
-          rear_lane_detector.detect(frames[1]), rear_lane_target,
-          rear_lane_missed_updates,
-          lane_blocked_by_vehicle(detections[1], frames[1].cols, frames[1].rows));
-      rear_lane_target = rear_lane_warning.update(rear_lane_target);
+    // Run the full PC estimator on a worker so its 40-100 ms CPU pass cannot
+    // stall video presentation. The worker alternates front/rear and always
+    // consumes the newest available frame.
+    if (lane_running &&
+        lane_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+      LaneTaskResult result = lane_future.get();
+      lane_running = false;
+      last_lane_ms = result.elapsed_ms;
+      const bool fresh_lane = std::chrono::steady_clock::now() - result.captured_at <
+                              std::chrono::milliseconds(250);
+      if (fresh_lane) {
+        if (result.camera == 0)
+          front_lane_target = front_lane_warning.update(result.lane);
+        else
+          rear_lane_target = rear_lane_warning.update(result.lane);
+      }
     }
-    lane = front_lane_target;
-    rear_lane = rear_lane_target;
-    lane_ms = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - lane_start).count();
+    if (!lane_running) {
+      // Front is the driving view and needs lower latency. Process it twice
+      // for every rear update while retaining independent detector state.
+      const int camera = (lane_task_sequence++ % 3 == 2) ? 1 : 0;
+      cv::Mat lane_frame = frames[camera].clone();
+      const auto lane_captured_at = std::chrono::steady_clock::now();
+      lane_future = std::async(std::launch::async,
+          [&front_lane_detector, &rear_lane_detector, lane_frame, camera, lane_captured_at]() {
+            const auto started = std::chrono::steady_clock::now();
+            LaneTaskResult result;
+            result.camera = camera;
+            result.captured_at = lane_captured_at;
+            result.lane = camera == 0 ? front_lane_detector.detect(lane_frame)
+                                      : rear_lane_detector.detect(lane_frame);
+            result.elapsed_ms = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - started).count();
+            return result;
+          });
+      lane_running = true;
+    }
+    // The PC demo draws a new geometry every processed frame. The board has
+    // two lane cameras, so render-time interpolation fills the frames between
+    // alternating front/rear measurements without modifying detector state.
+    lane = interpolate_lane(lane, front_lane_target, 0.78f);
+    rear_lane = interpolate_lane(rear_lane, rear_lane_target, 0.62f);
     front_risk = front_risk_estimator.update(
         detections[0], frames[0].cols, frames[0].rows, &lane, fresh_measurement[0]);
     rear_risk = rear_risk_estimator.update(
@@ -1231,6 +1269,7 @@ int main(int argc, char** argv) {
           if (calibration_points.size() == 4) {
             calibration_points = order_roi(calibration_points);
             if (valid_roi(calibration_points)) {
+              finish_lane_task();
               adas::LaneDetector& lane_detector = calibration_target == CalibrationTarget::FRONT
                   ? front_lane_detector : rear_lane_detector;
               lane_detector.set_roi(calibration_points[0], calibration_points[1],
@@ -1261,6 +1300,7 @@ int main(int argc, char** argv) {
         }
       }
       if (scene_delta != 0 && scene_paths.size() > 1) {
+        finish_lane_task();
         if (inference_running) {
           inference_future.wait();
           inference_running = false;
@@ -1344,7 +1384,7 @@ int main(int argc, char** argv) {
     if (shown_frames % 30 == 0) std::cout << "shown=" << shown_frames
         << " source_frame=" << source_frame_index << " fps_1s=" << display_fps
         << " npu_ms=" << npu_ms << " lanes=" << lane.valid << ',' << rear_lane.valid
-        << " capture_ms=" << capture_ms << " lane_ms=" << lane_ms
+        << " capture_ms=" << capture_ms << " lane_ms=" << last_lane_ms
         << " compose_ms=" << compose_ms << " render_ms=" << render_ms
         << " frame_ms=" << std::chrono::duration<double, std::milli>(
                std::chrono::steady_clock::now() - frame_start).count()
@@ -1357,6 +1397,7 @@ int main(int argc, char** argv) {
         << " blind=" << left_blind.occupied << ',' << right_blind.occupied
         << std::endl;
   }
+  finish_lane_task();
   if (inference_running) inference_future.wait();
   const double seconds = std::chrono::duration<double>(
       std::chrono::steady_clock::now() - start).count();

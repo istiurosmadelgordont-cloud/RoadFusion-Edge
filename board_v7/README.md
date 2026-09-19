@@ -43,12 +43,13 @@ row. Front and rear therefore use eight points in total.
 Use the `PREV SCENE` and `NEXT SCENE` buttons, or the `[` and `]` keys, to
 cycle through the bundled synchronized scenes. Switching resets decoding,
 the timeline, ByteTrack, collision state and lane history. The lane detector is
-the September 18 baseline: four-point ROI, HLS white/yellow extraction, Canny,
-IPM bird-eye transform, histogram sliding-window search and quadratic fitting.
-If the bird-eye fit fails, straight Hough lines provide the fallback. The later
-grayscale fallback, expanded ROI search and curved Hough fallback are disabled.
-Because the baseline is stricter, each camera and scene may need a fresh `C` or
-`R` calibration before it can hold both lane markings reliably.
+a C++ port of the PC demo's `LaneGeometryEstimator`: 640-pixel processing, dynamic road
+exposure, five-scale apparent-stripe-width filtering, HLS/HSV color masks,
+Sobel support, IPM, tracked-pixel search, robust quadratic fitting and the same
+five-update curve hold. Its converging-line fallback is also retained. The
+four-view loop uses the estimator's own temporal result directly instead of
+passing it through the older board-side geometry interpolator. Each camera and
+scene still needs an accurate `C` or `R` four-point calibration.
 
 The right sidebar includes a lightweight surround-location display. It keeps
 the ego vehicle near the bottom of a perspective road, draws the current
@@ -58,11 +59,13 @@ distance. Tracks come from ByteTrack. This is a low-cost ADAS visualization
 rather than metric BEV; real-world positions require camera intrinsics,
 extrinsics and ground-plane calibration.
 
-To keep the Cortex-A55 UI responsive, the camera textures and safety overlays
-still refresh every displayed frame, lane extraction alternates front/rear at
-one update every two displayed frames, and dashboard text refreshes every
-third frame. On the test board the FPGA-style composite path measured roughly
-12-14 FPS with the GLES UI and about 19 FPS headless, depending on the scene.
+The camera textures and safety overlays refresh every displayed frame. The
+complete PC lane estimator runs on an asynchronous latest-frame worker, with
+two front updates per rear update because front is the driving view. Results
+older than 250 ms are discarded and render-time interpolation fills the gaps
+without changing detector state. Dashboard text refreshes every third frame.
+With the unreduced 640-pixel five-scale algorithm, the test board measured
+roughly 15-18 FPS with the GLES UI after the asynchronous change.
 
 `run.sh` uses `taskset -c 2,3` and two OpenCV worker threads. Linux CPU IDs
 2 and 3 are the third and fourth Cortex-A55 cores. RKNN Runtime invokes the
