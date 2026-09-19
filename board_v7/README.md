@@ -42,9 +42,13 @@ row. Front and rear therefore use eight points in total.
 
 Use the `PREV SCENE` and `NEXT SCENE` buttons, or the `[` and `]` keys, to
 cycle through the bundled synchronized scenes. Switching resets decoding,
-the timeline, ByteTrack, collision state and lane history. Lane geometry uses
-quadratic fitting on both the bird-eye path and the Hough fallback; display
-points interpolate between lane updates to avoid six-frame jumps.
+the timeline, ByteTrack, collision state and lane history. The lane detector is
+the September 18 baseline: four-point ROI, HLS white/yellow extraction, Canny,
+IPM bird-eye transform, histogram sliding-window search and quadratic fitting.
+If the bird-eye fit fails, straight Hough lines provide the fallback. The later
+grayscale fallback, expanded ROI search and curved Hough fallback are disabled.
+Because the baseline is stricter, each camera and scene may need a fresh `C` or
+`R` calibration before it can hold both lane markings reliably.
 
 The right sidebar includes a lightweight surround-location display. It keeps
 the ego vehicle near the bottom of a perspective road, draws the current

@@ -17,9 +17,6 @@ class LaneDetector {
  private:
   bool fit_side(const std::vector<cv::Vec4i>& lines, bool left, int width, int height,
                 cv::Vec4f& result) const;
-  bool fit_side_quadratic(const std::vector<cv::Vec4i>& lines, bool left,
-                          int width, int height,
-                          std::vector<cv::Point>& result) const;
   cv::Vec4f smooth(const cv::Vec4f& current, cv::Vec4f& previous, bool& has_previous) const;
 
   LaneConfig config_;

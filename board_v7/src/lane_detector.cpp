@@ -24,9 +24,7 @@ bool fit_quadratic(const std::vector<cv::Point>& points, cv::Vec3d& coefficients
     min_y = std::min(min_y, point.y);
     max_y = std::max(max_y, point.y);
   }
-  // The bird-eye path spans most of the image, while the Hough fallback uses
-  // only the calibrated lower-road band (about 45 px at 480x270).
-  if (max_y - min_y < 35) return false;
+  if (max_y - min_y < 90) return false;
   cv::Mat design(static_cast<int>(points.size()), 3, CV_64F);
   cv::Mat values(static_cast<int>(points.size()), 1, CV_64F);
   for (size_t i = 0; i < points.size(); ++i) {
@@ -40,26 +38,6 @@ bool fit_quadratic(const std::vector<cv::Point>& points, cv::Vec3d& coefficients
   if (!cv::solve(design, values, solved, cv::DECOMP_SVD)) return false;
   coefficients = cv::Vec3d(solved.at<double>(0), solved.at<double>(1), solved.at<double>(2));
   return true;
-}
-
-void collect_side_points(const std::vector<cv::Vec4i>& lines, bool left,
-                         int width, int height, std::vector<cv::Point>& points) {
-  for (const cv::Vec4i& line : lines) {
-    const float dx = static_cast<float>(line[2] - line[0]);
-    const float dy = static_cast<float>(line[3] - line[1]);
-    const float length = std::sqrt(dx * dx + dy * dy);
-    if (std::abs(dx) < 2.0f || length < height * 0.035f) continue;
-    const float slope = dy / dx;
-    if ((left && slope > -0.30f) || (!left && slope < 0.30f) ||
-        std::abs(slope) > 8.0f) continue;
-    const float mid_x = 0.5f * (line[0] + line[2]);
-    if ((left && mid_x > width * 0.62f) || (!left && mid_x < width * 0.38f)) continue;
-    const int samples = std::max(3, static_cast<int>(length / 3.0f));
-    for (int sample = 0; sample <= samples; ++sample) {
-      const float t = sample / static_cast<float>(samples);
-      points.emplace_back(cvRound(line[0] + dx * t), cvRound(line[1] + dy * t));
-    }
-  }
 }
 
 void search_side(const std::vector<cv::Point>& pixels, bool left, int width, int height,
@@ -168,10 +146,17 @@ void LaneDetector::set_roi(const cv::Point2f& tl, const cv::Point2f& tr,
 bool LaneDetector::fit_side(const std::vector<cv::Vec4i>& lines, bool left, int width, int height,
                             cv::Vec4f& result) const {
   std::vector<cv::Point2f> points;
-  std::vector<cv::Point> sampled;
-  collect_side_points(lines, left, width, height, sampled);
-  points.reserve(sampled.size());
-  for (const cv::Point& point : sampled) points.emplace_back(point);
+  for (const cv::Vec4i& line : lines) {
+    const float dx = static_cast<float>(line[2] - line[0]);
+    const float dy = static_cast<float>(line[3] - line[1]);
+    if (std::abs(dx) < 2.0f || std::sqrt(dx * dx + dy * dy) < height * 0.035f) continue;
+    const float slope = dy / dx;
+    if ((left && slope > -0.40f) || (!left && slope < 0.40f) || std::abs(slope) > 5.0f) continue;
+    const float mid_x = 0.5f * (line[0] + line[2]);
+    if ((left && mid_x > width * 0.62f) || (!left && mid_x < width * 0.38f)) continue;
+    points.emplace_back(static_cast<float>(line[0]), static_cast<float>(line[1]));
+    points.emplace_back(static_cast<float>(line[2]), static_cast<float>(line[3]));
+  }
   if (points.size() < 4) return false;
   cv::Vec4f fit;
   cv::fitLine(points, fit, cv::DIST_L2, 0, 0.01, 0.01);
@@ -185,35 +170,6 @@ bool LaneDetector::fit_side(const std::vector<cv::Vec4i>& lines, bool left, int 
                                  : (x_bottom > x_top + width * 0.03f);
   return direction_ok && x_top > width * 0.18f && x_top < width * 0.82f &&
          x_bottom > -width * 0.05f && x_bottom < width * 1.05f;
-}
-
-bool LaneDetector::fit_side_quadratic(const std::vector<cv::Vec4i>& lines, bool left,
-                                      int width, int height,
-                                      std::vector<cv::Point>& result) const {
-  std::vector<cv::Point> points;
-  collect_side_points(lines, left, width, height, points);
-  cv::Vec3d curve;
-  if (!fit_quadratic(points, curve)) return false;
-  const int y_top = cvRound(height * std::min(config_.top_left.y, config_.top_right.y));
-  const int y_bottom = cvRound(height * std::max(config_.bottom_left.y, config_.bottom_right.y));
-  const int samples = 28;
-  result.clear();
-  for (int i = 0; i < samples; ++i) {
-    const float t = i / static_cast<float>(samples - 1);
-    const float ordered = left ? t : 1.0f - t;
-    const int y = cvRound(y_bottom + (y_top - y_bottom) * ordered);
-    const int x = cvRound(curve[0] * y * y + curve[1] * y + curve[2]);
-    if (x < -width * 0.05f || x > width * 1.05f) {
-      result.clear();
-      return false;
-    }
-    result.emplace_back(x, y);
-  }
-  if (result.size() != static_cast<size_t>(samples)) return false;
-  const int x_top = left ? result.back().x : result.front().x;
-  const int x_bottom = left ? result.front().x : result.back().x;
-  return left ? x_bottom < x_top - width * 0.025f
-              : x_bottom > x_top + width * 0.025f;
 }
 
 cv::Vec4f LaneDetector::smooth(const cv::Vec4f& current, cv::Vec4f& previous,
@@ -242,7 +198,6 @@ LaneResult LaneDetector::detect(const cv::Mat& frame) {
   const int w = work.cols;
   const int h = work.rows;
   cv::Mat hls, white, yellow, binary, blurred, edges;
-  cv::Mat gray, gray_blurred, gray_edges;
   cv::cvtColor(work, hls, cv::COLOR_BGR2HLS);
   cv::inRange(hls, cv::Scalar(0, 145, 0), cv::Scalar(180, 255, 255), white);
   cv::inRange(hls, cv::Scalar(12, 70, 65), cv::Scalar(42, 230, 255), yellow);
@@ -253,31 +208,12 @@ LaneResult LaneDetector::detect(const cv::Mat& frame) {
       cv::Point(static_cast<int>(config_.top_right.x * w), static_cast<int>(config_.top_right.y * h)),
       cv::Point(static_cast<int>(config_.bottom_right.x * w), static_cast<int>(config_.bottom_right.y * h)),
       cv::Point(static_cast<int>(config_.bottom_left.x * w), static_cast<int>(config_.bottom_left.y * h))};
-  // Calibration clicks describe the lane boundary. Give the detector a small
-  // tolerance outside that boundary so a one-pixel click error cannot remove
-  // the actual paint from the mask.
-  const int top_pad = std::max(8, static_cast<int>(w * 0.025f));
-  const int bottom_pad = std::max(12, static_cast<int>(w * 0.04f));
-  roi[0].x = std::max(0, roi[0].x - top_pad);
-  roi[1].x = std::min(w - 1, roi[1].x + top_pad);
-  roi[2].x = std::min(w - 1, roi[2].x + bottom_pad);
-  roi[3].x = std::max(0, roi[3].x - bottom_pad);
   cv::Mat mask = cv::Mat::zeros(binary.size(), CV_8UC1);
   cv::fillConvexPoly(mask, roi, cv::Scalar(255));
   cv::bitwise_and(binary, mask, binary);
   cv::GaussianBlur(binary, blurred, cv::Size(5, 5), 0);
   cv::Canny(blurred, edges, 45, 130);
   cv::bitwise_and(edges, mask, result.binary);
-  // Dim or wet roads often make white paint fall below the fixed HLS
-  // brightness threshold. Only pay for the grayscale fallback when the color
-  // mask is sparse; bright rear-view frames keep the cheaper path.
-  if (cv::countNonZero(result.binary) < 180) {
-    cv::cvtColor(work, gray, cv::COLOR_BGR2GRAY);
-    cv::GaussianBlur(gray, gray_blurred, cv::Size(5, 5), 0);
-    cv::Canny(gray_blurred, gray_edges, 35, 105);
-    cv::bitwise_and(gray_edges, mask, gray_edges);
-    cv::bitwise_or(result.binary, gray_edges, result.binary);
-  }
 
   const cv::Point2f source[] = {
       cv::Point2f(config_.top_left.x * w, config_.top_left.y * h),
@@ -355,37 +291,7 @@ LaneResult LaneDetector::detect(const cv::Mat& frame) {
   }
 
   std::vector<cv::Vec4i> lines;
-  cv::HoughLinesP(result.binary, lines, 1, CV_PI / 180.0, 18, h * 0.035, h * 0.08);
-  std::vector<cv::Point> left_quadratic;
-  std::vector<cv::Point> right_quadratic;
-  const bool left_quadratic_ok = fit_side_quadratic(
-      lines, true, w, h, left_quadratic);
-  const bool right_quadratic_ok = fit_side_quadratic(
-      lines, false, w, h, right_quadratic);
-  if (left_quadratic_ok && right_quadratic_ok) {
-    const int bottom_width = right_quadratic.back().x - left_quadratic.front().x;
-    const int top_width = right_quadratic.front().x - left_quadratic.back().x;
-    if (bottom_width > w * 0.24f && bottom_width < w * 1.05f &&
-        top_width > w * 0.025f && top_width < w * 0.55f &&
-        top_width < bottom_width) {
-      result.left = left_quadratic;
-      result.right = right_quadratic;
-      result.polygon = result.left;
-      result.polygon.insert(result.polygon.end(), result.right.begin(), result.right.end());
-      result.valid = true;
-      const float lane_center = 0.5f * (result.left.front().x + result.right.back().x);
-      result.offset_ratio = (w * 0.5f - lane_center) /
-          std::max(1.0f, static_cast<float>(bottom_width));
-      result.departure = std::abs(result.offset_ratio) > config_.departure_ratio;
-      if (processing_scale < 1.0f) {
-        const float inverse = 1.0f / processing_scale;
-        for (cv::Point& point : result.left) { point.x = cvRound(point.x * inverse); point.y = cvRound(point.y * inverse); }
-        for (cv::Point& point : result.right) { point.x = cvRound(point.x * inverse); point.y = cvRound(point.y * inverse); }
-        for (cv::Point& point : result.polygon) { point.x = cvRound(point.x * inverse); point.y = cvRound(point.y * inverse); }
-      }
-      return result;
-    }
-  }
+  cv::HoughLinesP(result.binary, lines, 1, CV_PI / 180.0, 22, h * 0.045, h * 0.055);
   cv::Vec4f left, right;
   const bool left_ok = fit_side(lines, true, w, h, left);
   const bool right_ok = fit_side(lines, false, w, h, right);
