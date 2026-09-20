@@ -1,11 +1,13 @@
 # 以太网接收视频 → DDR → HDMI 工程快照
 
-本目录保存 2026-09-16 的 Pango `board_3_oneboard_design` 工程以及对应的 Windows 上位机。FPGA 从千兆以太网接收 RGB565 视频，按当前 RTL 固定的 960×540 帧格式写入 DDR 并输出显示。用户已在板上看到上位机发送的彩条；本次归档只复制现有文件、核对工程输入并编写说明，没有修改 RTL、重新实现或重新上板验证。
+本目录保存 Pango `board_3_oneboard_design` 以太网视频工程以及对应的 Windows 上位机。最新快照为 2026-09-18，FPGA 从千兆以太网接收固定 640×720 RGB565 视频，写入 DDR 并与另外三路视频组成 1920×1080 输出。此前的 2026-09-16 960×540 接收版本继续保留。
 
 ## 文件与打开方式
 
-- [`ethernet_video_fpga_20260916.zip`](ethernet_video_fpga_20260916.zip)：从当前 `.pds` 提取的全部 `source/`、`ipcore/` 输入，加上 `3_ddr_test.pds`、`ddr_test.fdc` 和当时的 `generate_bitstream/test_ddr.sbit`。保留文件的工程相对路径。
-- [`SOURCE_MANIFEST.csv`](SOURCE_MANIFEST.csv)：压缩包内每个文件的字节数和 SHA-256；可用于确认快照未变。
+- [`ethernet_video_fpga_20260918.zip`](ethernet_video_fpga_20260918.zip)：当前版本，含 9 月 18 日重新生成的 bitstream。以太网接收尺寸为 640×720。
+- [`SOURCE_MANIFEST_20260918.csv`](SOURCE_MANIFEST_20260918.csv)：当前压缩包内每个文件的字节数和 SHA-256。
+- [`ethernet_video_fpga_20260916.zip`](ethernet_video_fpga_20260916.zip)：上一版快照，以太网接收尺寸为 960×540；对应校验表为 [`SOURCE_MANIFEST.csv`](SOURCE_MANIFEST.csv)。
+- 每个 ZIP 都从当时的 `.pds` 提取全部 `source/`、`ipcore/` 输入，并加入 `3_ddr_test.pds`、`ddr_test.fdc` 和 `generate_bitstream/test_ddr.sbit`，保留工程相对路径。
 - [`build_snapshot.py`](build_snapshot.py)：按 `.pds` 输入列表重新生成源码包和清单的脚本。
 - [Windows 上位机](../../tools/udp_video_sender/README.md)：视频、图片、彩条经 UDP 发送到该接收器。
 
@@ -19,21 +21,21 @@
 | --- | --- |
 | FPGA IP / 目标 UDP 端口 | `192.168.1.10:1234` |
 | FPGA MAC | `A0:B1:C2:D3:E4:E4` |
-| 输入画面 | 固定 `960×540`、RGB565、大端字节序 |
-| 每帧第一个 UDP 负载 | `F0 5A A5 0F 03 C0 02 1C`，后 4 字节为宽高 |
+| 输入画面 | 最新版固定 `640×720`、RGB565、大端字节序 |
+| 每帧第一个 UDP 负载 | `F0 5A A5 0F 02 80 02 D0`，后 4 字节为宽高 |
 | 后续 UDP 负载 | 连续像素流，每包最多 1200 字节，无序号和确认 |
-| 每帧像素数据 | `960×540×2 = 1,036,800` 字节，即 864 个满载 UDP 包 |
+| 每帧像素数据 | `640×720×2 = 921,600` 字节，即 768 个满载 UDP 包 |
 
-上位机可任选输入和输出分辨率及采样/发送帧率，以便以后修改 FPGA 时继续测试；**这版 FPGA 的 `eth_img_rec.v` 只接受 960×540 帧头，并按固定 518400 像素结束一帧**。使用此 bitstream 时，将上位机“输出分辨率（实际发送）”设为 960×540。帧率不写入帧头，只由包发送节奏决定。上位机的“实际平均 fps”是本机发包速率，不是 FPGA 确认的显示帧率。
+上位机可任选输入和输出分辨率及采样/发送帧率，以便以后修改 FPGA 时继续测试；**9 月 18 日版本的 `eth_img_rec.v` 只接受 640×720 帧头，并按固定 460800 像素结束一帧**。使用最新 bitstream 时，将上位机“输出分辨率（实际发送）”设为 640×720。使用 9 月 16 日旧 bitstream 时仍应选择 960×540。帧率不写入帧头，只由包发送节奏决定。
 
 FPGA 目前没有 UDP 确认、重传、包序号或自动丢包恢复。应使用独立千兆网口，配置本机静态 IPv4（如 `192.168.1.102/24`）及指向 FPGA MAC 的静态邻居；操作步骤见上位机 README。不要仅凭网口灯或 Wireshark 发包计数判断整帧已进入 DDR。
 
 ## 帧率与带宽
 
-960×540 RGB565 的纯图像数据为每帧 1,036,800 字节。30 fps 需要约 248.8 Mbps 的**净像素带宽**，另加 Ethernet/IP/UDP 开销和帧边界等待。若上位机限速 120 Mbps，30 fps 无法实现；提高至约 800 Mbps 后，还受视频解码、缩放、Windows 发包、网卡以及 FPGA/DDR 接收能力限制。上位机显示解码/转换与发包耗时，便于区分瓶颈。更高限速不等于 FPGA 必然能完整接收，须用 ILA/显示画面检查错帧和丢包。
+640×720 RGB565 的纯图像数据为每帧 921,600 字节。30 fps 需要约 221.2 Mbps 的**净像素带宽**，另加 Ethernet/IP/UDP 开销和帧边界等待。若上位机限速 120 Mbps，30 fps 无法实现；提高限速后，仍受视频解码、缩放、Windows 发包、网卡以及 FPGA/DDR 接收能力限制。
 
 ## 验证边界与来源
 
-该包中的 bitstream 是源工程现存的 `test_ddr.sbit`，不是本次重新生成的。上位机单元测试通过；压缩包完整性和所有 `.pds` 源文件引用已核对，但本次未运行 PDS 全流程，也未记录 ILA 统计或连续帧的 FPGA 端吞吐率。用户此前反馈彩条已经在板上显示，这属于现场观察，不应代替逐帧完整性验证。
+9 月 18 日包中的 bitstream 是源工程在 2026-09-18 17:33 左右完成流程后现存的 `test_ddr.sbit`。本次归档没有再次运行 PDS，也未记录 ILA 统计或连续帧吞吐率。相对 9 月 16 日版，源码变化集中在四路 DDR 画面尺寸/地址、摄像头输出高度和以太网接收尺寸；未修改上位机。
 
 此工程基于 `FPGA-Video-Capture-main` 的 `board_3_oneboard_design`，原项目说明提及“小眼睛半导体”和“正点原子”的部分参考代码；RGMII 接收部分也参照了用户所用的开发板官方以太网 Demo。保留原文件及厂商 IP 声明；使用或再分发这些部分时应遵守各自许可。

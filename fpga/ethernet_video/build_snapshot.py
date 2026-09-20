@@ -10,6 +10,7 @@ from pathlib import Path
 
 project = Path(sys.argv[1]).resolve()
 output = Path(sys.argv[2]).resolve()
+snapshot = sys.argv[3] if len(sys.argv) > 3 else "20260916"
 output.mkdir(parents=True, exist_ok=True)
 pds = project / "3_ddr_test.pds"
 text = pds.read_text(encoding="utf-8", errors="replace")
@@ -23,8 +24,8 @@ missing = [path for path in paths if not (project / path).is_file()]
 if missing:
     raise SystemExit("Missing PDS inputs: " + ", ".join(missing))
 
-archive = output / "ethernet_video_fpga_20260916.zip"
-manifest = output / "SOURCE_MANIFEST.csv"
+archive = output / f"ethernet_video_fpga_{snapshot}.zip"
+manifest = output / f"SOURCE_MANIFEST_{snapshot}.csv"
 rows = []
 with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
     for rel in paths:
