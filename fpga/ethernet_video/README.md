@@ -11,6 +11,20 @@
 - [`build_snapshot.py`](build_snapshot.py)：按 `.pds` 输入列表重新生成源码包和清单的脚本。
 - [Windows 上位机](../../tools/udp_video_sender/README.md)：视频、图片、彩条经 UDP 发送到该接收器。
 
+## 本地工程与仓库源码对应关系
+
+[`source_960x540/`](source_960x540/) 是 2026-09-16 快照中 27 个 RTL 文件的可浏览副本，与本地 PDS 工程的 `board_3_oneboard_design/source/` 按文件名一一对应。仓库副本保持原始字节和编码，可用 SHA-256 直接比较。
+
+将 [`sync_local_source.ps1`](sync_local_source.ps1) 复制到本地 `board_3_oneboard_design` 根目录后，可与 RoadFusion-Edge 的本地克隆比较或同步：
+
+```powershell
+.\sync_local_source.ps1 -RepositoryRoot C:\path\to\RoadFusion-Edge -Mode Compare
+.\sync_local_source.ps1 -RepositoryRoot C:\path\to\RoadFusion-Edge -Mode Pull
+.\sync_local_source.ps1 -RepositoryRoot C:\path\to\RoadFusion-Edge -Mode Push
+```
+
+`Pull` 用仓库的 960×540 RTL 覆盖本地 `source/`；`Push` 只复制到仓库克隆，仍需在那里查看 `git diff` 后提交。工程文件、约束、IP 和 bitstream 继续以 ZIP 快照为准。
+
 解压到单独目录后，用 Pango PDS 2022.2-SP6.4 打开 `3_ddr_test.pds`。工程配置为 Logos PGL50H、FBG484、速度等级 -6，顶层模块 `test_ddr` 在 `source/ddr_test_top.v`。约束文件为 `ddr_test.fdc`。压缩包仅保存工程输入和现成 bitstream，不包含旧日志、综合/布局数据库或完整实现目录；重新编译时让 PDS 重新生成这些文件。工具版本、IP 许可和实际板卡引脚须与此工程相容。
 
 `.pds` 中列出的 27 个 Verilog 源文件、10 个 IP 配置文件和 101 个 IP 源文件，以及工程、约束和 bitstream，合计 141 个文件已逐一检查存在，并在 ZIP 中重新读取校验 SHA-256。部分 IP 是厂商加密文件；保留快照不改变其许可条件。
