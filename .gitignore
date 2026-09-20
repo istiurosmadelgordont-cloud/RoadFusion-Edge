@@ -23,6 +23,15 @@ calibration/images/
 calibration/v7/
 calibration/dataset.txt
 calibration/*.onnx
+calibration/ufldv1/
+calibration/ufldv2/
+calibration/ufldv2_student/
+calibration/ufldv2_multiscene/
+calibration/ufldv*_dataset.txt
+
+# Generated UFLD graphs and board models (rebuild with tools/ scripts)
+models/ufld*.onnx
+models/ufld*.rknn
 
 # Board build and runtime artifacts
 board/build/

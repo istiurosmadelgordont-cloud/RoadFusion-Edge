@@ -12,4 +12,4 @@ if [ ! -f "$MODEL" ]; then
 fi
 
 exec taskset -c 2,3 ./build/adas_four_view --model "$MODEL" \
-  --scene four_view_sample/66b5fa4b_30fps --cpu-threads 2 --detect-every 6 --software-decode "$@"
+  --scene four_view_sample/66b5fa4b_30fps --cpu-threads 1 --detect-every 6 --software-decode "$@"

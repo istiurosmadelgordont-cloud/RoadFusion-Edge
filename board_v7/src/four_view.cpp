@@ -8,6 +8,7 @@
 #include "adas/signal_logic.hpp"
 #include "adas/warning_logic.hpp"
 #include "adas/text_renderer.hpp"
+#include "adas/ufld_lane_detector.hpp"
 #ifdef ADAS_HAVE_GLES
 #include "adas/gl_presenter.hpp"
 #endif
@@ -58,8 +59,10 @@ struct Options {
   std::string model = "models/unified21_p2_v7_640_int8.rknn";
   std::string scene = "four_view_sample/e716f3ed";
   std::string snapshot;
+  std::string ufld_model;
   int cpu_threads = 2;
   int detect_every = 2;
+  int ufld_every = 5;
   int max_frames = 0;
   int snapshot_frame = -1;
   bool headless = false;
@@ -70,6 +73,7 @@ struct Options {
   bool opencv_display = false;
   bool software_decode = false;
   bool legacy_mosaic = false;
+  bool ufld_rear = false;
 };
 
 bool parse(int argc, char** argv, Options& o) {
@@ -83,10 +87,12 @@ bool parse(int argc, char** argv, Options& o) {
     if (key == "--opencv") { o.opencv_display = true; continue; }
     if (key == "--software-decode") { o.software_decode = true; continue; }
     if (key == "--legacy-mosaic") { o.legacy_mosaic = true; continue; }
+    if (key == "--ufld-rear") { o.ufld_rear = true; continue; }
     if (key == "--help") {
       std::cout << "--scene DIR --model FILE --detect-every N --cpu-threads N "
-                   "--max-frames N --snapshot FILE --snapshot-frame N --headless --benchmark --once "
-                   "--separate --dump-detections --opencv --software-decode --legacy-mosaic\n";
+                   "--ufld-model FILE --ufld-every N --max-frames N --snapshot FILE --snapshot-frame N "
+                   "--headless --benchmark --once "
+                   "--separate --dump-detections --opencv --software-decode --legacy-mosaic --ufld-rear\n";
       return false;
     }
     if (++i >= argc) { std::cerr << "Missing value for " << key << '\n'; return false; }
@@ -94,7 +100,9 @@ bool parse(int argc, char** argv, Options& o) {
     if (key == "--scene") o.scene = value;
     else if (key == "--model") o.model = value;
     else if (key == "--snapshot") o.snapshot = value;
+    else if (key == "--ufld-model") o.ufld_model = value;
     else if (key == "--detect-every") o.detect_every = std::max(1, std::atoi(value.c_str()));
+    else if (key == "--ufld-every") o.ufld_every = std::max(2, std::atoi(value.c_str()));
     else if (key == "--cpu-threads") o.cpu_threads = std::max(1, std::min(4, std::atoi(value.c_str())));
     else if (key == "--max-frames") o.max_frames = std::max(0, std::atoi(value.c_str()));
     else if (key == "--snapshot-frame") o.snapshot_frame = std::max(0, std::atoi(value.c_str()));
@@ -106,6 +114,11 @@ bool parse(int argc, char** argv, Options& o) {
 class SyncCapture {
  public:
   ~SyncCapture() { close_pipe(); }
+
+  void release() {
+    close_pipe();
+    software_.release();
+  }
 
   bool open(const std::string& path, bool hardware) {
     close_pipe();
@@ -203,6 +216,10 @@ class SyncCapture {
 };
 
 bool scene_complete(const std::string& scene) {
+  std::ifstream synchronized((scene + "/sync_720p.mp4").c_str(), std::ios::binary);
+  if (synchronized) return true;
+  std::ifstream composite((scene + "/fpga_1080p.mp4").c_str(), std::ios::binary);
+  if (composite) return true;
   for (int i = 0; i < 4; ++i) {
     std::ifstream input((scene + "/" + kFiles[i]).c_str(), std::ios::binary);
     if (!input) return false;
@@ -212,8 +229,22 @@ bool scene_complete(const std::string& scene) {
 
 bool open_scene(const std::string& scene, bool hardware,
                 std::array<SyncCapture, 4>& streams,
-                double& source_fps, int& source_frames) {
+                double& source_fps, int& source_frames,
+                bool& single_composite) {
   if (!scene_complete(scene)) return false;
+  const std::string synchronized_path = scene + "/sync_720p.mp4";
+  const std::string fpga_path = scene + "/fpga_1080p.mp4";
+  std::ifstream synchronized(synchronized_path.c_str(), std::ios::binary);
+  const std::string composite_path = synchronized ? synchronized_path : fpga_path;
+  std::ifstream composite(composite_path.c_str(), std::ios::binary);
+  single_composite = static_cast<bool>(composite);
+  if (single_composite) {
+    for (int i = 1; i < 4; ++i) streams[i].release();
+    if (!streams[0].open(composite_path, hardware)) return false;
+    source_fps = streams[0].fps();
+    source_frames = streams[0].frames();
+    return source_fps >= 1.0 && source_fps <= 60.0 && source_frames > 0;
+  }
   double expected_fps = 0.0;
   int expected_frames = -1;
   for (int i = 0; i < 4; ++i) {
@@ -234,6 +265,32 @@ bool open_scene(const std::string& scene, bool hardware,
   return true;
 }
 
+bool read_synchronized_group(std::array<SyncCapture, 4>& streams,
+                             bool single_composite,
+                             cv::Mat& composite,
+                             std::array<cv::Mat, 4>& frames) {
+  if (!single_composite) {
+    // Publish a group only after all decoders produced the same next index.
+    std::array<cv::Mat, 4> pending;
+    for (int i = 0; i < 4; ++i) {
+      if (!streams[i].read(pending[i])) return false;
+    }
+    frames = std::move(pending);
+    return true;
+  }
+  if (!streams[0].read(composite) || composite.empty()) return false;
+  const int half_w = composite.cols / 2;
+  const int half_h = composite.rows / 2;
+  if (half_w < 1 || half_h < 1) return false;
+  for (int i = 0; i < 4; ++i) {
+    const cv::Rect quadrant((i % 2) * half_w, (i / 2) * half_h,
+                            half_w, half_h);
+    cv::resize(composite(quadrant), frames[i], cv::Size(kTileW, kTileH),
+               0.0, 0.0, cv::INTER_AREA);
+  }
+  return true;
+}
+
 struct InferenceResult {
   std::array<std::vector<adas::Detection>, 4> detections;
   double npu_ms = 0.0;
@@ -243,6 +300,7 @@ struct InferenceResult {
 struct LaneTaskResult {
   int camera = 0;
   adas::LaneResult lane;
+  bool neural = false;
   double elapsed_ms = 0.0;
   std::chrono::steady_clock::time_point captured_at{};
 };
@@ -406,7 +464,9 @@ adas::LaneResult stabilize_lane(const adas::LaneResult& measured,
   missed_updates = 0;
   if (!previous.valid || previous.left.empty() || previous.right.empty()) return measured;
 
-  return interpolate_lane(previous, measured, 0.72f);
+  // UFLD already produces fitted curves. Keep only light suppression here;
+  // heavier filtering makes the 90-120 ms NPU result look another update late.
+  return interpolate_lane(previous, measured, 0.88f);
 }
 
 bool lane_blocked_by_vehicle(const std::vector<adas::Detection>& detections,
@@ -878,7 +938,10 @@ int main(int argc, char** argv) {
   if (!parse(argc, argv, options)) return 1;
   if (!adas::ui::initialize_text("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"))
     std::cerr << "Chinese font unavailable; UI text will use fallback rendering\n";
-  cv::setNumThreads(options.cpu_threads);
+  // The lane estimator and detector preprocessing already run as separate
+  // application workers. A shared OpenCV worker pool caused rare multi-second
+  // starvation on the two assigned Cortex-A55 cores.
+  cv::setNumThreads(1);
   std::vector<std::string> scene_paths;
   const char* bundled_scenes[] = {
       "four_view_sample/66b5fa4b_30fps",
@@ -904,8 +967,9 @@ int main(int argc, char** argv) {
   std::array<SyncCapture, 4> streams;
   double source_fps = 0.0;
   int source_frames = -1;
+  bool single_composite = false;
   if (!open_scene(options.scene, !options.software_decode, streams,
-                  source_fps, source_frames)) {
+                  source_fps, source_frames, single_composite)) {
     std::cerr << "Cannot open synchronized scene " << options.scene << '\n';
     return 2;
   }
@@ -913,6 +977,16 @@ int main(int argc, char** argv) {
   config.model_path = options.model;
   adas::RknnDetector detector(config);
   if (!detector.ready()) { std::cerr << detector.error() << '\n'; return 3; }
+  std::unique_ptr<adas::UfldLaneDetector> ufld_lane_detector;
+  if (!options.ufld_model.empty()) {
+    ufld_lane_detector.reset(new adas::UfldLaneDetector(options.ufld_model));
+    if (!ufld_lane_detector->ready()) {
+      std::cerr << ufld_lane_detector->error() << '\n';
+      return 4;
+    }
+    std::cout << "Experimental lane model: " << ufld_lane_detector->profile()
+              << " every >= " << options.ufld_every << " displayed frames\n";
+  }
   adas::SignalLogic signal_logic;
   adas::DriveConfig drive_config;
   adas::DriveDecisionLogic drive_logic(drive_config);
@@ -955,7 +1029,11 @@ int main(int argc, char** argv) {
   bool inference_running = false;
   std::future<LaneTaskResult> lane_future;
   bool lane_running = false;
+  bool lane_task_uses_npu = false;
   int lane_task_sequence = 0;
+  int ufld_task_sequence = 0;
+  int last_detector_start = -1000000;
+  int last_ufld_start = -1000000;
   double npu_ms = 0.0;
   double display_fps = 0.0;
   std::deque<std::chrono::steady_clock::time_point> presentation_times;
@@ -995,6 +1073,7 @@ int main(int argc, char** argv) {
   caption(canvas, "ROADFUSION EDGE  |  NVIDIA PHYSICALAI  |  四路智能驾驶辅助",
           20, 31, cv::Scalar(235, 240, 245), 0.62);
   std::array<cv::Mat, 4> source_images;
+  cv::Mat source_composite;
   double last_lane_ms = 0.0;
   const auto finish_lane_task = [&]() {
     if (lane_running) {
@@ -1013,7 +1092,8 @@ int main(int argc, char** argv) {
     fresh_measurement.fill(false);
     bool ok = true;
     if (!calibration_paused) {
-      for (int i = 0; i < 4; ++i) if (!streams[i].read(source_images[i])) ok = false;
+      ok = read_synchronized_group(streams, single_composite,
+                                   source_composite, source_images);
     }
     for (int i = 0; i < 4; ++i) frames[i] = source_images[i].clone();
     capture_ms = std::chrono::duration<double, std::milli>(
@@ -1021,7 +1101,8 @@ int main(int argc, char** argv) {
     if (!ok) {
       if (options.once) break;
       finish_lane_task();
-      for (int i = 0; i < 4; ++i) streams[i].reset();
+      if (single_composite) streams[0].reset();
+      else for (int i = 0; i < 4; ++i) streams[i].reset();
       source_frame_index = 0;
       skip_debt = 0.0;
       signal_logic = adas::SignalLogic();
@@ -1061,7 +1142,11 @@ int main(int argc, char** argv) {
     }
     const auto tracking_now = std::chrono::steady_clock::now();
     for (int i = 0; i < 4; ++i) detections[i] = trackers[i].predict(tracking_now);
-    if (shown_frames % options.detect_every == 0 && !inference_running) {
+    const bool detector_pending =
+        shown_frames - last_detector_start >= options.detect_every;
+    if (detector_pending && !inference_running &&
+        (!lane_running || !lane_task_uses_npu)) {
+      last_detector_start = shown_frames;
       if (options.separate) {
         const int camera = (shown_frames / options.detect_every) % 4;
         const auto measured_at = std::chrono::steady_clock::now();
@@ -1106,41 +1191,75 @@ int main(int argc, char** argv) {
         lane_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
       LaneTaskResult result = lane_future.get();
       lane_running = false;
+      lane_task_uses_npu = false;
       last_lane_ms = result.elapsed_ms;
       const bool fresh_lane = std::chrono::steady_clock::now() - result.captured_at <
-                              std::chrono::milliseconds(250);
+                              std::chrono::milliseconds(result.neural ? 450 : 250);
       if (fresh_lane) {
-        if (result.camera == 0)
-          front_lane_target = front_lane_warning.update(result.lane);
-        else
-          rear_lane_target = rear_lane_warning.update(result.lane);
+        if (result.camera == 0) {
+          const adas::LaneResult measured = front_lane_warning.update(result.lane);
+          front_lane_target = stabilize_lane(
+              measured, front_lane_target, front_lane_missed_updates,
+              lane_blocked_by_vehicle(detections[0], frames[0].cols, frames[0].rows));
+        } else {
+          const adas::LaneResult measured = rear_lane_warning.update(result.lane);
+          rear_lane_target = stabilize_lane(
+              measured, rear_lane_target, rear_lane_missed_updates,
+              lane_blocked_by_vehicle(detections[1], frames[1].cols, frames[1].rows));
+        }
       }
     }
     if (!lane_running) {
-      // Front is the driving view and needs lower latency. Process it twice
-      // for every rear update while retaining independent detector state.
-      const int camera = (lane_task_sequence++ % 3 == 2) ? 1 : 0;
-      cv::Mat lane_frame = frames[camera].clone();
-      const auto lane_captured_at = std::chrono::steady_clock::now();
-      lane_future = std::async(std::launch::async,
-          [&front_lane_detector, &rear_lane_detector, lane_frame, camera, lane_captured_at]() {
-            const auto started = std::chrono::steady_clock::now();
-            LaneTaskResult result;
-            result.camera = camera;
-            result.captured_at = lane_captured_at;
-            result.lane = camera == 0 ? front_lane_detector.detect(lane_frame)
-                                      : rear_lane_detector.detect(lane_frame);
-            result.elapsed_ms = std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - started).count();
-            return result;
-          });
-      lane_running = true;
+      int camera = -1;
+      bool use_ufld_task = false;
+      if (ufld_lane_detector) {
+        // RK3568 has one NPU execution queue. Start UFLD only between YOLO
+        // jobs; never let the two contexts queue behind one another.
+        if (!inference_running && !detector_pending &&
+            shown_frames - last_ufld_start >= options.ufld_every) {
+          // Front drives LDW/FCW and is more latency-sensitive. When rear lane
+          // detection is enabled, reserve one of five jobs for it.
+          camera = options.ufld_rear && (++ufld_task_sequence % 5 == 0) ? 1 : 0;
+          use_ufld_task = true;
+          last_ufld_start = shown_frames;
+        } else if (!options.ufld_rear && shown_frames % 12 == 7) {
+          // The CULane model is forward-facing. Keep the calibrated OpenCV
+          // estimator for the rear tele camera at a lower rate.
+          camera = 1;
+        }
+      } else {
+        // Front is the driving view and needs PC-like consecutive updates.
+        // Give it three worker slots for every rear update.
+        camera = (lane_task_sequence++ % 4 == 3) ? 1 : 0;
+      }
+      if (camera >= 0) {
+        cv::Mat lane_frame = frames[camera].clone();
+        const auto lane_captured_at = std::chrono::steady_clock::now();
+        adas::UfldLaneDetector* ufld = ufld_lane_detector.get();
+        lane_future = std::async(std::launch::async,
+            [&front_lane_detector, &rear_lane_detector, ufld, lane_frame, camera,
+             use_ufld_task, lane_captured_at]() {
+              const auto started = std::chrono::steady_clock::now();
+              LaneTaskResult result;
+              result.camera = camera;
+              result.neural = use_ufld_task;
+              result.captured_at = lane_captured_at;
+              if (use_ufld_task) {
+                result.lane = ufld->detect(lane_frame);
+              } else {
+                result.lane = camera == 0 ? front_lane_detector.detect(lane_frame)
+                                          : rear_lane_detector.detect(lane_frame);
+              }
+              result.elapsed_ms = std::chrono::duration<double, std::milli>(
+                  std::chrono::steady_clock::now() - started).count();
+              return result;
+            });
+        lane_running = true;
+        lane_task_uses_npu = use_ufld_task;
+      }
     }
-    // The PC demo draws a new geometry every processed frame. The board has
-    // two lane cameras, so render-time interpolation fills the frames between
-    // alternating front/rear measurements without modifying detector state.
-    lane = interpolate_lane(lane, front_lane_target, 0.78f);
-    rear_lane = interpolate_lane(rear_lane, rear_lane_target, 0.62f);
+    lane = interpolate_lane(lane, front_lane_target, 0.95f);
+    rear_lane = interpolate_lane(rear_lane, rear_lane_target, 0.82f);
     front_risk = front_risk_estimator.update(
         detections[0], frames[0].cols, frames[0].rows, &lane, fresh_measurement[0]);
     rear_risk = rear_risk_estimator.update(
@@ -1239,8 +1358,10 @@ int main(int argc, char** argv) {
         const float ratio = std::max(0.0f, std::min(1.0f,
             (click_x - kProgressBar.x) / static_cast<float>(kProgressBar.width)));
         const int target = static_cast<int>(ratio * (source_frames - 1));
-        bool seek_ok = true;
-        for (int i = 0; i < 4; ++i) seek_ok = streams[i].seek(target) && seek_ok;
+        bool seek_ok = streams[0].seek(target);
+        if (!single_composite) {
+          for (int i = 1; i < 4; ++i) seek_ok = streams[i].seek(target) && seek_ok;
+        }
         if (seek_ok) {
           source_frame_index = target;
           skip_debt = 0.0;
@@ -1309,14 +1430,22 @@ int main(int argc, char** argv) {
         const int target_scene = (scene_index + scene_delta + count) % count;
         double next_fps = 0.0;
         int next_frames = -1;
+        bool next_single_composite = false;
         if (open_scene(scene_paths[target_scene], !options.software_decode,
-                       streams, next_fps, next_frames)) {
+                       streams, next_fps, next_frames, next_single_composite)) {
           scene_index = target_scene;
           options.scene = scene_paths[scene_index];
           source_fps = next_fps;
           source_frames = next_frames;
+          single_composite = next_single_composite;
           source_frame_index = 0;
           shown_frames = 0;
+          lane_task_sequence = 0;
+          ufld_task_sequence = 0;
+          last_detector_start = -1000000;
+          // shown_frames is scene-local. Keeping the previous scene's start
+          // index blocks UFLD until the new scene reaches that old index.
+          last_ufld_start = -1000000;
           skip_debt = 0.0;
           calibration_target = CalibrationTarget::NONE;
           calibration_points.clear();
@@ -1370,15 +1499,11 @@ int main(int argc, char** argv) {
       if (spent < period) {
         std::this_thread::sleep_for(std::chrono::duration<double>(period - spent));
       } else {
-        skip_debt += spent / period - 1.0;
-        const int skip = std::min(static_cast<int>(skip_debt), 4);
-        for (int n = 0; n < skip; ++n) {
-          bool grabbed = true;
-          for (int i = 0; i < 4; ++i) grabbed = streams[i].grab() && grabbed;
-          if (!grabbed) break;
-          ++source_frame_index;
-          skip_debt -= 1.0;
-        }
+        // Do not grab/drop source frames. The PC demo processes frames in
+        // sequence; skipping here made its temporal lane tracker jump several
+        // frames at a time. When RK3568 is slower than the 30 FPS source, play
+        // the demo slower instead of corrupting the lane motion sequence.
+        skip_debt = 0.0;
       }
     }
     if (shown_frames % 30 == 0) std::cout << "shown=" << shown_frames

@@ -34,7 +34,10 @@ add_executable(adas_four_view
   src/risk_estimator.cpp
   src/overlay.cpp
   src/text_renderer.cpp
+  src/ufld_lane_detector.cpp
 )
+
+add_executable(ufld_benchmark src/ufld_benchmark.cpp)
 
 find_library(EGL_LIBRARY NAMES EGL)
 find_library(GLES_LIBRARY NAMES GLESv2)
@@ -64,5 +67,7 @@ target_include_directories(adas_four_view PRIVATE
 )
 target_compile_options(adas_four_view PRIVATE -O3 -Wall -Wextra)
 target_link_libraries(adas_four_view PRIVATE ${OpenCV_LIBS} ${RKNNRT_LIBRARY} ${FREETYPE_LIBRARIES} pthread dl)
+target_include_directories(ufld_benchmark PRIVATE include third_party/rknn ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(ufld_benchmark PRIVATE ${OpenCV_LIBS} ${RKNNRT_LIBRARY} pthread dl)
 
 install(TARGETS adas_demo RUNTIME DESTINATION bin)

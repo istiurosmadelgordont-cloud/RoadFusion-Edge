@@ -17,6 +17,9 @@ On the board, build and run from `/home/cat/rk3568_adas/board_v7`:
 ./scripts/run.sh --source samples/project_video.mp4
 ./scripts/run.sh --source test_inputs/ccf7_full_01470.jpg --headless --dump-detections
 ./scripts/run_four_view.sh
+./scripts/run_four_view.sh \
+  --ufld-model models/ufldv2_culane_res18_800x320_student_int8.rknn \
+  --ufld-every 2 --ufld-rear
 ```
 
 The four-view demo first builds the same 1920x1080 four-quadrant frame that
@@ -59,17 +62,42 @@ distance. Tracks come from ByteTrack. This is a low-cost ADAS visualization
 rather than metric BEV; real-world positions require camera intrinsics,
 extrinsics and ground-plane calibration.
 
-The camera textures and safety overlays refresh every displayed frame. The
-complete PC lane estimator runs on an asynchronous latest-frame worker, with
-two front updates per rear update because front is the driving view. Results
-older than 250 ms are discarded and render-time interpolation fills the gaps
-without changing detector state. Dashboard text refreshes every third frame.
-With the unreduced 640-pixel five-scale algorithm, the test board measured
-roughly 15-18 FPS with the GLES UI after the asynchronous change.
+The camera textures and safety overlays refresh every displayed frame. Without
+`--ufld-model`, the complete PC lane estimator runs on an asynchronous
+latest-frame worker, with three front updates per rear update. Results older
+than 250 ms are discarded and render-time interpolation fills the gaps.
 
-`run.sh` uses `taskset -c 2,3` and two OpenCV worker threads. Linux CPU IDs
-2 and 3 are the third and fourth Cortex-A55 cores. RKNN Runtime invokes the
-NPU independently; CPU affinity does not assign NPU cores on RK3568.
+With `--ufld-model`, the board uses the 800x320 UFLDv2 CULane student through
+RKNN. YOLO and UFLD share the RK3568 NPU queue without overlapping. A pending
+YOLO job keeps priority so frequent lane jobs cannot starve object detection.
+`--ufld-rear` assigns four of every five lane jobs to the latency-sensitive
+front view and one to rear. Scene changes reset both scheduling clocks, which
+prevents the new scene from waiting for the previous scene's frame index.
+The tested `--ufld-every 2` configuration displays about 16-19 FPS, with UFLD
+taking about 105-118 ms per call. It uses UFLD only for both lane views; the
+four-point OpenCV estimator is not used as a fallback in this mode.
+
+The UFLD ONNX/RKNN files and calibration images are generated artifacts and
+are intentionally excluded from Git. The reproducible path is:
+
+1. `training/make_ufldv2_800x320_student.py`
+2. `training/distill_ufldv2_800x320.py`
+3. `tools/export_ufldv2_onnx.py`
+4. `tools/make_ufldv2_calibration.py`
+5. `tools/convert_ufldv2_int8.py`
+
+`ufld_benchmark` reports standalone RKNN latency on the board. Dashboard text
+refreshes every third frame.
+
+Normal playback does not use `VideoCapture::grab()` to skip source frames.
+When the complete pipeline cannot match a 30 FPS clip, it plays every source
+frame at the achieved display rate so the PC estimator receives a continuous
+motion sequence. `source_frame` should therefore advance with `shown` in the
+periodic log rather than running roughly twice as fast as it.
+
+`run_four_view.sh` uses `taskset -c 2,3` and one OpenCV worker thread. Linux
+CPU IDs 2 and 3 are the third and fourth Cortex-A55 cores. RKNN Runtime invokes
+the NPU independently; CPU affinity does not assign NPU cores on RK3568.
 Inference defaults to every second video frame to keep the UI responsive.
 The V7 P2 decoder checks for four 21-class score outputs before running.
 
