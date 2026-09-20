@@ -2,16 +2,11 @@
 
 面向道路环境感知与辅助驾驶的 FPGA + ARM/NPU 异构边缘视觉系统。
 
-本项目是“紫光同创 FPGA + RK3568 ARM/NPU”异构高级辅助驾驶系统的
-ARM 端软件与模型部署工程。FPGA 负责多路视频同步采集、图像预处理、
+本项目是“紫光同创 FPGA + RK3568 ARM/NPU”异构高级辅助驾驶系统工程，
+仓库同时保存 FPGA 工程、ARM 端软件和模型部署工具。FPGA 负责视频采集、图像预处理、
 帧缓存和低延迟数据传输；RK3568 ARM 负责系统调度、车道分析和场景逻辑，
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
-
-> 当前仓库包含 RK3568 端 C++ 程序、RKNN 模型与转换工具，以及 FPGA 开发基线。
-> HDMI → DDR → 图像增强 → PCIe 工程见 [fpga/hdmi_ddr_pice](fpga/hdmi_ddr_pice/README.md)，
-> 原 PCIe 彩条基线保留于 [fpga/pcie_video](fpga/pcie_video/)。当前 FPGA 版本的已知问题与验证边界见各目录说明。
-> 当前以太网 960×540 RGB565 接收工程及 Windows 视频/图片发送器见 [fpga/ethernet_video](fpga/ethernet_video/README.md) 和 [tools/udp_video_sender](tools/udp_video_sender/README.md)。
 
 ## 数据流
 
@@ -27,11 +22,31 @@ RK3568 NPU：INT8 道路目标检测
 ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 ```
 
+## FPGA 工程内容
+
+仓库的 [`fpga/`](fpga/) 目录包含可恢复的 Pango PDS 工程、关键 RTL、协议说明和验证记录：
+
+| 目录 | 内容 | 当前验证边界 |
+| --- | --- | --- |
+| [`fpga/pcie/hdmi_ddr_pice_handshake_20260919`](fpga/pcie/hdmi_ddr_pice_handshake_20260919/README.md) | PGL50H HDMI/DDR/增强/PCIe 工程，增加 RC 四缓冲所有权握手、完成标记、归还 token 和 STOP 应答 | 控制器仿真、1080p 完整帧回归、RC 参考代码、PDS Compile/Synthesize 已通过；尚未完成布局布线、真实驱动和板级压力测试 |
+| [`fpga/hdmi_ddr_pice`](fpga/hdmi_ddr_pice/README.md) | 2026-09-15 HDMI → DDR → 图像增强 → PCIe 开发基线 | 保存源码和依赖；固定四缓冲轮转没有 RC 所有权反馈，不能保证零拷贝处理期间不被覆盖 |
+| [`fpga/pcie_video`](fpga/pcie_video/) | 1080p RGB565 PCIe 彩条基线及 ARM 操作说明 | 用于先验证 BAR 命令、TLP/DMA 和四缓冲传输，不代表摄像头链路完成 |
+| [`fpga/ethernet_video`](fpga/ethernet_video/README.md) | 千兆以太网接收 960×540 RGB565、写 DDR 并显示，配套 Windows UDP 发送器 | 已有彩条显示现场观察；协议没有包序号、确认或重传 |
+
+完整 PDS 工程以 ZIP 或分卷形式保存，恢复命令、SHA-256、工具版本、已知 RTL/CDC
+问题均写在各目录 README 和 `BUILD_STATUS.md` 中。综合成功不等于板级数据完整性、
+缓存一致性和时序已经签核。
+
+RK3568 四路演示目前用四个同步视频模拟 FPGA 的单路 `1920×1080` 四宫格输出。
+现有 FPGA 交付工程重点验证单路 1080p RGB565 的采集、DDR 和 PCIe DMA；四摄同步、
+四路缩放拼接以及 FPGA→RK3568 的完整联合链路仍需在后续 RTL 和板级联调中验收。
+
 ## 功能
 
 - 单个 21 类道路目标检测模型，交通灯细分为红/绿两色的圆灯、左箭头、右箭头和直行箭头。
 - 有效信号灯区域筛选和连续帧状态判断。
 - 四点车道标定、IPM 鸟瞰变换、二值特征、滑动窗口搜索和二次曲线拟合。
+- 可选 UFLDv2 CULane 轻量版 RKNN 车道检测，前后视与 YOLO 共享 NPU 调度队列。
 - 车道偏移、道路曲率、安全距离、相对速度和 TTC 风险估计。
 - 集成可视化界面，可导入视频、暂停、重新标定、切换检测并显示实时帧率。
 
@@ -48,7 +63,8 @@ traffic_green_circle  traffic_green_left   traffic_green_right  traffic_green_st
 当前四路版本包括：
 
 - 前、后、左、右四路同步视频和可拖动的统一进度条；支持按钮或 `[`、`]` 切换场景。
-- 四路画面拼成一个 640×640 输入，一次调用 RK3568 NPU 完成检测，再映射回各个视角。
+- 四路画面先按 FPGA 接口拼成一个 1920×1080 四宫格，再整体 letterbox 到固定
+  640×640 输入；一次调用 RK3568 NPU 完成检测并映射回各个视角。
 - ByteTrack 风格的目标关联、短时预测和检测间隔补偿，降低框体滞后与闪烁。
 - 前后视角独立四点标定；标定时暂停画面，标定结果写入 `board_v7/config`。
 - IPM 鸟瞰空间二次曲线拟合、逐帧插值、车辆遮挡保持，以及车道宽度突变抑制。
