@@ -21,6 +21,8 @@ class UfldLaneDetector {
   bool ready() const { return ready_; }
   const std::string& error() const { return error_; }
   const std::string& profile() const { return profile_; }
+  int input_width() const { return input_width_; }
+  int input_height() const { return input_height_; }
   LaneResult detect(const cv::Mat& bgr, double* inference_ms = nullptr);
   void reset() {}
 

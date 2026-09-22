@@ -1,27 +1,19 @@
 #include "adas/ufld_lane_detector.hpp"
+#include "adas/model_file.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <iostream>
 #include <limits>
 
 #include <opencv2/imgproc.hpp>
+#include <rga/im2d.h>
+#include <rga/rga.h>
 
 namespace adas {
 namespace {
-
-std::vector<unsigned char> read_binary(const std::string& path) {
-  std::ifstream file(path.c_str(), std::ios::binary | std::ios::ate);
-  if (!file) return {};
-  const std::streamsize size = file.tellg();
-  file.seekg(0, std::ios::beg);
-  std::vector<unsigned char> data(static_cast<size_t>(size));
-  if (!file.read(reinterpret_cast<char*>(data.data()), size)) return {};
-  return data;
-}
 
 inline size_t index4(int a, int b, int c, int d,
                      int dim_b, int dim_c, int dim_d) {
@@ -68,9 +60,10 @@ float stable_softmax_expectation(const float* values, int count, int center,
 }  // namespace
 
 UfldLaneDetector::UfldLaneDetector(const std::string& model_path) {
-  const std::vector<unsigned char> model = read_binary(model_path);
+  std::string model_error;
+  const std::vector<unsigned char> model = read_model_file(model_path, &model_error);
   if (model.empty()) {
-    fail("cannot read UFLD RKNN model: " + model_path);
+    fail("cannot read UFLD RKNN model: " + model_error);
     return;
   }
   if (rknn_init(&context_, const_cast<unsigned char*>(model.data()),
@@ -86,6 +79,10 @@ UfldLaneDetector::UfldLaneDetector(const std::string& model_path) {
   input_attr_.index = 0;
   if (rknn_query(context_, RKNN_QUERY_INPUT_ATTR, &input_attr_, sizeof(input_attr_)) != RKNN_SUCC) {
     fail("cannot query UFLD input");
+    return;
+  }
+  if (input_attr_.n_dims != 4) {
+    fail("UFLD input tensor must have four dimensions");
     return;
   }
   if (input_attr_.fmt == RKNN_TENSOR_NHWC) {
@@ -105,8 +102,32 @@ UfldLaneDetector::UfldLaneDetector(const std::string& model_path) {
     }
   }
   v2_ = io_num_.n_output == 4;
-  profile_ = v2_ ? "UFLDv2 CULane 800x320" : "UFLD V1 CULane 800x288";
-  ready_ = (v2_ && input_width_ == 800 && input_height_ == 320) ||
+  if (v2_) {
+    bool has_loc_row = false;
+    bool has_exist_row = false;
+    for (const rknn_tensor_attr& attr : output_attrs_) {
+      const std::string name = attr.name;
+      if (name == "loc_row" && attr.n_elems >= 200U * 72U * 4U)
+        has_loc_row = true;
+      if (name == "exist_row" && attr.n_elems >= 2U * 72U * 4U)
+        has_exist_row = true;
+    }
+    if (!has_loc_row || !has_exist_row) {
+      fail("UFLDv2 output tensor schema is incompatible");
+      return;
+    }
+  } else if (output_attrs_[0].n_elems < 201U * 18U * 4U) {
+    fail("UFLD V1 output tensor schema is incompatible");
+    return;
+  }
+  if (v2_) {
+    profile_ = "UFLDv2 CULane " + std::to_string(input_width_) + "x" +
+               std::to_string(input_height_);
+  } else {
+    profile_ = "UFLD V1 CULane 800x288";
+  }
+  ready_ = (v2_ && (input_width_ == 800 || input_width_ == 1600) &&
+            input_height_ == 320) ||
            (!v2_ && input_width_ == 800 && input_height_ == 288);
   if (!ready_) fail("unexpected UFLD input dimensions");
 }
@@ -127,7 +148,23 @@ void UfldLaneDetector::fail(const std::string& message) {
 cv::Mat UfldLaneDetector::preprocess(const cv::Mat& bgr) const {
   cv::Mat resized;
   if (v2_) {
-    cv::resize(bgr, resized, cv::Size(input_width_, 533), 0, 0, cv::INTER_LINEAR);
+    resized.create(533, input_width_, CV_8UC3);
+    // RK3568 RGA rejects the 2.5x upscale used by the 640-wide simulation.
+    // Native FPGA quadrants are 960 wide (1.67x), which RGA can accelerate.
+    bool rga_ok = bgr.cols >= input_width_ / 2 && bgr.isContinuous() &&
+                  resized.isContinuous();
+    if (rga_ok) {
+      const rga_buffer_t source = wrapbuffer_virtualaddr(
+          const_cast<unsigned char*>(bgr.data), bgr.cols, bgr.rows,
+          RK_FORMAT_BGR_888);
+      const rga_buffer_t target = wrapbuffer_virtualaddr(
+          resized.data, resized.cols, resized.rows, RK_FORMAT_BGR_888);
+      rga_ok = imresize(source, target) == IM_STATUS_SUCCESS;
+    }
+    if (!rga_ok) {
+      cv::resize(bgr, resized, cv::Size(input_width_, 533), 0, 0,
+                 cv::INTER_LINEAR);
+    }
     resized = resized.rowRange(resized.rows - input_height_, resized.rows).clone();
   } else {
     cv::resize(bgr, resized, cv::Size(input_width_, input_height_), 0, 0, cv::INTER_LINEAR);
@@ -137,7 +174,7 @@ cv::Mat UfldLaneDetector::preprocess(const cv::Mat& bgr) const {
 }
 
 LaneResult UfldLaneDetector::detect(const cv::Mat& bgr, double* inference_ms) {
-  if (!ready_ || bgr.empty()) return LaneResult();
+  if (!ready_ || bgr.empty() || bgr.type() != CV_8UC3) return LaneResult();
   cv::Mat image = preprocess(bgr);
   rknn_input input{};
   input.index = 0;
@@ -155,6 +192,12 @@ LaneResult UfldLaneDetector::detect(const cv::Mat& bgr, double* inference_ms) {
   }
   if (rknn_outputs_get(context_, io_num_.n_output, outputs.data(), nullptr) != RKNN_SUCC)
     return LaneResult();
+  for (const rknn_output& output : outputs) {
+    if (!output.buf) {
+      rknn_outputs_release(context_, io_num_.n_output, outputs.data());
+      return LaneResult();
+    }
+  }
   if (inference_ms) {
     *inference_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();
@@ -244,6 +287,19 @@ LaneResult UfldLaneDetector::make_result(const Points& left, const Points& right
   if (last_y - first_y < height * 0.16f) return result;
   cv::Vec3d left_fit, right_fit;
   if (!fit_quadratic(left.values, left_fit) || !fit_quadratic(right.values, right_fit)) return result;
+  // Fit only spatially consistent anchors; do not add temporal lag here.
+  const auto refine = [width](const std::vector<cv::Point2f>& points, cv::Vec3d& fit) {
+    std::vector<double> residuals;
+    for (const auto& p : points) residuals.push_back(std::abs(p.x - curve_x(fit, p.y)));
+    std::sort(residuals.begin(), residuals.end());
+    const double limit = std::max(width * 0.008, 2.5 * residuals[residuals.size() / 2]);
+    std::vector<cv::Point2f> inliers;
+    for (const auto& p : points)
+      if (std::abs(p.x - curve_x(fit, p.y)) <= limit) inliers.push_back(p);
+    if (inliers.size() < 5 || inliers.size() * 2 < points.size()) return false;
+    return fit_quadratic(inliers, fit);
+  };
+  if (!refine(left.values, left_fit) || !refine(right.values, right_fit)) return result;
   for (int i = 0; i < 32; ++i) {
     const float y = last_y - (last_y - first_y) * i / 31.0f;
     const int lx = cvRound(std::max(0.0, std::min(curve_x(left_fit, y),
@@ -273,7 +329,9 @@ LaneResult UfldLaneDetector::make_result(const Points& left, const Points& right
                         std::max(1.0f, bottom_width);
   result.departure = std::abs(result.offset_ratio) > 0.16f;
   result.valid = true;
-  result.partial = false;
+  // Official V2 requires > half the row anchors. Sparse curves remain visible
+  // for diagnostics but cannot initiate LDW (coverage is not a probability).
+  result.partial = v2_ && (left.confidence <= 0.5f || right.confidence <= 0.5f);
   return result;
 }
 

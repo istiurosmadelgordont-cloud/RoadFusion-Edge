@@ -15,6 +15,7 @@ class ByteTracker {
                                 std::chrono::steady_clock::time_point measured_at,
                                 std::chrono::steady_clock::time_point now);
   std::vector<Detection> predict(std::chrono::steady_clock::time_point now) const;
+  std::vector<Detection> observations() const;
   void reset();
 
  private:

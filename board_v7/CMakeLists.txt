@@ -71,3 +71,11 @@ target_include_directories(ufld_benchmark PRIVATE include third_party/rknn ${Ope
 target_link_libraries(ufld_benchmark PRIVATE ${OpenCV_LIBS} ${RKNNRT_LIBRARY} pthread dl)
 
 install(TARGETS adas_demo RUNTIME DESTINATION bin)
+
+add_executable(perception_regression EXCLUDE_FROM_ALL
+  tests/perception_regression.cpp src/warning_logic.cpp src/signal_logic.cpp
+  src/drive_decision.cpp src/risk_estimator.cpp src/byte_tracker.cpp)
+target_include_directories(perception_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(perception_regression PRIVATE ${OpenCV_LIBS})
+# Release builds must still execute the regression assertions.
+target_compile_options(perception_regression PRIVATE -UNDEBUG)

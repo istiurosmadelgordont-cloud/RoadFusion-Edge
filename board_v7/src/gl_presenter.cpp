@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 
+#include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 
@@ -127,15 +128,28 @@ GlPresenter::GlPresenter(int width, int height) : width_(width), height_(height)
     window_attrs.colormap = colormap_;
     window_attrs.event_mask = ExposureMask | KeyPressMask | ButtonPressMask |
                               Button1MotionMask | StructureNotifyMask;
-    window_attrs.override_redirect = True;
+    window_attrs.override_redirect = False;
     window_ = XCreateWindow(x_display_, root, 0, 0, width_, height_, 0, depth,
                             InputOutput, visual,
-                            CWColormap | CWEventMask | CWOverrideRedirect, &window_attrs);
+                            CWColormap | CWEventMask, &window_attrs);
     if (visual_info) XFree(visual_info);
     if (!window_) throw std::runtime_error("XCreateWindow failed");
     XStoreName(x_display_, window_, "RK3568 V7 | NVIDIA 4 VIEW");
-    XMapRaised(x_display_, window_);
-    XSetInputFocus(x_display_, window_, RevertToPointerRoot, CurrentTime);
+
+    // Let the desktop window manager own the window.  The previous
+    // override_redirect window bypassed the WM, so Alt+Tab could not switch
+    // away and Esc/q were easily lost when keyboard focus changed.
+    wm_delete_window_ = XInternAtom(x_display_, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(x_display_, window_, &wm_delete_window_, 1);
+    net_wm_state_ = XInternAtom(x_display_, "_NET_WM_STATE", False);
+    net_wm_state_fullscreen_ =
+        XInternAtom(x_display_, "_NET_WM_STATE_FULLSCREEN", False);
+    XChangeProperty(x_display_, window_, net_wm_state_, XA_ATOM, 32,
+                    PropModeReplace,
+                    reinterpret_cast<unsigned char*>(&net_wm_state_fullscreen_),
+                    1);
+
+    XMapWindow(x_display_, window_);
     XFlush(x_display_);
     egl_surface_ = eglCreateWindowSurface(egl_display_, config,
                                            static_cast<EGLNativeWindowType>(window_), nullptr);
@@ -221,15 +235,15 @@ void GlPresenter::draw_texture(GLuint texture, const cv::Mat& image,
 }
 
 void GlPresenter::present(const cv::Mat& ui, const std::array<cv::Mat, 4>& cameras,
-                          int header_height, int tile_width, int tile_height) {
+                          const std::array<cv::Rect, 4>& view_rects) {
   glViewport(0, 0, width_, height_);
   glClearColor(0.07f, 0.09f, 0.11f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
   draw_texture(ui_texture_, ui, 0, 0, width_, height_);
   for (int i = 0; i < 4; ++i)
     draw_texture(camera_textures_[i], cameras[i],
-                 (i % 2) * tile_width, header_height + (i / 2) * tile_height,
-                 tile_width, tile_height);
+                 view_rects[i].x, view_rects[i].y,
+                 view_rects[i].width, view_rects[i].height);
   if (!eglSwapBuffers(egl_display_, egl_surface_))
     throw std::runtime_error("eglSwapBuffers failed");
 }
@@ -240,10 +254,18 @@ int GlPresenter::poll_input(int* click_x, int* click_y) {
   while (XPending(x_display_)) {
     XEvent event{};
     XNextEvent(x_display_, &event);
+    if (event.type == ClientMessage &&
+        static_cast<Atom>(event.xclient.data.l[0]) == wm_delete_window_) {
+      return 27;
+    }
     if (event.type == KeyPress) {
       const KeySym key = XLookupKeysym(&event.xkey, 0);
       if (key == XK_Escape) return 27;
       if (key == XK_q || key == XK_Q) return 'q';
+      if (key == XK_F11) {
+        set_fullscreen(!fullscreen_);
+        continue;
+      }
       if (key == XK_m || key == XK_M) return 'm';
       if (key == XK_c || key == XK_C) return 'c';
       if (key == XK_r || key == XK_R) return 'r';
@@ -260,6 +282,27 @@ int GlPresenter::poll_input(int* click_x, int* click_y) {
     }
   }
   return -1;
+}
+
+void GlPresenter::set_fullscreen(bool enabled) {
+  if (!x_display_ || !window_ || net_wm_state_ == None ||
+      net_wm_state_fullscreen_ == None || fullscreen_ == enabled) {
+    return;
+  }
+
+  XEvent event{};
+  event.type = ClientMessage;
+  event.xclient.window = window_;
+  event.xclient.message_type = net_wm_state_;
+  event.xclient.format = 32;
+  event.xclient.data.l[0] = enabled ? 1 : 0;  // add/remove
+  event.xclient.data.l[1] = net_wm_state_fullscreen_;
+  event.xclient.data.l[2] = None;
+  event.xclient.data.l[3] = 1;  // normal application request
+  XSendEvent(x_display_, DefaultRootWindow(x_display_), False,
+             SubstructureRedirectMask | SubstructureNotifyMask, &event);
+  XFlush(x_display_);
+  fullscreen_ = enabled;
 }
 
 void GlPresenter::cleanup() {

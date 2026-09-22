@@ -1,10 +1,10 @@
 #include "adas/rknn_detector.hpp"
+#include "adas/model_file.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
@@ -13,16 +13,6 @@
 
 namespace adas {
 namespace {
-
-std::vector<unsigned char> read_binary(const std::string& path) {
-  std::ifstream file(path.c_str(), std::ios::binary | std::ios::ate);
-  if (!file) return {};
-  const std::streamsize size = file.tellg();
-  file.seekg(0, std::ios::beg);
-  std::vector<unsigned char> data(static_cast<size_t>(size));
-  if (!file.read(reinterpret_cast<char*>(data.data()), size)) return {};
-  return data;
-}
 
 struct TensorView {
   const float* data = nullptr;
@@ -80,9 +70,10 @@ float dfl_value(const TensorView& box, int side, int bins, int y, int x) {
 }  // namespace
 
 RknnDetector::RknnDetector(const DetectorConfig& config) : config_(config) {
-  std::vector<unsigned char> model = read_binary(config_.model_path);
+  std::string model_error;
+  std::vector<unsigned char> model = read_model_file(config_.model_path, &model_error);
   if (model.empty()) {
-    fail("cannot read RKNN model: " + config_.model_path);
+    fail("cannot read RKNN model: " + model_error);
     return;
   }
 
@@ -161,7 +152,7 @@ cv::Mat RknnDetector::preprocess(const cv::Mat& bgr, Letterbox& meta) const {
 }
 
 std::vector<Detection> RknnDetector::detect(const cv::Mat& bgr, double* inference_ms) {
-  if (!ready_ || bgr.empty()) return {};
+  if (!ready_ || bgr.empty() || bgr.type() != CV_8UC3) return {};
   Letterbox meta;
   cv::Mat input_image = preprocess(bgr, meta);
   rknn_input input{};
@@ -182,6 +173,12 @@ std::vector<Detection> RknnDetector::detect(const cv::Mat& bgr, double* inferenc
     outputs[i].want_float = 1;
   }
   if (rknn_outputs_get(context_, io_num_.n_output, outputs.data(), nullptr) != RKNN_SUCC) return {};
+  for (const rknn_output& output : outputs) {
+    if (!output.buf) {
+      rknn_outputs_release(context_, io_num_.n_output, outputs.data());
+      return {};
+    }
+  }
   const auto stop = std::chrono::steady_clock::now();
   if (inference_ms) *inference_ms = std::chrono::duration<double, std::milli>(stop - start).count();
   std::vector<Detection> result = postprocess(outputs, meta);

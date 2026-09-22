@@ -14,13 +14,15 @@ struct RiskConfig {
   float clear_ttc_s = 4.2f;
   int enter_updates = 2;
   int clear_updates = 3;
+  bool require_closing = false;  // RCW must not mean merely a nearby rear car.
 };
 
 class RiskEstimator {
  public:
   explicit RiskEstimator(const RiskConfig& config = RiskConfig());
   RiskResult update(const std::vector<Detection>& detections, int width, int height,
-                    const LaneResult* lane = nullptr, bool fresh_measurement = true);
+                    const LaneResult* lane = nullptr, bool fresh_measurement = true,
+                    double measurement_time_s = -1.0);
   void reset();
 
  private:
@@ -29,6 +31,7 @@ class RiskEstimator {
   float filtered_distance_ = -1.0f;
   float smoothed_speed_ = 0.0f;
   std::chrono::steady_clock::time_point previous_time_{};
+  double previous_sample_s_ = -1.0;
   bool initialized_ = false;
   bool warning_ = false;
   int target_track_id_ = -1;

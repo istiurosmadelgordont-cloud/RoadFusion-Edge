@@ -18,7 +18,7 @@ class GlPresenter {
   GlPresenter& operator=(const GlPresenter&) = delete;
 
   void present(const cv::Mat& ui, const std::array<cv::Mat, 4>& cameras,
-               int header_height, int tile_width, int tile_height);
+               const std::array<cv::Rect, 4>& view_rects);
   int poll_input(int* click_x, int* click_y);
   const std::string& renderer() const { return renderer_; }
 
@@ -33,6 +33,10 @@ class GlPresenter {
   Display* x_display_ = nullptr;
   Window window_ = 0;
   Colormap colormap_ = 0;
+  Atom wm_delete_window_ = None;
+  Atom net_wm_state_ = None;
+  Atom net_wm_state_fullscreen_ = None;
+  bool fullscreen_ = true;
   EGLDisplay egl_display_ = EGL_NO_DISPLAY;
   EGLContext egl_context_ = EGL_NO_CONTEXT;
   EGLSurface egl_surface_ = EGL_NO_SURFACE;
@@ -42,6 +46,8 @@ class GlPresenter {
   GLint pos_location_ = -1;
   GLint uv_location_ = -1;
   std::string renderer_;
+
+  void set_fullscreen(bool enabled);
 };
 
 }  // namespace adas

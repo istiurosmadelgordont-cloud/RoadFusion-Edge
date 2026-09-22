@@ -24,7 +24,12 @@ DriveResult DriveDecisionLogic::update(const SignalResult& signal) {
   // SignalLogic has not reached a majority yet, so keep the previous decision
   // rather than reacting to a single uncertain frame.
   if (!signal.stable) {
-    current_.held = current_.decision != DriveDecision::UNKNOWN;
+    // Never keep GO while a new reading is absent or contradictory.
+    if (current_.decision == DriveDecision::GO ||
+        ++unknown_streak_ >= config_.unknown_grace_updates) {
+      current_.decision = DriveDecision::UNKNOWN;
+      current_.held = false;
+    } else current_.held = current_.decision != DriveDecision::UNKNOWN;
     return current_;
   }
 

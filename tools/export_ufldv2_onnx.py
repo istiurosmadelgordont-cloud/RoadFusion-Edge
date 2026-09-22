@@ -31,6 +31,7 @@ def main() -> None:
     parser.add_argument("--config", choices=("culane", "culane_student", "tusimple"), required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--backbone", choices=("18", "34"), default="18")
     args = parser.parse_args()
 
     sys.path.insert(0, str(args.upstream.resolve()))
@@ -53,7 +54,7 @@ def main() -> None:
             self.dim2 = grid_col * cols * lanes
             self.dim3 = 2 * rows * lanes
             self.dim4 = 2 * cols * lanes
-            self.model = resnet("18", pretrained=False)
+            self.model = resnet(args.backbone, pretrained=False)
             self.pool = torch.nn.Conv2d(512, 8, 1)
             input_dim = height // 32 * width // 32 * 8
             self.cls = torch.nn.Sequential(

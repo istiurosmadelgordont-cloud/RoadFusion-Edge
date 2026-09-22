@@ -46,7 +46,8 @@ RK3568 四路演示目前用四个同步视频模拟 FPGA 的单路 `1920×1080`
 - 单个 21 类道路目标检测模型，交通灯细分为红/绿两色的圆灯、左箭头、右箭头和直行箭头。
 - 有效信号灯区域筛选和连续帧状态判断。
 - 四点车道标定、IPM 鸟瞰变换、二值特征、滑动窗口搜索和二次曲线拟合。
-- 可选 UFLDv2 CULane 轻量版 RKNN 车道检测，前后视与 YOLO 共享 NPU 调度队列。
+- 可选 UFLDv2 CULane RKNN 车道检测；当前精度配置由前视独占完整
+  1600×320 ResNet18，后视车道关闭，YOLO 与前视 UFLD 共享 NPU 调度队列。
 - 车道偏移、道路曲率、安全距离、相对速度和 TTC 风险估计。
 - 集成可视化界面，可导入视频、暂停、重新标定、切换检测并显示实时帧率。
 
@@ -68,7 +69,7 @@ traffic_green_circle  traffic_green_left   traffic_green_right  traffic_green_st
 - ByteTrack 风格的目标关联、短时预测和检测间隔补偿，降低框体滞后与闪烁。
 - 前后视角独立四点标定；标定时暂停画面，标定结果写入 `board_v7/config`。
 - IPM 鸟瞰空间二次曲线拟合、逐帧插值、车辆遮挡保持，以及车道宽度突变抑制。
-- 前后碰撞/TTC 预警、左右盲区提示、交通灯状态与瞬时显示帧率。预警逻辑使用
+- 前后碰撞/TTC 预警、左右盲区提示、交通灯状态与真实显示帧率。预警逻辑使用
   ByteTrack 目标锁定、连续帧确认和进入/退出回差，避免检测间隔预测框造成单帧误报。
 - 中文化 1920×1080 车载界面；保留 FPS、NPU、TTC、YOLOv8 和模型类别名等技术术语。
 - 1920×1080 OpenGL ES 界面；进程绑定 CPU 2、3，RKNN Runtime 独立调用 NPU。
@@ -77,7 +78,10 @@ traffic_green_circle  traffic_green_left   traffic_green_right  traffic_green_st
 和 INT8 RKNN 一并保留，便于重新转换及核对模型来源。测试视频、NVIDIA PhysicalAI
 原始素材、量化图片、运行日志和构建产物体积较大，不进入 Git 仓库。
 
-四路版本的详细操作、已验证性能和当前模型限制见 [`board_v7/README.md`](board_v7/README.md)。
+四路版本的详细操作、已验证性能和当前模型限制见 [`board_v7/README.md`](board_v7/README.md)，
+九层软件框架与模块完成边界见 [`board_v7/ARCHITECTURE.md`](board_v7/ARCHITECTURE.md)，
+当前及后续代码的扩展性、健壮性、安全性与验证要求见
+[`board_v7/ENGINEERING.md`](board_v7/ENGINEERING.md)。
 
 ## 软件模块
 

@@ -111,6 +111,21 @@ std::vector<Detection> ByteTracker::predict(std::chrono::steady_clock::time_poin
   return result;
 }
 
+std::vector<Detection> ByteTracker::observations() const {
+  std::vector<Detection> result;
+  for (const auto& track : tracks_) {
+    if (track.missed != 0) continue;
+    Detection d;
+    d.class_id = track.class_id;
+    d.track_id = track.id;
+    d.name = track.name;
+    d.score = track.score;
+    d.box = track.box;
+    result.push_back(d);
+  }
+  return result;
+}
+
 void ByteTracker::reset() { tracks_.clear(); next_id_ = 1; }
 
 }  // namespace adas

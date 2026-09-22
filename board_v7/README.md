@@ -18,8 +18,8 @@ On the board, build and run from `/home/cat/rk3568_adas/board_v7`:
 ./scripts/run.sh --source test_inputs/ccf7_full_01470.jpg --headless --dump-detections
 ./scripts/run_four_view.sh
 ./scripts/run_four_view.sh \
-  --ufld-model models/ufldv2_culane_res18_800x320_student_int8.rknn \
-  --ufld-every 2 --ufld-rear
+  --ufld-model models/ufldv2_culane_res18_1600x320_int8.rknn \
+  --ufld-every 2 --no-rear-lane
 ```
 
 The four-view demo first builds the same 1920x1080 four-quadrant frame that
@@ -67,15 +67,27 @@ The camera textures and safety overlays refresh every displayed frame. Without
 latest-frame worker, with three front updates per rear update. Results older
 than 250 ms are discarded and render-time interpolation fills the gaps.
 
-With `--ufld-model`, the board uses the 800x320 UFLDv2 CULane student through
-RKNN. YOLO and UFLD share the RK3568 NPU queue without overlapping. A pending
-YOLO job keeps priority so frequent lane jobs cannot starve object detection.
-`--ufld-rear` assigns four of every five lane jobs to the latency-sensitive
-front view and one to rear. Scene changes reset both scheduling clocks, which
-prevents the new scene from waiting for the previous scene's frame index.
-The tested `--ufld-every 2` configuration displays about 16-19 FPS, with UFLD
-taking about 105-118 ms per call. It uses UFLD only for both lane views; the
-four-point OpenCV estimator is not used as a fallback in this mode.
+With `--ufld-model`, YOLO and UFLD share the RK3568 NPU queue without
+overlapping. The deployed accuracy profile uses the official-width 1600x320
+UFLDv2 CULane ResNet18 model on the front view only. `--no-rear-lane` disables
+all rear lane work; rear YOLO, ByteTrack and RCW remain active. The 800x320
+student remains available as the lower-latency alternative.
+
+The full model measured 148.5 ms per standalone RKNN call and roughly
+192-244 ms for the complete asynchronous lane task while the four-view program
+was active. A 150-frame end-to-end headless run achieved 15.3 displayed FPS;
+the normal UI is not artificially FPS-limited. On simulated data each view is
+already 640x360. When a native 1920x1080 FPGA composite is supplied, the front
+UFLD path preserves the original 960x540 quadrant and scales only the resulting
+geometry to the 720p UI, avoiding an unnecessary loss of lane detail.
+
+Example accuracy-profile launch:
+
+```sh
+sh scripts/run_four_view.sh \
+  --ufld-model models/ufldv2_culane_res18_1600x320_int8.rknn \
+  --ufld-every 2 --no-rear-lane
+```
 
 The UFLD ONNX/RKNN files and calibration images are generated artifacts and
 are intentionally excluded from Git. The reproducible path is:

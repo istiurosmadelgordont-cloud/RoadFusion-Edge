@@ -25,6 +25,7 @@ void RiskEstimator::reset() {
   filtered_distance_ = -1.0f;
   smoothed_speed_ = 0.0f;
   previous_time_ = std::chrono::steady_clock::time_point();
+  previous_sample_s_ = -1.0;
   initialized_ = false;
   warning_ = false;
   target_track_id_ = -1;
@@ -36,7 +37,9 @@ void RiskEstimator::reset() {
 RiskResult RiskEstimator::update(const std::vector<Detection>& detections,
                                  int width, int height,
                                  const LaneResult* lane,
-                                 bool fresh_measurement) {
+                                 bool fresh_measurement, double measurement_time_s) {
+  const auto received_at = std::chrono::steady_clock::now();
+  if (initialized_ && received_at - previous_time_ > std::chrono::seconds(1)) reset();
   if (!fresh_measurement) return last_result_;
 
   std::vector<const Detection*> candidates;
@@ -96,9 +99,12 @@ RiskResult RiskEstimator::update(const std::vector<Detection>& detections,
   if (!initialized_) {
     filtered_distance_ = previous_distance_ = raw_distance;
     previous_time_ = now;
+    previous_sample_s_ = measurement_time_s;
     initialized_ = true;
   } else {
-    const float dt = std::chrono::duration<float>(now - previous_time_).count();
+    const float dt = measurement_time_s >= 0.0 && previous_sample_s_ >= 0.0 ?
+        static_cast<float>(measurement_time_s - previous_sample_s_) :
+        std::chrono::duration<float>(now - previous_time_).count();
     if (dt > 0.05f && dt < 2.0f) {
       const float max_jump = std::max(2.5f, filtered_distance_ * 0.22f);
       const float bounded = std::max(filtered_distance_ - max_jump,
@@ -111,6 +117,7 @@ RiskResult RiskEstimator::update(const std::vector<Detection>& detections,
       filtered_distance_ = next_distance;
     }
     previous_time_ = now;
+    previous_sample_s_ = measurement_time_s;
   }
 
   RiskResult result;
@@ -123,11 +130,12 @@ RiskResult RiskEstimator::update(const std::vector<Detection>& detections,
   if (result.reliable && smoothed_speed_ > 0.8f)
     result.ttc_s = result.distance_m / smoothed_speed_;
 
-  const bool danger = result.reliable &&
+  const bool danger = result.reliable && (!config_.require_closing || smoothed_speed_ > 0.8f) &&
       (result.distance_m < config_.warning_distance_m ||
        (result.ttc_s > 0.0f && result.ttc_s < config_.warning_ttc_s));
-  const bool clear = result.distance_m > config_.clear_distance_m &&
-      (result.ttc_s < 0.0f || result.ttc_s > config_.clear_ttc_s);
+  const bool clear = (config_.require_closing && smoothed_speed_ < 0.3f) ||
+      (result.distance_m > config_.clear_distance_m &&
+       (result.ttc_s < 0.0f || result.ttc_s > config_.clear_ttc_s));
   if (!warning_) {
     clear_streak_ = 0;
     warning_streak_ = danger ? warning_streak_ + 1 : 0;

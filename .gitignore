@@ -32,6 +32,7 @@ calibration/ufldv*_dataset.txt
 # Generated UFLD graphs and board models (rebuild with tools/ scripts)
 models/ufld*.onnx
 models/ufld*.rknn
+models/ufld*.pth
 
 # Board build and runtime artifacts
 board/build/

@@ -26,12 +26,27 @@ void LaneDepartureMonitor::reset() {
   enter_streak_ = 0;
   clear_streak_ = 0;
   unreliable_streak_ = 0;
+  previous_at_ = enter_at_ = clear_at_ = blinker_at_ = std::chrono::steady_clock::time_point();
+  blinker_seen_ = false;
 }
 
-LaneResult LaneDepartureMonitor::update(const LaneResult& measured) {
+LaneResult LaneDepartureMonitor::update(const LaneResult& measured,
+    std::chrono::steady_clock::time_point captured_at, const VehicleWarningContext& vehicle) {
+  if (initialized_ && captured_at <= previous_at_) {
+    LaneResult stale = measured;
+    stale.departure = false;
+    return stale;
+  }
+  const float dt = initialized_ ? std::chrono::duration<float>(captured_at - previous_at_).count() : 0.0f;
+  if (initialized_ && dt > 0.8f) {
+    initialized_ = warning_ = false;
+    enter_streak_ = clear_streak_ = 0;
+  }
+  previous_at_ = captured_at;
   LaneResult result = measured;
-  if (!result.valid) {
-    if (++unreliable_streak_ >= 3) warning_ = false;
+  if (!result.valid || result.partial || !std::isfinite(result.offset_ratio)) {
+    warning_ = false;
+    enter_streak_ = clear_streak_ = 0;
     result.departure = false;
     return result;
   }
@@ -41,16 +56,21 @@ LaneResult LaneDepartureMonitor::update(const LaneResult& measured) {
     filtered_offset_ = corrected;
     initialized_ = true;
   } else {
-    filtered_offset_ = 0.65f * filtered_offset_ + 0.35f * corrected;
+    const float alpha = 1.0f - std::exp(-std::max(0.0f, dt) / 0.12f);
+    filtered_offset_ += alpha * (corrected - filtered_offset_);
   }
   result.offset_ratio = filtered_offset_;
 
-  // A lane inferred from one visible marking is useful for drawing, but is
-  // not reliable enough to create a new driver warning.
-  if (result.partial) {
-    enter_streak_ = 0;
-    if (++unreliable_streak_ >= 3) warning_ = false;
-    result.departure = warning_;
+  if (vehicle.valid && (vehicle.left_blinker || vehicle.right_blinker)) {
+    blinker_at_ = captured_at;
+    blinker_seen_ = true;
+  }
+  const bool recent_blinker = blinker_seen_ &&
+      std::chrono::duration<float>(captured_at - blinker_at_).count() < 5.0f;
+  if (vehicle.valid && (vehicle.speed_kmh < 50.0f || recent_blinker || vehicle.lateral_control_active)) {
+    warning_ = false;
+    enter_streak_ = clear_streak_ = 0;
+    result.departure = false;
     return result;
   }
 
@@ -59,14 +79,16 @@ LaneResult LaneDepartureMonitor::update(const LaneResult& measured) {
   if (!warning_) {
     clear_streak_ = 0;
     enter_streak_ = magnitude >= 0.16f ? enter_streak_ + 1 : 0;
-    if (enter_streak_ >= 3) {
+    if (enter_streak_ == 1) enter_at_ = captured_at;
+    if (enter_streak_ >= 2 && std::chrono::duration<float>(captured_at - enter_at_).count() >= 0.25f) {
       warning_ = true;
       enter_streak_ = 0;
     }
   } else {
     enter_streak_ = 0;
     clear_streak_ = magnitude <= 0.10f ? clear_streak_ + 1 : 0;
-    if (clear_streak_ >= 4) {
+    if (clear_streak_ == 1) clear_at_ = captured_at;
+    if (clear_streak_ >= 2 && std::chrono::duration<float>(captured_at - clear_at_).count() >= 0.35f) {
       warning_ = false;
       clear_streak_ = 0;
     }

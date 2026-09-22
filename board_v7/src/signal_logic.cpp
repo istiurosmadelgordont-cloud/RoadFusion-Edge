@@ -20,6 +20,7 @@ SignalResult SignalLogic::update(const std::vector<Detection>& detections, int w
   SignalResult result;
   float best_relevance = -1.0f;
   for (const Detection& detection : detections) {
+    if (detection.score < 0.4f || detection.box.width <= 0 || detection.box.height <= 0) continue;
     // Only round and straight signals can inform a forward-driving prompt.
     // Left/right arrows are still drawn, but need lane or route context.
     if (detection.class_id != 7 && detection.class_id != 10 &&
@@ -50,7 +51,8 @@ SignalResult SignalLogic::update(const std::vector<Detection>& detections, int w
       majority_count = item.second;
     }
   }
-  result.stable = majority_count >= 3;
+  result.stable = majority_count >= 3 && result.state == majority &&
+                  result.state != SignalState::NONE;
   if (result.stable) result.state = majority;
   return result;
 }
