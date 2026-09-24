@@ -6,6 +6,7 @@
 #include "adas/perception_schedule.hpp"
 #include "adas/experimental_adas.hpp"
 #include "adas/adas_logic_v2.hpp"
+#include "adas/lane_geometry_tracker.hpp"
 #include <cassert>
 #include <chrono>
 #include <iostream>
@@ -31,17 +32,60 @@ int main() {
   lane.offset_ratio = 0.25f;
   LaneDepartureMonitor monitor;
   assert(!monitor.update(lane, at(0)).departure);
-  assert(!monitor.update(lane, at(100)).departure);
+  assert(monitor.update(lane, at(100)).departure);
   assert(monitor.update(lane, at(300)).departure);
   lane.partial = true;
-  assert(!monitor.update(lane, at(400)).departure);
+  assert(monitor.update(lane, at(400)).departure);  // one weak update must not flash off
   lane.partial = false;
-  assert(!monitor.update(lane, at(500)).departure);
+  assert(monitor.update(lane, at(500)).departure);
   assert(monitor.update(lane, at(800)).departure);
   assert(!monitor.update(lane, at(2000)).departure); // gap must restart confirmation
   lane.offset_ratio = 0;
   for (int ms = 2200; ms <= 3000; ms += 200)
     assert(!monitor.update(lane, at(ms)).departure);
+
+  const auto make_lane = [](int left_bottom, int right_bottom) {
+    LaneResult value;
+    value.valid = true;
+    value.offset_ratio = (320.0f - (left_bottom + right_bottom) * 0.5f) /
+                         (right_bottom - left_bottom);
+    value.left = {{left_bottom, 350}, {left_bottom + 25, 170}};
+    value.right = {{right_bottom - 25, 170}, {right_bottom, 350}};
+    value.polygon = value.left;
+    value.polygon.insert(value.polygon.end(), value.right.begin(), value.right.end());
+    return value;
+  };
+  NeuralLaneGeometryTracker geometry_tracker;
+  LaneResult stable_lane = geometry_tracker.update(make_lane(180, 460));
+  assert(stable_lane.valid && !stable_lane.identity_uncertain);
+  LaneResult adjacent_lane = geometry_tracker.update(make_lane(470, 750));
+  assert(adjacent_lane.valid && adjacent_lane.partial && adjacent_lane.identity_uncertain);
+  assert(adjacent_lane.reassignment_side == LaneDepartureSide::NONE);
+  // Ego moves left: the SAME lane moves right in the image (negative offset).
+  // Once the model selects the new left lane, its centre jumps back left.
+  geometry_tracker.reset();
+  geometry_tracker.update(make_lane(260, 540));
+  adjacent_lane = geometry_tracker.update(make_lane(-20, 260));
+  assert(adjacent_lane.reassignment_side == LaneDepartureSide::LEFT);
+  monitor.reset();
+  const LaneResult reassigned_warning = monitor.update(adjacent_lane, at(0));
+  assert(reassigned_warning.departure &&
+         reassigned_warning.departure_side == LaneDepartureSide::LEFT);
+
+  LaneResult weak = make_lane(180, 460);
+  weak.partial = true;
+  assert(monitor.update(weak, at(200)).departure);
+  for (int ms = 400; ms <= 1800; ms += 200) monitor.update(weak, at(ms));
+  assert(!monitor.update(weak, at(2000)).departure);
+  geometry_tracker.reset();
+  geometry_tracker.update(make_lane(100, 380));
+  adjacent_lane = geometry_tracker.update(make_lane(380, 660));
+  assert(adjacent_lane.reassignment_side == LaneDepartureSide::RIGHT);
+  monitor.reset();
+  assert(monitor.update(adjacent_lane, at(0)).departure_side == LaneDepartureSide::RIGHT);
+  LaneResult centred = make_lane(180, 460);
+  for (int ms = 200; ms <= 1800; ms += 200) monitor.update(centred, at(ms));
+  assert(!monitor.update(centred, at(2000)).departure);
 
   VehicleWarningContext car;
   car.valid = true;
@@ -139,6 +183,21 @@ int main() {
   assert(!semantic.left_change_allowed);  // two observations are required
   semantic = semantics.update(marking, lane, at(100));
   assert(semantic.left_change_allowed && !semantic.right_change_allowed);
+
+  LaneSemanticTracker tlc_tracker;
+  lane.offset_ratio = 0.0f;
+  tlc_tracker.update(marking, lane, at(0));
+  lane.offset_ratio = 0.10f;
+  semantic = tlc_tracker.update(marking, lane, at(100));
+  assert(semantic.trend == CrossingSide::RIGHT && semantic.tlc_s > 0.0f);
+  lane.departure = true;
+  lane.departure_side = LaneDepartureSide::LEFT;
+  semantic = tlc_tracker.update(marking, lane, at(200));
+  assert(semantic.crossing == CrossingSide::LEFT);
+  lane.departure = false;
+  lane.departure_side = LaneDepartureSide::NONE;
+  semantic.crossing = CrossingSide::NONE;
+  semantic.trend = CrossingSide::NONE;
 
   LaneChangeFsm lane_change;
   lane_change.request(ManeuverDirection::LEFT, at(0));

@@ -88,6 +88,7 @@ struct LaneSemantic {
   LaneMarking left = LaneMarking::UNKNOWN;
   LaneMarking right = LaneMarking::UNKNOWN;
   CrossingSide crossing = CrossingSide::NONE;
+  CrossingSide trend = CrossingSide::NONE;
   float tlc_s = -1.0f;
   bool left_change_allowed = false;
   bool right_change_allowed = false;
@@ -164,6 +165,7 @@ class LaneSemanticTracker {
     result.left_evidence = observed.left_coverage;
     result.right_evidence = observed.right_coverage;
     result.crossing = CrossingSide::NONE;
+    result.trend = CrossingSide::NONE;
     result.tlc_s = -1.0f;
     if (!result.lane_valid || !std::isfinite(lane.offset_ratio)) {
       result.left_change_allowed = result.right_change_allowed = false;
@@ -175,8 +177,12 @@ class LaneSemanticTracker {
     result.right = stabilize(observed.right, right_candidate_, right_streak_, result.right);
     result.left_change_allowed = result.left == LaneMarking::DASHED;
     result.right_change_allowed = result.right == LaneMarking::DASHED;
-    if (lane.offset_ratio < -0.16f) result.crossing = CrossingSide::LEFT;
-    if (lane.offset_ratio > 0.16f) result.crossing = CrossingSide::RIGHT;
+    if (lane.offset_ratio < -0.16f ||
+        lane.departure_side == LaneDepartureSide::LEFT)
+      result.crossing = CrossingSide::LEFT;
+    if (lane.offset_ratio > 0.16f ||
+        lane.departure_side == LaneDepartureSide::RIGHT)
+      result.crossing = CrossingSide::RIGHT;
 
     if (previous_at_ != std::chrono::steady_clock::time_point() && at > previous_at_) {
       const float dt = std::chrono::duration<float>(at - previous_at_).count();
@@ -187,10 +193,13 @@ class LaneSemanticTracker {
         const bool outward = (lane.offset_ratio > 0.0f && lateral_speed_mps_ > 0.05f) ||
                              (lane.offset_ratio < 0.0f && lateral_speed_mps_ < -0.05f);
         if (outward && clearance > 0.0f) {
+          result.trend = lateral_speed_mps_ < 0.0f ? CrossingSide::LEFT
+                                                   : CrossingSide::RIGHT;
           result.tlc_s = std::min(9.9f, clearance / std::abs(lateral_speed_mps_));
         }
       }
     }
+    if (result.crossing != CrossingSide::NONE) result.trend = result.crossing;
     previous_offset_ = lane.offset_ratio;
     previous_at_ = at;
     last_ = result;

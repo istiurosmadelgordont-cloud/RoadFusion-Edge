@@ -5,6 +5,7 @@
 #include "adas/byte_tracker.hpp"
 #include "adas/drive_decision.hpp"
 #include "adas/lane_detector.hpp"
+#include "adas/lane_geometry_tracker.hpp"
 #include "adas/overlay.hpp"
 #include "adas/risk_estimator.hpp"
 #include "adas/rknn_detector.hpp"
@@ -328,6 +329,7 @@ struct LaneTaskResult {
   bool neural = false;
   double elapsed_ms = 0.0;
   std::chrono::steady_clock::time_point captured_at{};
+  std::chrono::steady_clock::time_point media_at{};
 };
 
 adas::LaneResult scale_lane_result(const adas::LaneResult& source,
@@ -411,8 +413,13 @@ void draw_lane_geometry(cv::Mat& frame, const adas::LaneResult& lane) {
   cv::fillPoly(layer, std::vector<std::vector<cv::Point>>(1, lane.polygon),
                lane.departure ? cv::Scalar(0, 70, 255) : cv::Scalar(20, 190, 70));
   cv::addWeighted(layer, 0.24, frame, 0.76, 0, frame);
-  cv::polylines(frame, lane.left, false, cv::Scalar(40, 255, 80), 5, cv::LINE_AA);
-  cv::polylines(frame, lane.right, false, cv::Scalar(40, 255, 80), 5, cv::LINE_AA);
+  const cv::Scalar normal(230, 210, 50), danger(35, 45, 245);
+  cv::polylines(frame, lane.left, false,
+                lane.departure_side == adas::LaneDepartureSide::LEFT ? danger : normal,
+                lane.departure_side == adas::LaneDepartureSide::LEFT ? 8 : 5, cv::LINE_AA);
+  cv::polylines(frame, lane.right, false,
+                lane.departure_side == adas::LaneDepartureSide::RIGHT ? danger : normal,
+                lane.departure_side == adas::LaneDepartureSide::RIGHT ? 8 : 5, cv::LINE_AA);
 }
 
 cv::Point2f sample_lane_line(const std::vector<cv::Point>& line, float position) {
@@ -498,27 +505,6 @@ adas::LaneResult stabilize_lane(const adas::LaneResult& measured,
   return interpolate_lane(previous, measured, 0.88f);
 }
 
-adas::LaneResult retain_neural_lane(const adas::LaneResult& measured,
-                                    const adas::LaneResult& previous,
-                                    int& missed_updates) {
-  if (measured.valid) {
-    missed_updates = 0;
-    return measured;
-  }
-  ++missed_updates;
-  // One weak UFLD frame must not blank the lane overlay.  Keep the last
-  // geometry briefly, but mark it partial so LDW never treats held geometry
-  // as a fresh reliable measurement.  This removes visual flashing without
-  // adding the slow interpolation that previously made curves lag the video.
-  if (previous.valid && missed_updates <= 3) {
-    adas::LaneResult held = previous;
-    held.partial = true;
-    held.departure = false;
-    return held;
-  }
-  return measured;
-}
-
 bool lane_blocked_by_vehicle(const std::vector<adas::Detection>& detections,
                              int width, int height) {
   for (const auto& detection : detections) {
@@ -583,10 +569,25 @@ cv::Scalar box_color(int cls) {
   return cv::Scalar(90, 200, 255);
 }
 
-void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections) {
+cv::Scalar target_risk_color(const adas::RiskResult& risk) {
+  if (risk.warning || (risk.ttc_s > 0.0f && risk.ttc_s < 1.5f))
+    return cv::Scalar(35, 45, 245);
+  if (risk.ttc_s > 0.0f && risk.ttc_s < 3.0f)
+    return cv::Scalar(30, 150, 245);
+  return cv::Scalar(50, 225, 245);
+}
+
+void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections,
+                const adas::RiskResult* risk = nullptr, int attention_track = -1,
+                bool danger_attention = false) {
   for (const auto& d : detections) {
-    const cv::Scalar color = box_color(d.class_id);
-    cv::rectangle(frame, d.box, color, 2);
+    const bool risk_target = risk && risk->target && risk->track_id >= 0 &&
+                             d.track_id == risk->track_id;
+    const bool attention = attention_track >= 0 && d.track_id == attention_track;
+    const cv::Scalar color = risk_target ? target_risk_color(*risk) :
+        attention ? (danger_attention ? cv::Scalar(35, 45, 245)
+                                      : cv::Scalar(50, 225, 245)) : box_color(d.class_id);
+    cv::rectangle(frame, d.box, color, risk_target || attention ? 4 : 2);
     std::ostringstream label;
     label << d.name;
     if (d.track_id >= 0) label << " #" << d.track_id;
@@ -599,6 +600,37 @@ void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections) 
                   cv::Scalar(15, 20, 25), cv::FILLED);
     caption(frame, label.str(), x + 3, y - 5, color, 0.43);
   }
+}
+
+void draw_rear_risk_overlay(cv::Mat& frame, const adas::RiskResult& risk) {
+  // No rear lane geometry is available with --no-rear-lane. A fixed
+  // trapezoid would falsely imply a road-aligned collision corridor.
+  // Show object-level risk only until calibrated geometry is available.
+  if (!risk.target) return;
+  std::ostringstream text;
+  text << "RCW #" << risk.track_id << "  " << std::fixed << std::setprecision(1)
+       << risk.distance_m << "m";
+  if (risk.ttc_s > 0.0f) text << "  TTC " << risk.ttc_s << "s";
+  caption(frame, text.str(), 12, 28, target_risk_color(risk), 0.56);
+}
+
+void draw_blind_spot_overlay(cv::Mat& frame, const adas::BlindSpotResult& blind,
+                             bool turn_intent, const char* side) {
+  const std::vector<cv::Point> region{{cvRound(frame.cols * 0.08f), cvRound(frame.rows * 0.34f)},
+      {cvRound(frame.cols * 0.92f), cvRound(frame.rows * 0.34f)},
+      {cvRound(frame.cols * 0.98f), cvRound(frame.rows * 0.98f)},
+      {cvRound(frame.cols * 0.02f), cvRound(frame.rows * 0.98f)}};
+  const bool lca = blind.occupied && turn_intent;
+  const cv::Scalar color = lca ? cv::Scalar(35, 45, 245) :
+      blind.occupied ? cv::Scalar(50, 225, 245) : cv::Scalar(230, 210, 50);
+  cv::Mat layer = frame.clone();
+  cv::fillConvexPoly(layer, region, color);
+  cv::addWeighted(layer, lca ? 0.18 : blind.occupied ? 0.12 : 0.05,
+                  frame, lca ? 0.82 : blind.occupied ? 0.88 : 0.95, 0, frame);
+  cv::polylines(frame, region, true, color, lca ? 4 : 2, cv::LINE_AA);
+  std::string text = std::string(side) + (lca ? " LCA 变道危险" :
+      blind.occupied ? " BSD 盲区占用" : " BSD ROI");
+  caption(frame, text, 12, 28, color, 0.56);
 }
 
 void warning_banner(cv::Mat& frame, const std::string& text) {
@@ -758,7 +790,11 @@ void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
                        const std::array<std::vector<adas::Detection>, 4>& detections,
                        const adas::LaneResult& front_lane,
                        const adas::LaneResult& rear_lane,
-                       const adas::SignalResult& signal) {
+                       const adas::SignalResult& signal,
+                       const adas::RiskResult& front_risk,
+                       const adas::RiskResult& rear_risk,
+                       const adas::BlindSpotResult& left_blind,
+                       const adas::BlindSpotResult& right_blind) {
   cv::rectangle(canvas, area, cv::Scalar(38, 41, 45), cv::FILLED);
   cv::rectangle(canvas, area, cv::Scalar(70, 78, 84), 1);
   const cv::Point ego(area.x + area.width / 2, area.y + area.height * 72 / 100);
@@ -836,13 +872,23 @@ void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
       }
       position.x = std::max(area.x + 9, std::min(area.x + area.width - 10, position.x));
       position.y = std::max(area.y + 9, std::min(area.y + area.height - 10, position.y));
+      const bool front_target = camera == 0 && front_risk.target &&
+          detection.track_id == front_risk.track_id;
+      const bool rear_target = camera == 1 && rear_risk.target &&
+          detection.track_id == rear_risk.track_id;
+      const bool blind_target = (camera == 2 && detection.track_id == left_blind.track_id) ||
+          (camera == 3 && detection.track_id == right_blind.track_id);
+      cv::Scalar object_color(165, 172, 176);
+      if (front_target) object_color = target_risk_color(front_risk);
+      if (rear_target) object_color = target_risk_color(rear_risk);
+      if (blind_target) object_color = cv::Scalar(50, 225, 245);
       if (detection.class_id <= 1) {
-        cv::circle(canvas, position, 5, cv::Scalar(220, 80, 220), cv::FILLED);
+        cv::circle(canvas, position, 5, object_color, cv::FILLED);
       } else {
         const int icon_width = 9 + cvRound(apparent * 5.0f);
         const int icon_height = 15 + cvRound(apparent * 8.0f);
         draw_top_car(canvas, position, icon_width, icon_height,
-                     cv::Scalar(165, 172, 176), camera >= 2, false);
+                     object_color, camera >= 2, false);
       }
     }
   }
@@ -854,7 +900,10 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
                   const std::array<std::vector<adas::Detection>, 4>& detections,
                   const adas::LaneResult& front_lane, const adas::LaneResult& rear_lane,
                   const adas::DriveResult& drive, const adas::RiskResult& front_risk,
-                  const adas::RiskResult& rear_risk, bool left_blind, bool right_blind,
+                  const adas::RiskResult& rear_risk,
+                  const adas::BlindSpotResult& left_blind,
+                  const adas::BlindSpotResult& right_blind, bool side_fresh,
+                  bool health_ready,
                   double lane_ms, const std::array<double, 2>& lane_age_ms,
                   const adas::VehicleState& vehicle,
                   const adas::LaneSemantic& semantics,
@@ -870,7 +919,8 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
     cv::line(canvas, {x + 1, y + 40}, {x + w - 2, y + 40}, cv::Scalar(85, 59, 29));
   };
   card(86, 220, "导航 / 周边感知    Navigation");
-  draw_surround_map(canvas, {x + 12, 138, 258, 154}, detections, front_lane, rear_lane, signal);
+  draw_surround_map(canvas, {x + 12, 138, 258, 154}, detections, front_lane,
+                    rear_lane, signal, front_risk, rear_risk, left_blind, right_blind);
   caption(canvas, "周边目标示意", x + 287, 170, cyan, 0.67);
   caption(canvas, "地图 / 路线未接入", x + 287, 210, muted, 0.51);
   caption(canvas, "非真实世界坐标", x + 287, 244, muted, 0.47);
@@ -914,15 +964,20 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
          drive.decision == adas::DriveDecision::GO ? "GO 通行提示" :
          drive.decision == adas::DriveDecision::SLOW ? "SLOW 减速提示" : "等待有效信号")
       : adas::intersection_action_caption(intersection.action);
-  caption(canvas, decision, x + 160, 580,
+  const char* route = intersection.route == adas::ManeuverDirection::LEFT ? "LEFT" :
+                      intersection.route == adas::ManeuverDirection::RIGHT ? "RIGHT" :
+                      intersection.route == adas::ManeuverDirection::STRAIGHT ? "STRAIGHT" : "--";
+  caption(canvas, std::string("路口方向 ") +
+          (intersection.route_valid ? route : "未知") + "  |  " + decision, x + 160, 580,
           intersection.action == adas::IntersectionAction::STOP ? red : white, 0.56);
   panel(canvas,kSignalVerify.x,kSignalVerify.y,kSignalVerify.width,kSignalVerify.height);
   caption(canvas,verify_colors?"HSV复核 开":"HSV复核 关",kSignalVerify.x+5,kSignalVerify.y+21,
           verify_colors?cyan:muted,.47);
 
-  card(614, 128, "车道状态    Lane Status");
+  card(614, 136, "车道状态    Lane Status");
   caption(canvas, "前视", x + 17, 683, muted, 0.54);
-  caption(canvas, front_lane.valid ? (front_lane.departure ? "视觉偏离" : "已检测") : "未检测",
+  caption(canvas, front_lane.valid ? (front_lane.departure
+              ? adas::lane_departure_name(front_lane.departure_side) : "已检测") : "未检测",
           x + 83, 683, front_lane.valid ? (front_lane.departure ? red : green) : muted, 0.62);
   caption(canvas, "后视", x + 285, 683, muted, 0.54);
   caption(canvas, rear_lane.valid ? "已检测" : "未检测", x + 355, 683,
@@ -933,11 +988,35 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
                 << "   TLC ";
   if (semantics.tlc_s > 0.0f) lane_semantic << std::fixed << std::setprecision(1) << semantics.tlc_s << "s";
   else lane_semantic << "--";
-  caption(canvas, lane_semantic.str(), x + 17, 719, muted, 0.51);
+  caption(canvas, lane_semantic.str(), x + 17, 703, muted, 0.48);
+  const bool changing_left = lane_change.direction == adas::ManeuverDirection::LEFT;
+  const bool changing_right = lane_change.direction == adas::ManeuverDirection::RIGHT;
+  const char* visual_state = !front_lane.valid ? "不可用" :
+      front_lane.departure && front_lane.departure_side == adas::LaneDepartureSide::LEFT
+          ? "左偏离" :
+      front_lane.departure && front_lane.departure_side == adas::LaneDepartureSide::RIGHT
+          ? "右偏离" :
+      front_lane.partial || front_lane.identity_uncertain ? "待确认" : "未见偏离";
+  const char* request_state = changing_left ? "模拟左" :
+                              changing_right ? "模拟右" : "未提供";
+  caption(canvas, std::string("视觉 ") + visual_state + "   |   变道请求 " + request_state,
+          x + 17, 723, front_lane.departure ? red : muted, 0.46);
+  const bool rule_ok = changing_left ? semantics.left_change_allowed :
+                       changing_right ? semantics.right_change_allowed : false;
+  const bool blind_clear = side_fresh &&
+      !(changing_left ? left_blind.occupied : changing_right ? right_blind.occupied : false);
+  std::ostringstream change_hud;
+  change_hud << "规则 " << (rule_ok ? "OK" : "--")
+             << "  盲区 " << (!side_fresh ? "STALE" : blind_clear ? "CLEAR" : "VEHICLE")
+             << "  " << adas::lane_change_state_caption(lane_change.state);
+  caption(canvas, change_hud.str(), x + 17, 743,
+          lane_change.permitted ? green :
+          lane_change.state == adas::LaneChangeState::BLOCKED ? red : muted, 0.42);
 
   card(754, 120, "ADAS 视觉预警 / 未接 CAN");
   const char* labels[] = {"FCW", "RCW", "BSD-L", "BSD-R", "LDW"};
-  const bool warnings[] = {front_risk.warning, rear_risk.warning, left_blind, right_blind, front_lane.departure};
+  const bool warnings[] = {front_risk.warning, rear_risk.warning, left_blind.occupied,
+                           right_blind.occupied, front_lane.departure};
   for (int i = 0; i < 5; ++i) {
     const int bx = x + 15 + i * 100;
     caption(canvas, labels[i], bx, 822, warnings[i] ? red : white, 0.57);
@@ -953,8 +1032,16 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
   caption(canvas, perf.str(), x + 17, 952, green, 0.57);
   caption(canvas, timing.str(), x + 17, 980, white, 0.48);
   std::ostringstream age;
-  age << std::fixed << std::setprecision(0) << "车道结果年龄  前 " << lane_age_ms[0] << " / 后 " << lane_age_ms[1] << " ms";
-  caption(canvas, age.str(), x + 17, 1006, muted, 0.46);
+  const bool lane_fresh = lane_age_ms[0] >= 0.0 && lane_age_ms[0] <= 1000.0;
+  if (!health_ready) {
+    age << "Health  INITIALIZING";
+  } else {
+    age << "Health  YOLO/NPU " << (side_fresh ? "OK" : "STALE")
+        << "  UFLD " << (lane_fresh ? "OK" : "STALE")
+        << "  CAMERA OK";
+  }
+  caption(canvas, age.str(), x + 17, 1006,
+          health_ready && (!side_fresh || !lane_fresh) ? red : muted, 0.46);
 }
 
 void draw_bottom_left(cv::Mat& canvas, int scene_index, int scene_count,
@@ -1087,6 +1174,8 @@ int main(int argc, char** argv) {
   adas::LaneResult rear_lane;
   adas::LaneResult front_lane_target;
   adas::LaneResult rear_lane_target;
+  adas::NeuralLaneGeometryTracker front_neural_lane_tracker;
+  adas::NeuralLaneGeometryTracker rear_neural_lane_tracker;
   int front_lane_missed_updates = 0;
   int rear_lane_missed_updates = 0;
   adas::RiskResult front_risk;
@@ -1166,10 +1255,12 @@ int main(int argc, char** argv) {
       inference_running = false;
     }
     front_lane_target = rear_lane_target = adas::LaneResult();
+    front_neural_lane_tracker.reset();
+    rear_neural_lane_tracker.reset();
     front_lane_warning.reset();
     rear_lane_warning.reset();
     const auto reset_at = std::chrono::steady_clock::now();
-    vehicle_state_manager.set_demo_turn(adas::TurnSignal::OFF, reset_at);
+    vehicle_state_manager = adas::VehicleStateManager();
     lane_change_fsm.request(adas::ManeuverDirection::NONE, reset_at);
     lane_semantic_tracker.reset();
     lane_semantic = adas::LaneSemantic();
@@ -1219,6 +1310,8 @@ int main(int argc, char** argv) {
       rear_lane = adas::LaneResult();
       front_lane_target = adas::LaneResult();
       rear_lane_target = adas::LaneResult();
+      front_neural_lane_tracker.reset();
+      rear_neural_lane_tracker.reset();
       front_lane_missed_updates = rear_lane_missed_updates = 0;
       front_risk_estimator.reset();
       rear_risk_estimator.reset();
@@ -1274,19 +1367,23 @@ int main(int argc, char** argv) {
         auto& target = c == 0 ? front_lane_target : rear_lane_target;
         auto& monitor = c == 0 ? front_lane_warning : rear_lane_warning;
         auto& misses = c == 0 ? front_lane_missed_updates : rear_lane_missed_updates;
+        auto& neural_tracker = c == 0 ? front_neural_lane_tracker
+                                      : rear_neural_lane_tracker;
         // UFLD already fits curves, so only bridge short dropouts. The OpenCV
         // fallback also rejects implausible lane-width jumps caused by cars.
         const adas::LaneResult measured = scale_lane_result(
             result.lane, result.image_width, result.image_height,
             frames[c].cols, frames[c].rows);
         adas::LaneResult geometry = result.neural ?
-            retain_neural_lane(measured, target, misses) : stabilize_lane(
+            neural_tracker.update(measured) : stabilize_lane(
                 measured, target, misses,
                 lane_blocked_by_vehicle(detections[c], frames[c].cols, frames[c].rows));
-        target = monitor.update(geometry, result.captured_at);
+        // Use the video timeline for LDW hold/clear times.  Wall-clock NPU
+        // scheduling varies between replays of the same scene.
+        target = monitor.update(geometry, result.media_at);
         if (c == 0) {
           lane_semantic = lane_semantic_tracker.update(
-              result.markings, target, result.captured_at);
+              result.markings, target, result.media_at);
         }
         lane_captured_at[c] = result.captured_at;
         lane_source_frame[c] = result.source_frame;
@@ -1397,15 +1494,20 @@ int main(int argc, char** argv) {
         }
         const auto task_captured_at = frame_start;
         const int task_source_frame = source_frame_index;
+        const auto task_media_at = std::chrono::steady_clock::time_point(
+            std::chrono::seconds(1)) +
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>(task_source_frame / source_fps));
         adas::UfldLaneDetector* ufld = ufld_lane_detector.get();
         lane_future = std::async(std::launch::async,
             [&front_lane_detector, &rear_lane_detector, ufld, lane_frame, camera,
-             use_ufld_task, task_captured_at, task_source_frame]() {
+             use_ufld_task, task_captured_at, task_media_at, task_source_frame]() {
               const auto started = std::chrono::steady_clock::now();
               LaneTaskResult result;
               result.camera = camera;
               result.neural = use_ufld_task;
               result.captured_at = task_captured_at;
+              result.media_at = task_media_at;
               result.source_frame = task_source_frame;
               result.image_width = lane_frame.cols;
               result.image_height = lane_frame.rows;
@@ -1437,10 +1539,13 @@ int main(int argc, char** argv) {
       if (lane_age_ms[c] > (c == 0 ? 1000.0 : 1400.0)) {
         target = adas::LaneResult();
         (c == 0 ? front_lane_warning : rear_lane_warning).reset();
+        (c == 0 ? front_neural_lane_tracker : rear_neural_lane_tracker).reset();
         if (c == 0) {
           lane_semantic.lane_valid = false;
           lane_semantic.left_change_allowed = false;
           lane_semantic.right_change_allowed = false;
+          lane_semantic.crossing = adas::CrossingSide::NONE;
+          lane_semantic.trend = adas::CrossingSide::NONE;
           lane_semantic.tlc_s = -1.0f;
         }
       }
@@ -1483,9 +1588,20 @@ int main(int argc, char** argv) {
         intersection_result);
     const auto render_start = std::chrono::steady_clock::now();
     adas::draw_overlay(frames[0], detections[0], lane, signal, front_risk,
-                       drive, display_fps, npu_ms);
+                       drive, display_fps, npu_ms, &lane_semantic);
     draw_lane_geometry(frames[1], rear_lane);
-    for (int i = 1; i < 4; ++i) draw_boxes(frames[i], detections[i]);
+    draw_boxes(frames[1], detections[1], &rear_risk);
+    const bool left_intent = vehicle_state.turn_valid &&
+        vehicle_state.turn == adas::TurnSignal::LEFT;
+    const bool right_intent = vehicle_state.turn_valid &&
+        vehicle_state.turn == adas::TurnSignal::RIGHT;
+    draw_boxes(frames[2], detections[2], nullptr, left_blind.track_id,
+               left_blind.occupied && left_intent);
+    draw_boxes(frames[3], detections[3], nullptr, right_blind.track_id,
+               right_blind.occupied && right_intent);
+    draw_rear_risk_overlay(frames[1], rear_risk);
+    draw_blind_spot_overlay(frames[2], left_blind, left_intent, "LEFT");
+    draw_blind_spot_overlay(frames[3], right_blind, right_intent, "RIGHT");
     if (rear_risk.warning) warning_banner(frames[1], "后车快速接近  TTC预警");
     if (left_blind.occupied)
       warning_banner(frames[2], "左侧盲区有目标");
@@ -1503,8 +1619,11 @@ int main(int argc, char** argv) {
     // refresh at one third of the video rate.
     const bool refresh_dashboard = shown_frames < 2 || shown_frames % 3 == 0;
     if (refresh_dashboard) {
+      const bool health_ready = shown_frames >
+          std::max(10, static_cast<int>(std::max(1.0, source_fps) * 2.0));
       draw_sidebar(canvas, display_fps, instant_fps, npu_ms, signal, detections, lane, rear_lane,
-                   drive, front_risk, rear_risk, left_blind.occupied, right_blind.occupied,
+                   drive, front_risk, rear_risk, left_blind, right_blind, side_fresh,
+                   health_ready,
                    last_lane_ms, lane_age_ms, vehicle_state, lane_semantic,
                    lane_change_result, intersection_result, verify_colors);
       draw_bottom_left(canvas, scene_index,
@@ -1613,6 +1732,8 @@ int main(int argc, char** argv) {
           rear_lane = adas::LaneResult();
           front_lane_target = adas::LaneResult();
           rear_lane_target = adas::LaneResult();
+          front_neural_lane_tracker.reset();
+          rear_neural_lane_tracker.reset();
           front_lane_missed_updates = rear_lane_missed_updates = 0;
         }
       }
@@ -1640,11 +1761,13 @@ int main(int argc, char** argv) {
                 front_lane_warning.set_reference_from_roi(calibration_points);
                 lane = adas::LaneResult();
                 front_lane_target = adas::LaneResult();
+                front_neural_lane_tracker.reset();
                 front_lane_missed_updates = 0;
               } else {
                 rear_lane_warning.set_reference_from_roi(calibration_points);
                 rear_lane = adas::LaneResult();
                 rear_lane_target = adas::LaneResult();
+                rear_neural_lane_tracker.reset();
                 rear_lane_missed_updates = 0;
               }
               calibration_target = CalibrationTarget::NONE;
@@ -1693,6 +1816,8 @@ int main(int argc, char** argv) {
           rear_lane = adas::LaneResult();
           front_lane_target = adas::LaneResult();
           rear_lane_target = adas::LaneResult();
+          front_neural_lane_tracker.reset();
+          rear_neural_lane_tracker.reset();
           front_lane_missed_updates = rear_lane_missed_updates = 0;
           front_risk_estimator.reset();
           rear_risk_estimator.reset();
@@ -1774,6 +1899,9 @@ int main(int argc, char** argv) {
         << " stale_lane_drops=" << stale_lane_drops
         << " lane_offset=" << lane.offset_ratio << ',' << rear_lane.offset_ratio
         << " lane_departure=" << lane.departure << ',' << rear_lane.departure
+        << " departure_side=" << static_cast<int>(lane.departure_side)
+        << " lane_identity=" << lane.identity_uncertain
+        << " lane_reassignment=" << static_cast<int>(lane.reassignment_side)
         << " risk_target=" << front_risk.target << ',' << rear_risk.target
         << " risk_warning=" << front_risk.warning << ',' << rear_risk.warning
         << " distance_m=" << front_risk.distance_m << ',' << rear_risk.distance_m

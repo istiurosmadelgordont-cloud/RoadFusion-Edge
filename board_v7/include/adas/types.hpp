@@ -6,6 +6,8 @@
 
 namespace adas {
 
+enum class LaneDepartureSide { NONE, LEFT, RIGHT };
+
 struct Detection {
   int class_id = -1;
   int track_id = -1;
@@ -18,6 +20,11 @@ struct LaneResult {
   bool valid = false;
   bool partial = false;
   bool departure = false;
+  bool identity_uncertain = false;
+  LaneDepartureSide departure_side = LaneDepartureSide::NONE;
+  // Set by temporal geometry tracking when UFLD appears to replace the
+  // original ego-lane pair with an adjacent pair in one update.
+  LaneDepartureSide reassignment_side = LaneDepartureSide::NONE;
   float offset_ratio = 0.0f;
   std::vector<cv::Point> left;
   std::vector<cv::Point> right;
@@ -75,6 +82,14 @@ struct RiskResult {
   float ttc_s = -1.0f;
   cv::Rect box;
 };
+
+inline const char* lane_departure_name(LaneDepartureSide side) {
+  switch (side) {
+    case LaneDepartureSide::LEFT: return "LDW-L";
+    case LaneDepartureSide::RIGHT: return "LDW-R";
+    default: return "LDW";
+  }
+}
 
 inline const char* class_name(int id) {
   static const char* names[] = {

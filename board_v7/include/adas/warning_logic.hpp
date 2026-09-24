@@ -30,10 +30,12 @@ class LaneDepartureMonitor {
   float filtered_offset_ = 0.0f;
   bool initialized_ = false;
   bool warning_ = false;
+  LaneDepartureSide warning_side_ = LaneDepartureSide::NONE;
   int enter_streak_ = 0;
   int clear_streak_ = 0;
   int unreliable_streak_ = 0;
-  std::chrono::steady_clock::time_point previous_at_{}, enter_at_{}, clear_at_{}, blinker_at_{};
+  std::chrono::steady_clock::time_point previous_at_{}, enter_at_{}, clear_at_{},
+      warning_at_{}, blinker_at_{};
   bool blinker_seen_ = false;
 };
 

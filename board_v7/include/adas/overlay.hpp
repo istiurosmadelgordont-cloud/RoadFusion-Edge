@@ -6,9 +6,12 @@
 
 namespace adas {
 
+struct LaneSemantic;
+
 void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
                   const LaneResult& lane, const SignalResult& signal,
                   const RiskResult& risk, const DriveResult& drive,
-                  double fps, double npu_ms);
+                  double fps, double npu_ms,
+                  const LaneSemantic* semantics = nullptr);
 
 }  // namespace adas

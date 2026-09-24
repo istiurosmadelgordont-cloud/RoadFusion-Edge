@@ -23,10 +23,12 @@ void LaneDepartureMonitor::reset() {
   filtered_offset_ = 0.0f;
   initialized_ = false;
   warning_ = false;
+  warning_side_ = LaneDepartureSide::NONE;
   enter_streak_ = 0;
   clear_streak_ = 0;
   unreliable_streak_ = 0;
-  previous_at_ = enter_at_ = clear_at_ = blinker_at_ = std::chrono::steady_clock::time_point();
+  previous_at_ = enter_at_ = clear_at_ = warning_at_ = blinker_at_ =
+      std::chrono::steady_clock::time_point();
   blinker_seen_ = false;
 }
 
@@ -34,20 +36,27 @@ LaneResult LaneDepartureMonitor::update(const LaneResult& measured,
     std::chrono::steady_clock::time_point captured_at, const VehicleWarningContext& vehicle) {
   if (initialized_ && captured_at <= previous_at_) {
     LaneResult stale = measured;
-    stale.departure = false;
+    stale.departure = warning_;
+    stale.departure_side = warning_side_;
     return stale;
   }
   const float dt = initialized_ ? std::chrono::duration<float>(captured_at - previous_at_).count() : 0.0f;
   if (initialized_ && dt > 0.8f) {
     initialized_ = warning_ = false;
+    warning_side_ = LaneDepartureSide::NONE;
     enter_streak_ = clear_streak_ = 0;
   }
   previous_at_ = captured_at;
   LaneResult result = measured;
-  if (!result.valid || result.partial || !std::isfinite(result.offset_ratio)) {
-    warning_ = false;
-    enter_streak_ = clear_streak_ = 0;
-    result.departure = false;
+  if (!result.valid || !std::isfinite(result.offset_ratio)) {
+    ++unreliable_streak_;
+    if (unreliable_streak_ > 3) {
+      warning_ = false;
+      warning_side_ = LaneDepartureSide::NONE;
+      enter_streak_ = clear_streak_ = 0;
+    }
+    result.departure = warning_;
+    result.departure_side = warning_side_;
     return result;
   }
 
@@ -69,31 +78,67 @@ LaneResult LaneDepartureMonitor::update(const LaneResult& measured,
       std::chrono::duration<float>(captured_at - blinker_at_).count() < 5.0f;
   if (vehicle.valid && (vehicle.speed_kmh < 50.0f || recent_blinker || vehicle.lateral_control_active)) {
     warning_ = false;
+    warning_side_ = LaneDepartureSide::NONE;
     enter_streak_ = clear_streak_ = 0;
     result.departure = false;
     return result;
   }
 
+  if ((result.partial || result.identity_uncertain) &&
+      result.reassignment_side == LaneDepartureSide::NONE) {
+    ++unreliable_streak_;
+    // Weak observations cannot confirm recovery, but must not keep an old
+    // departure alive indefinitely either. Expiry means unknown, not centred.
+    if (unreliable_streak_ > 3 || (warning_ &&
+        captured_at - warning_at_ > std::chrono::milliseconds(1200))) {
+      warning_ = false;
+      warning_side_ = LaneDepartureSide::NONE;
+    }
+    enter_streak_ = clear_streak_ = 0;
+    result.departure = warning_;
+    result.departure_side = warning_side_;
+    return result;
+  }
   unreliable_streak_ = 0;
   const float magnitude = std::abs(filtered_offset_);
+  const LaneDepartureSide measured_side = filtered_offset_ < 0.0f
+      ? LaneDepartureSide::LEFT : LaneDepartureSide::RIGHT;
+  const LaneDepartureSide candidate_side =
+      result.reassignment_side != LaneDepartureSide::NONE
+          ? result.reassignment_side : measured_side;
   if (!warning_) {
     clear_streak_ = 0;
-    enter_streak_ = magnitude >= 0.16f ? enter_streak_ + 1 : 0;
+    // A lane-pair reassignment is strong evidence that the vehicle crossed a
+    // boundary.  Keep the warning on the original side even if the newly
+    // selected pair makes the numerical offset look centred again.
+    const bool reassigned = result.reassignment_side != LaneDepartureSide::NONE;
+    const bool severe = magnitude >= 0.24f;
+    enter_streak_ = (reassigned || magnitude >= 0.15f) ? enter_streak_ + 1 : 0;
     if (enter_streak_ == 1) enter_at_ = captured_at;
-    if (enter_streak_ >= 2 && std::chrono::duration<float>(captured_at - enter_at_).count() >= 0.25f) {
+    if (reassigned || (severe && enter_streak_ >= 2) || (enter_streak_ >= 2 &&
+        std::chrono::duration<float>(captured_at - enter_at_).count() >= 0.12f)) {
       warning_ = true;
+      warning_side_ = candidate_side;
+      warning_at_ = captured_at;
       enter_streak_ = 0;
     }
   } else {
     enter_streak_ = 0;
-    clear_streak_ = magnitude <= 0.10f ? clear_streak_ + 1 : 0;
+    const bool minimum_hold = warning_at_ != std::chrono::steady_clock::time_point() &&
+        captured_at - warning_at_ >= std::chrono::milliseconds(800);
+    const bool centred = magnitude <= 0.08f &&
+        result.reassignment_side == LaneDepartureSide::NONE &&
+        !result.identity_uncertain;
+    clear_streak_ = minimum_hold && centred ? clear_streak_ + 1 : 0;
     if (clear_streak_ == 1) clear_at_ = captured_at;
-    if (clear_streak_ >= 2 && std::chrono::duration<float>(captured_at - clear_at_).count() >= 0.35f) {
+    if (clear_streak_ >= 3 && std::chrono::duration<float>(captured_at - clear_at_).count() >= 0.30f) {
       warning_ = false;
+      warning_side_ = LaneDepartureSide::NONE;
       clear_streak_ = 0;
     }
   }
   result.departure = warning_;
+  result.departure_side = warning_side_;
   return result;
 }
 
