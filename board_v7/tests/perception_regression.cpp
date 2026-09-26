@@ -138,6 +138,27 @@ int main() {
   tracker.update({}, at(100), at(100));
   assert(tracker.observations().empty());
   assert(!tracker.predict(at(100)).empty()); // prediction is not a fresh measurement
+  tracker.reset();
+  tracker.update({close}, at(0), at(0));
+  close.box.x += 5;
+  tracker.update({close}, at(100), at(100));
+  close.box.x += 5;
+  const auto moving = tracker.update({close}, at(200), at(200));
+  assert(moving.size() == 1 && moving.front().motion_valid && moving.front().image_velocity.x > 0);
+  assert(!tracker.predict(at(1100)).front().motion_valid);
+  BlindSpotMonitor side;
+  Detection side_car = close;
+  side_car.box = cv::Rect2f(200, 190, 160, 120);
+  assert(!side.update({side_car}, 640, 360, true).occupied);
+  side_car.track_id = 2;  // The zone is still occupied after an ID switch.
+  const auto occupied_side = side.update({side_car}, 640, 360, true);
+  assert(occupied_side.occupied && occupied_side.track_id == 2);
+  assert(side.update({}, 640, 360, false).occupied);  // No fresh sample.
+  assert(side.update({}, 640, 360, true).occupied);
+  assert(side.update({}, 640, 360, true).occupied);
+  assert(!side.update({}, 640, 360, true).occupied);
+  side_car.track_id = -1;
+  assert(!side.update({side_car}, 640, 360, true).occupied);
   RiskEstimator replay(cfg);
   replay.update({close}, 640, 360, nullptr, true, 0.0);
   close.box.height += 20;
@@ -221,8 +242,30 @@ int main() {
   assert(intersection.stable && intersection.action == IntersectionAction::STOP);
   Detection green_straight = green;
   green_straight.class_id = 14;
+  green_straight.score = .9f;
   assert(intersection_logic.update({green_straight}, vehicle).action ==
          IntersectionAction::UNKNOWN);  // left intent cannot consume straight green
+
+  VehicleState unknown_route;
+  for (int i = 0; i < 5; ++i)
+    assert(intersection_logic.update({green_straight}, unknown_route).action == IntersectionAction::UNKNOWN);
+  unknown_route.turn_valid = true;
+  unknown_route.turn = TurnSignal::OFF;
+  assert(!intersection_logic.update({green_straight}, unknown_route).route_valid);
+  unknown_route.route_valid = true;
+  unknown_route.route = ManeuverDirection::STRAIGHT;
+  for (int i = 0; i < 3; ++i) intersection_logic.update({green_straight}, unknown_route);
+  assert(intersection_logic.update({green_straight}, unknown_route).action == IntersectionAction::GO);
+  Detection green_left = green;
+  green_left.class_id = 12;
+  green_left.score = .9f;
+  unknown_route.route = ManeuverDirection::LEFT;
+  assert(intersection_logic.update({green_left}, unknown_route).action == IntersectionAction::WAIT);
+  // A conflicting red must not lose to a higher-confidence green.
+  red_left.score = .5f;
+  green_left.score = .95f;
+  for (int i = 0; i < 3; ++i) intersection_logic.update({green_left, red_left}, unknown_route);
+  assert(intersection_logic.update({green_left, red_left}, unknown_route).action == IntersectionAction::STOP);
 
   WarningManager warning_manager;
   const auto warnings = warning_manager.update(true, true, true, false, true,

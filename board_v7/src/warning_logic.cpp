@@ -163,7 +163,8 @@ BlindSpotResult BlindSpotMonitor::update(
   const Detection* candidate = nullptr;
   float best_area = 0.0f;
   for (const Detection& detection : detections) {
-    if (detection.class_id < 1 || detection.class_id > 6 || detection.score < 0.25f) continue;
+    if (detection.class_id < 1 || detection.class_id > 6 ||
+        detection.score < 0.25f || detection.track_id < 0) continue;
     const cv::Point2f contact(detection.box.x + detection.box.width * 0.5f,
                               detection.box.y + detection.box.height);
     const float area = detection.box.area() /
@@ -177,12 +178,11 @@ BlindSpotResult BlindSpotMonitor::update(
 
   if (candidate) {
     clear_streak_ = 0;
-    if (candidate->track_id >= 0 && candidate->track_id != candidate_track_id_) {
-      candidate_track_id_ = candidate->track_id;
-      enter_streak_ = 1;
-    } else {
-      ++enter_streak_;
-    }
+    // Blind-spot occupancy belongs to the region, not to one stable ID.
+    // Sparse four-camera detections can switch the largest target or reassign
+    // its track while a vehicle remains in the blind zone.
+    candidate_track_id_ = candidate->track_id;
+    ++enter_streak_;
     if (enter_streak_ >= 2) occupied_ = true;
   } else {
     enter_streak_ = 0;

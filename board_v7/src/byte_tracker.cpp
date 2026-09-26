@@ -106,6 +106,10 @@ std::vector<Detection> ByteTracker::predict(std::chrono::steady_clock::time_poin
     detection.name = track.name;
     detection.score = track.score;
     detection.box = project(track, now);
+    detection.motion_valid = track.hits >= 3 && track.missed == 0 &&
+        now - track.measured_at < std::chrono::milliseconds(800);
+    detection.image_velocity = cv::Point2f(track.velocity[0] + 0.5f * track.velocity[2],
+                                           track.velocity[1] + 0.5f * track.velocity[3]);
     result.push_back(detection);
   }
   return result;

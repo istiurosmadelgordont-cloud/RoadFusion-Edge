@@ -562,32 +562,23 @@ void panel(cv::Mat& canvas, int x, int y, int w, int h) {
   cv::rectangle(canvas, cv::Rect(x, y, w, h), cv::Scalar(115, 76, 28), 1);
 }
 
-cv::Scalar box_color(int cls) {
-  if (cls >= 7 && cls <= 10) return cv::Scalar(55, 75, 255);
-  if (cls >= 11 && cls <= 14) return cv::Scalar(70, 230, 95);
-  if (cls == 0 || cls == 1) return cv::Scalar(210, 100, 240);
-  return cv::Scalar(90, 200, 255);
-}
-
 cv::Scalar target_risk_color(const adas::RiskResult& risk) {
-  if (risk.warning || (risk.ttc_s > 0.0f && risk.ttc_s < 1.5f))
-    return cv::Scalar(35, 45, 245);
-  if (risk.ttc_s > 0.0f && risk.ttc_s < 3.0f)
-    return cv::Scalar(30, 150, 245);
-  return cv::Scalar(50, 225, 245);
+  return adas::risk_overlay_color(risk);
 }
 
 void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections,
                 const adas::RiskResult* risk = nullptr, int attention_track = -1,
                 bool danger_attention = false) {
   for (const auto& d : detections) {
-    const bool risk_target = risk && risk->target && risk->track_id >= 0 &&
+    const bool risk_target = risk && risk->target && risk->reliable && risk->track_id >= 0 &&
                              d.track_id == risk->track_id;
     const bool attention = attention_track >= 0 && d.track_id == attention_track;
     const cv::Scalar color = risk_target ? target_risk_color(*risk) :
         attention ? (danger_attention ? cv::Scalar(35, 45, 245)
-                                      : cv::Scalar(50, 225, 245)) : box_color(d.class_id);
-    cv::rectangle(frame, d.box, color, risk_target || attention ? 4 : 2);
+                                      : cv::Scalar(50, 225, 245)) : adas::normal_object_color(d.class_id);
+    if (risk_target) adas::draw_risk_halo(frame, d.box, *risk);
+    cv::rectangle(frame, d.box, color, risk_target || attention ? 3 : 1);
+    if (!attention) continue;  // Target risk cards carry rear labels.
     std::ostringstream label;
     label << d.name;
     if (d.track_id >= 0) label << " #" << d.track_id;
@@ -602,35 +593,57 @@ void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections,
   }
 }
 
-void draw_rear_risk_overlay(cv::Mat& frame, const adas::RiskResult& risk) {
+void draw_rear_risk_overlay(cv::Mat& frame, const adas::RiskResult& risk,
+                             const std::vector<adas::Detection>& detections) {
   // No rear lane geometry is available with --no-rear-lane. A fixed
   // trapezoid would falsely imply a road-aligned collision corridor.
   // Show object-level risk only until calibrated geometry is available.
-  if (!risk.target) return;
-  std::ostringstream text;
-  text << "RCW #" << risk.track_id << "  " << std::fixed << std::setprecision(1)
-       << risk.distance_m << "m";
-  if (risk.ttc_s > 0.0f) text << "  TTC " << risk.ttc_s << "s";
-  caption(frame, text.str(), 12, 28, target_risk_color(risk), 0.56);
+  adas::draw_target_card(frame, detections, risk, "RCW");
+  if (!risk.target || !risk.reliable || !std::isfinite(risk.relative_speed_kmh) ||
+      risk.relative_speed_kmh < 3.0f) return;
+  for (const auto& d : detections) {
+    if (risk.track_id < 0 || d.track_id != risk.track_id) continue;
+    const int x = std::max(15, std::min(frame.cols - 15, cvRound(d.box.x + d.box.width + 14)));
+    const int y = std::max(65, std::min(frame.rows - 45, cvRound(d.box.y + d.box.height)));
+    const int length = cvRound(std::min(60.0f, 20.0f + risk.relative_speed_kmh));
+    // Down-screen is a symbolic approach toward ego, not a world-space vector.
+    cv::arrowedLine(frame, {x, y - length}, {x, y}, target_risk_color(risk), 3, cv::LINE_AA, 0, .3);
+    caption(frame, "CLOSING", std::max(5, x - 65), y + 18, target_risk_color(risk), .4);
+    break;
+  }
 }
 
 void draw_blind_spot_overlay(cv::Mat& frame, const adas::BlindSpotResult& blind,
-                             bool turn_intent, const char* side) {
-  const std::vector<cv::Point> region{{cvRound(frame.cols * 0.08f), cvRound(frame.rows * 0.34f)},
-      {cvRound(frame.cols * 0.92f), cvRound(frame.rows * 0.34f)},
-      {cvRound(frame.cols * 0.98f), cvRound(frame.rows * 0.98f)},
-      {cvRound(frame.cols * 0.02f), cvRound(frame.rows * 0.98f)}};
-  const bool lca = blind.occupied && turn_intent;
+                             bool turn_intent, const char* side, bool fresh,
+                             const std::vector<adas::Detection>& detections) {
+  const bool occupied = fresh && blind.occupied;
+  const bool lca = occupied && turn_intent;
   const cv::Scalar color = lca ? cv::Scalar(35, 45, 245) :
-      blind.occupied ? cv::Scalar(50, 225, 245) : cv::Scalar(230, 210, 50);
-  cv::Mat layer = frame.clone();
-  cv::fillConvexPoly(layer, region, color);
-  cv::addWeighted(layer, lca ? 0.18 : blind.occupied ? 0.12 : 0.05,
-                  frame, lca ? 0.82 : blind.occupied ? 0.88 : 0.95, 0, frame);
-  cv::polylines(frame, region, true, color, lca ? 4 : 2, cv::LINE_AA);
-  std::string text = std::string(side) + (lca ? " LCA 变道危险" :
-      blind.occupied ? " BSD 盲区占用" : " BSD ROI");
-  caption(frame, text, 12, 28, color, 0.56);
+      occupied ? cv::Scalar(50, 225, 245) : cv::Scalar(145, 160, 170);
+  const std::string text = std::string(side) + (!fresh ? " BSD UNAVAILABLE" :
+      lca ? " LCA BLOCKED" : occupied ? " BSD TARGET" : " BSD CLEAR");
+  int baseline = 0;
+  const cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX,
+                                              0.53, 1, &baseline);
+  const cv::Rect label_area(8, 6,
+                            std::min(frame.cols - 16, label_size.width + 22), 31);
+  cv::Mat label_roi = frame(label_area);
+  cv::Mat label_layer = label_roi.clone();
+  cv::rectangle(frame, label_area, cv::Scalar(15, 20, 27), cv::FILLED);
+  cv::addWeighted(label_roi, .82, label_layer, .18, 0, label_roi);
+  if (occupied) cv::rectangle(frame, label_area, color, 1, cv::LINE_AA);
+  if (!occupied) {
+    caption(frame, text, 18, 28, color, 0.53);
+    return;
+  }
+  for (const auto& d : detections) {
+    if (d.track_id != blind.track_id) continue;
+    // This cue follows the detected object in image space. The side cameras
+    // are not calibrated for a road-aligned polygon or metric trajectory.
+    adas::draw_side_risk_cue(frame, d.box, lca);
+    break;
+  }
+  caption(frame, text, 18, 28, color, 0.53);
 }
 
 void warning_banner(cv::Mat& frame, const std::string& text) {
@@ -638,6 +651,117 @@ void warning_banner(cv::Mat& frame, const std::string& text) {
   cv::rectangle(frame, area, cv::Scalar(20, 35, 190), cv::FILLED);
   adas::ui::draw_text(frame, text, cv::Point(area.x + 8, area.y + 22),
                       16, cv::Scalar(255, 255, 255));
+}
+
+void draw_maneuver_hud(cv::Mat& frame, const adas::LaneChangeResult& change,
+                        const adas::LaneSemantic& lane, bool blind, bool fresh,
+                        bool demo) {
+  if (change.state == adas::LaneChangeState::IDLE ||
+      change.direction == adas::ManeuverDirection::NONE) return;
+  const bool left = change.direction == adas::ManeuverDirection::LEFT;
+  const bool blocked = change.state == adas::LaneChangeState::BLOCKED ||
+                       change.state == adas::LaneChangeState::ABORT;
+  const cv::Scalar color = blocked ? cv::Scalar(35, 45, 245) :
+      change.permitted ? cv::Scalar(90, 215, 100) : cv::Scalar(35, 225, 245);
+  const int y = frame.rows - 96;
+  const cv::Rect area(10, y, 240, 86);
+  cv::rectangle(frame, area, cv::Scalar(20, 25, 28), cv::FILLED);
+  cv::rectangle(frame, area, color, 1);
+  cv::arrowedLine(frame, {left ? 45 : 20, y + 15}, {left ? 20 : 45, y + 15},
+                   color, 3, cv::LINE_AA, 0, .4);
+  const char* state = blocked ? "BLOCKED" : change.state == adas::LaneChangeState::DONE ? "DONE" :
+      change.state == adas::LaneChangeState::CHANGING ? "CHANGING" :
+      change.permitted ? "READY" : "CHECK";
+  caption(frame, std::string(left ? "LEFT " : "RIGHT ") + state + (demo ? "  DEMO" : ""),
+          55, y + 21, color, .48);
+  const auto marking = !lane.lane_valid ? adas::LaneMarking::UNKNOWN : left ? lane.left : lane.right;
+  const char* line = marking == adas::LaneMarking::SOLID ? "SOLID" :
+      marking == adas::LaneMarking::DASHED ? "DASHED" : "UNKNOWN";
+  caption(frame, std::string("LINE ") + line + "   BSD " + (!fresh ? "STALE" : blind ? "VEHICLE" : "CLEAR"),
+          18, y + 43, cv::Scalar(210, 215, 215), .39);
+  caption(frame, change.reason, 18, y + 68, color, .40);
+}
+
+int risk_level(const adas::RiskResult& risk) {
+  if (!risk.target || !risk.reliable) return 0;
+  if (std::isfinite(risk.ttc_s) && risk.ttc_s > 0.0f) {
+    if (risk.ttc_s < 1.5f) return 3;
+    if (risk.ttc_s < 3.0f) return 2;
+    if (risk.ttc_s < 4.0f) return 1;
+  }
+  return risk.warning ? 2 : 0;
+}
+
+std::array<int, 4> view_alert_levels(const adas::RiskResult& front,
+    const adas::RiskResult& rear, const adas::LaneResult& lane,
+    const adas::LaneSemantic& semantic, const adas::BlindSpotResult& left,
+    const adas::BlindSpotResult& right, bool side_fresh,
+    const adas::VehicleState& vehicle) {
+  std::array<int, 4> level{{risk_level(front), risk_level(rear), 0, 0}};
+  if (lane.departure) level[0] = std::max(level[0], 3);
+  else if (lane.valid && !lane.partial && !lane.identity_uncertain &&
+           semantic.trend != adas::CrossingSide::NONE && semantic.tlc_s > 0.0f)
+    level[0] = std::max(level[0], semantic.tlc_s < 1.5f ? 2 :
+        semantic.tlc_s < 2.5f ? 1 : 0);
+  if (side_fresh && left.occupied)
+    level[2] = vehicle.turn_valid && vehicle.turn == adas::TurnSignal::LEFT ? 3 : 1;
+  if (side_fresh && right.occupied)
+    level[3] = vehicle.turn_valid && vehicle.turn == adas::TurnSignal::RIGHT ? 3 : 1;
+  return level;
+}
+
+cv::Scalar alert_color(int level) {
+  return level >= 3 ? cv::Scalar(35, 45, 245) :
+         level == 2 ? cv::Scalar(30, 145, 245) :
+         level == 1 ? cv::Scalar(35, 205, 245) : cv::Scalar(82, 69, 47);
+}
+
+void draw_view_alerts(cv::Mat& canvas, const std::array<int, 4>& levels) {
+  const double seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+  const double pulse = .78 + .22 * std::sin(seconds * 2.0 * 3.141592653589793);
+  for (int i = 0; i < 4; ++i) {
+    const cv::Rect& r = kViewRects[i];
+    const int level = levels[i];
+    const cv::Scalar base = alert_color(level);
+    const cv::Scalar color = level >= 2 ? base * pulse : base;
+    // The canvas is reused across frames. Erase the full former stroke,
+    // including its inner antialiased pixels, before drawing a new severity.
+    cv::rectangle(canvas, cv::Rect(r.x - 3, r.y - 3, r.width + 6, r.height + 6),
+                  cv::Scalar(24, 15, 7), 10);
+    cv::rectangle(canvas, cv::Rect(r.x - 3, r.y - 3, r.width + 6, r.height + 6),
+                  color, level >= 2 ? 4 : level == 1 ? 3 : 1, cv::LINE_AA);
+  }
+}
+
+void draw_global_warning(cv::Mat& canvas, const adas::WarningSummary& warning,
+                         const adas::RiskResult& front, const adas::RiskResult& rear,
+                         const std::array<int, 4>& levels,
+                         const cv::Mat& normal_header) {
+  // Restore the normal title after an alert clears; the canvas is persistent.
+  normal_header.copyTo(canvas(cv::Rect(430, 0, 980, 76)));
+  const int maximum = *std::max_element(levels.begin(), levels.end());
+  if (maximum == 0 && warning.priority < 60) return;
+  const int level = std::max(maximum, warning.priority >= 60 ? 1 : 0);
+  const cv::Scalar color = alert_color(level);
+  cv::rectangle(canvas, cv::Rect(430, 0, 980, level >= 3 ? 8 : 5),
+                color, cv::FILLED);
+  if (warning.priority < 60 && risk_level(front) < 2 && risk_level(rear) < 2) return;
+  const cv::Rect area(430, 8, 980, 59);
+  cv::rectangle(canvas, area, cv::Scalar(20, 30, 38), cv::FILLED);
+  std::ostringstream text;
+  if ((warning.primary == adas::WarningCode::FCW && front.warning) ||
+      (warning.priority < 60 && risk_level(front) >= 2)) {
+    text << "FCW";
+    if (front.ttc_s > 0.0f && std::isfinite(front.ttc_s))
+      text << "  |  TTC ~" << std::fixed << std::setprecision(1) << front.ttc_s << "s";
+  } else if ((warning.primary == adas::WarningCode::RCW && rear.warning) ||
+             (warning.priority < 60 && risk_level(rear) >= 2)) {
+    text << "RCW";
+    if (rear.ttc_s > 0.0f && std::isfinite(rear.ttc_s))
+      text << "  |  TTC ~" << std::fixed << std::setprecision(1) << rear.ttc_s << "s";
+  } else text << warning.text;
+  caption(canvas, text.str(), 478, 48, color, .98);
 }
 
 const cv::Rect kProgressBar(24, 1050, 1320, 10);
@@ -787,119 +911,65 @@ void draw_top_car(cv::Mat& canvas, const cv::Point& center, int width, int heigh
 }
 
 void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
-                       const std::array<std::vector<adas::Detection>, 4>& detections,
-                       const adas::LaneResult& front_lane,
-                       const adas::LaneResult& rear_lane,
-                       const adas::SignalResult& signal,
                        const adas::RiskResult& front_risk,
                        const adas::RiskResult& rear_risk,
                        const adas::BlindSpotResult& left_blind,
-                       const adas::BlindSpotResult& right_blind) {
-  cv::rectangle(canvas, area, cv::Scalar(38, 41, 45), cv::FILLED);
+                       const adas::BlindSpotResult& right_blind,
+                       const adas::VehicleState& vehicle, bool side_fresh) {
+  // This is a directional risk indicator, not a metric map. No camera pixel
+  // position is presented as a physical distance or cross-camera track.
+  cv::rectangle(canvas, area, cv::Scalar(38, 29, 19), cv::FILLED);
   cv::rectangle(canvas, area, cv::Scalar(70, 78, 84), 1);
-  const cv::Point ego(area.x + area.width / 2, area.y + area.height * 72 / 100);
-  const int front_shift = front_lane.valid
-      ? cvRound(-front_lane.offset_ratio * 18.0f) : 0;
-  const int rear_shift = rear_lane.valid
-      ? cvRound(-rear_lane.offset_ratio * 18.0f) : 0;
-
-  const std::vector<cv::Point> road = {
-      cv::Point(ego.x - 18 + front_shift, area.y + 4),
-      cv::Point(ego.x + 18 + front_shift, area.y + 4),
-      cv::Point(ego.x + 48, ego.y + 22), cv::Point(ego.x - 48, ego.y + 22)};
-  cv::fillConvexPoly(canvas, road, cv::Scalar(29, 33, 37));
-  const cv::Scalar lane_color = front_lane.valid
-      ? cv::Scalar(205, 180, 80) : cv::Scalar(95, 105, 110);
-  cv::line(canvas, cv::Point(ego.x - 30, ego.y + 17),
-           cv::Point(ego.x - 14 + front_shift, area.y + 4), lane_color, 2, cv::LINE_AA);
-  cv::line(canvas, cv::Point(ego.x + 30, ego.y + 17),
-           cv::Point(ego.x + 14 + front_shift, area.y + 4), lane_color, 2, cv::LINE_AA);
-  const cv::Scalar rear_color = rear_lane.valid
-      ? cv::Scalar(160, 145, 80) : cv::Scalar(75, 82, 86);
-  cv::line(canvas, cv::Point(ego.x - 30, ego.y + 17),
-           cv::Point(ego.x - 19 + rear_shift, area.y + area.height - 3), rear_color, 1,
-           cv::LINE_AA);
-  cv::line(canvas, cv::Point(ego.x + 30, ego.y + 17),
-           cv::Point(ego.x + 19 + rear_shift, area.y + area.height - 3), rear_color, 1,
-           cv::LINE_AA);
-
-  for (int y = area.y + 12; y < ego.y - 18; y += 13)
-    cv::line(canvas, cv::Point(ego.x + front_shift / 2, y),
-             cv::Point(ego.x + front_shift / 2, y + 5), cv::Scalar(105, 110, 112), 1);
-
-  const cv::Rect light(ego.x - 5 + front_shift, area.y + 3, 10, 27);
-  cv::rectangle(canvas, light, cv::Scalar(9, 13, 16), cv::FILLED);
-  cv::rectangle(canvas, light, cv::Scalar(100, 110, 115), 1);
-  const cv::Scalar off(42, 47, 49);
-  cv::circle(canvas, cv::Point(light.x + 5, light.y + 5), 3,
-             signal.state == adas::SignalState::RED ? cv::Scalar(45, 55, 255) : off, cv::FILLED);
-  cv::circle(canvas, cv::Point(light.x + 5, light.y + 13), 3, off, cv::FILLED);
-  cv::circle(canvas, cv::Point(light.x + 5, light.y + 21), 3,
-             signal.state == adas::SignalState::GREEN ? cv::Scalar(65, 235, 90) : off,
-             cv::FILLED);
-
-  for (int camera = 0; camera < 4; ++camera) {
-    std::vector<const adas::Detection*> objects;
-    for (const adas::Detection& detection : detections[camera])
-      if (detection.class_id >= 0 && detection.class_id <= 6) objects.push_back(&detection);
-    std::sort(objects.begin(), objects.end(),
-              [](const adas::Detection* left, const adas::Detection* right) {
-                return left->box.area() > right->box.area();
-              });
-    const size_t limit = camera == 0 ? 3 : 2;
-    if (objects.size() > limit) objects.resize(limit);
-    for (const adas::Detection* object : objects) {
-      const adas::Detection& detection = *object;
-      const float nx = std::max(-1.0f, std::min(1.0f,
-          (detection.box.x + detection.box.width * 0.5f) / kTileW * 2.0f - 1.0f));
-      const float ny = std::max(-1.0f, std::min(1.0f,
-          (detection.box.y + detection.box.height * 0.5f) / kTileH * 2.0f - 1.0f));
-      const float apparent = std::max(0.0f, std::min(1.0f,
-          std::sqrt(std::max(1.0f, detection.box.area()) /
-                    static_cast<float>(kTileW * kTileH)) * 4.0f));
-      const float far = 1.0f - apparent;
-      cv::Point position = ego;
-      if (camera == 0) {
-        position.x += cvRound(nx * (24.0f + apparent * 28.0f));
-        position.y = area.y + 34 + cvRound(apparent * (ego.y - area.y - 59));
-      } else if (camera == 1) {
-        position.x -= cvRound(nx * 34.0f);
-        position.y = ego.y + 21 + cvRound(far * 7.0f);
-      } else {
-        const int side_distance = 52 + cvRound(far * (area.width / 2 - 65));
-        position.x += camera == 2 ? -side_distance : side_distance;
-        position.y += cvRound(ny * 22.0f);
-      }
-      position.x = std::max(area.x + 9, std::min(area.x + area.width - 10, position.x));
-      position.y = std::max(area.y + 9, std::min(area.y + area.height - 10, position.y));
-      const bool front_target = camera == 0 && front_risk.target &&
-          detection.track_id == front_risk.track_id;
-      const bool rear_target = camera == 1 && rear_risk.target &&
-          detection.track_id == rear_risk.track_id;
-      const bool blind_target = (camera == 2 && detection.track_id == left_blind.track_id) ||
-          (camera == 3 && detection.track_id == right_blind.track_id);
-      cv::Scalar object_color(165, 172, 176);
-      if (front_target) object_color = target_risk_color(front_risk);
-      if (rear_target) object_color = target_risk_color(rear_risk);
-      if (blind_target) object_color = cv::Scalar(50, 225, 245);
-      if (detection.class_id <= 1) {
-        cv::circle(canvas, position, 5, object_color, cv::FILLED);
-      } else {
-        const int icon_width = 9 + cvRound(apparent * 5.0f);
-        const int icon_height = 15 + cvRound(apparent * 8.0f);
-        draw_top_car(canvas, position, icon_width, icon_height,
-                     object_color, camera >= 2, false);
-      }
-    }
-  }
-  draw_top_car(canvas, ego, 18, 29, cv::Scalar(100, 230, 150), false, true);
+  const cv::Point ego(area.x + area.width / 2, area.y + 82);
+  const cv::Scalar idle(92, 70, 48);
+  const int front_level = risk_level(front_risk);
+  const int rear_level = risk_level(rear_risk);
+  const int left_level = side_fresh && left_blind.occupied
+      ? (vehicle.turn_valid && vehicle.turn == adas::TurnSignal::LEFT ? 3 : 1) : 0;
+  const int right_level = side_fresh && right_blind.occupied
+      ? (vehicle.turn_valid && vehicle.turn == adas::TurnSignal::RIGHT ? 3 : 1) : 0;
+  cv::circle(canvas, ego, 65, cv::Scalar(53, 68, 79), 1, cv::LINE_AA);
+  cv::circle(canvas, ego, 39, cv::Scalar(53, 68, 79), 1, cv::LINE_AA);
+  const auto sector = [&](int level, int begin, int end) {
+    const cv::Scalar color = level ? alert_color(level) : idle;
+    cv::ellipse(canvas, ego, cv::Size(59, 59), 0, begin, end,
+                color, level ? 11 : 7, cv::LINE_AA);
+  };
+  sector(front_level, 225, 315);
+  sector(rear_level, 45, 135);
+  sector(left_level, 135, 225);
+  sector(right_level, -45, 45);
+  draw_top_car(canvas, ego, 25, 42, cv::Scalar(208, 220, 232), false, true);
+  const auto risk_label = [&](const char* direction, const adas::RiskResult& risk,
+                              int level, int x, int y) {
+    caption(canvas, direction, x, y, level ? alert_color(level) : cv::Scalar(180, 165, 140), .52);
+    if (!level) return;
+    std::ostringstream line;
+    line << "TTC ";
+    if (std::isfinite(risk.ttc_s) && risk.ttc_s > 0.0f)
+      line << "~" << std::fixed << std::setprecision(1) << risk.ttc_s << "s";
+    else line << "--";
+    caption(canvas, line.str(), x, y + 18, alert_color(level), .43);
+  };
+  risk_label("FRONT", front_risk, front_level, area.x + 17, area.y + 25);
+  risk_label("REAR", rear_risk, rear_level, area.x + area.width - 105,
+             area.y + 25);
+  caption(canvas, "LEFT", area.x + 17, area.y + 94,
+          left_level ? alert_color(left_level) : idle, .52);
+  caption(canvas, side_fresh ? (left_level ? "BSD / LCA" : "CLEAR") : "STALE",
+          area.x + 17, area.y + 113,
+          left_level ? alert_color(left_level) : idle, .42);
+  caption(canvas, "RIGHT", area.x + area.width - 105, area.y + 94,
+          right_level ? alert_color(right_level) : idle, .52);
+  caption(canvas, side_fresh ? (right_level ? "BSD / LCA" : "CLEAR") : "STALE",
+          area.x + area.width - 105, area.y + 113,
+          right_level ? alert_color(right_level) : idle, .42);
 }
 
 void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms,
                   const adas::SignalResult& signal,
-                  const std::array<std::vector<adas::Detection>, 4>& detections,
                   const adas::LaneResult& front_lane, const adas::LaneResult& rear_lane,
-                  const adas::DriveResult& drive, const adas::RiskResult& front_risk,
+                  const adas::RiskResult& front_risk,
                   const adas::RiskResult& rear_risk,
                   const adas::BlindSpotResult& left_blind,
                   const adas::BlindSpotResult& right_blind, bool side_fresh,
@@ -918,19 +988,16 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
     caption(canvas, title, x + 16, y + 28, white, 0.62);
     cv::line(canvas, {x + 1, y + 40}, {x + w - 2, y + 40}, cv::Scalar(85, 59, 29));
   };
-  card(86, 220, "导航 / 周边感知    Navigation");
-  draw_surround_map(canvas, {x + 12, 138, 258, 154}, detections, front_lane,
-                    rear_lane, signal, front_risk, rear_risk, left_blind, right_blind);
-  caption(canvas, "周边目标示意", x + 287, 170, cyan, 0.67);
-  caption(canvas, "地图 / 路线未接入", x + 287, 210, muted, 0.51);
-  caption(canvas, "非真实世界坐标", x + 287, 244, muted, 0.47);
-  caption(canvas, "四路目标融合显示", x + 287, 276, muted, 0.47);
+  card(86, 220, "周边风险方位    Surround Awareness");
+  draw_surround_map(canvas, {x + 12, 132, w - 24, 166}, front_risk, rear_risk,
+                    left_blind, right_blind, vehicle, side_fresh);
 
-  card(318, 144, "车辆状态    Vehicle Status");
-  cv::ellipse(canvas, {x + 77, 409}, {49, 49}, 0, 145, 395, cyan, 6, cv::LINE_AA);
-  caption(canvas, "--", x + 53, 410, white, 1.1);
-  caption(canvas, "km/h", x + 47, 439, muted, 0.49);
-  caption(canvas, "模拟转向 / 10秒复位", x + 149, 395, white, 0.53);
+  card(318, 144, "转向与变道    Maneuver");
+  caption(canvas, vehicle.demo ? "转向输入  DEMO" : "转向输入  CAN 未接",
+          x + 18, 391, vehicle.demo ? cyan : muted, 0.58);
+  caption(canvas, "10秒自动复位", x + 297, 391, muted, 0.50);
+  caption(canvas, side_fresh ? "盲区数据有效" : "盲区数据过期",
+          x + 18, 433, side_fresh ? green : muted, 0.50);
   const cv::Rect buttons[] = {kIntentLeft,kIntentOff,kIntentRight};
   const char* names[] = {"左", "关闭", "右"};
   for (int i=0; i<3; ++i) {
@@ -941,10 +1008,8 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
         (i==2 && vehicle.turn==adas::TurnSignal::RIGHT);
     caption(canvas,names[i],b.x+18,b.y+24,selected?cyan:muted,.51);
   }
-  caption(canvas, vehicle.demo ? "状态  模拟" : "CAN  未接", x + 370, 395,
-          vehicle.demo ? cyan : muted, 0.54);
   caption(canvas, adas::lane_change_state_caption(lane_change.state),
-          x + 370, 432, lane_change.permitted ? green : muted, 0.52);
+          x + 400, 439, lane_change.permitted ? green : muted, 0.50);
 
   card(474, 128, "交通灯与路口决策    Traffic Light");
   const char* signal_text = "未确认";
@@ -959,11 +1024,7 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
     cv::circle(canvas, {x + 36 + i * 37, 551}, 13, on ? sig : cv::Scalar(53, 39, 22), cv::FILLED, cv::LINE_AA);
   }
   caption(canvas, std::string("识别：") + signal_text, x + 160, 546, sig, 0.66);
-  const char* decision = intersection.action == adas::IntersectionAction::UNKNOWN
-      ? (drive.decision == adas::DriveDecision::STOP ? "STOP 停车提示" :
-         drive.decision == adas::DriveDecision::GO ? "GO 通行提示" :
-         drive.decision == adas::DriveDecision::SLOW ? "SLOW 减速提示" : "等待有效信号")
-      : adas::intersection_action_caption(intersection.action);
+  const char* decision = adas::intersection_action_caption(intersection.action);
   const char* route = intersection.route == adas::ManeuverDirection::LEFT ? "LEFT" :
                       intersection.route == adas::ManeuverDirection::RIGHT ? "RIGHT" :
                       intersection.route == adas::ManeuverDirection::STRAIGHT ? "STRAIGHT" : "--";
@@ -1240,6 +1301,7 @@ int main(int argc, char** argv) {
   caption(canvas, "RoadFusion-Edge  /  Demo UI", 779, 62, cv::Scalar(202, 178, 140), 0.52);
   caption(canvas, "四路同步视频  |  演示模式", 1570, 43, cv::Scalar(225, 187, 115), 0.60);
   draw_camera_cards(canvas);
+  const cv::Mat normal_header = canvas(cv::Rect(430, 0, 980, 76)).clone();
   std::array<cv::Mat, 4> source_images;
   cv::Mat source_composite;
   double last_lane_ms = 0.0;
@@ -1552,19 +1614,27 @@ int main(int argc, char** argv) {
     }
     lane = front_lane_target;
     rear_lane = rear_lane_target;
-    if (last_detection_at == std::chrono::steady_clock::time_point() ||
-        presentation_now - last_detection_at > std::chrono::milliseconds(800)) {
+    const auto detection_age = last_detection_at == std::chrono::steady_clock::time_point()
+        ? std::chrono::steady_clock::duration::max()
+        : presentation_now - last_detection_at;
+    if (detection_age > std::chrono::milliseconds(800)) {
       signal_logic = adas::SignalLogic();
       drive_logic.reset();
       signal = adas::SignalResult();
       drive = adas::DriveResult();
       front_risk_estimator.reset();
       rear_risk_estimator.reset();
-      left_blind_monitor.reset();
-      right_blind_monitor.reset();
       current_lights.clear();
       intersection_logic = adas::IntersectionLogic();
       intersection_result = adas::IntersectionResult();
+    }
+    // High-resolution UFLD shares one NPU queue with four-view YOLO. Object
+    // updates may be more than 800 ms apart, so preserve the two-observation
+    // BSD confirmation across that gap. Side warnings still disappear as soon
+    // as their own freshness limit is reached.
+    if (detection_age > std::chrono::milliseconds(2500)) {
+      left_blind_monitor.reset();
+      right_blind_monitor.reset();
     }
     front_risk = front_risk_estimator.update(
         observed[0], frames[0].cols, frames[0].rows, &lane, fresh_measurement[0], detection_seconds[0]);
@@ -1577,35 +1647,53 @@ int main(int argc, char** argv) {
     }
     const auto advice_now = std::chrono::steady_clock::now();
     vehicle_state = vehicle_state_manager.snapshot(advice_now);
+    // Expired or changed intent invalidates the selected light immediately,
+    // without adding artificial confirmations between inference results.
+    if (adas::intended_route(vehicle_state) != intersection_result.route) {
+      intersection_logic = adas::IntersectionLogic();
+      intersection_result = adas::IntersectionResult();
+    }
     const bool side_fresh = last_detection_at != std::chrono::steady_clock::time_point() &&
-        advice_now - last_detection_at < std::chrono::milliseconds(800);
+        advice_now - last_detection_at < std::chrono::milliseconds(1800);
     lane_change_result = lane_change_fsm.update(
         vehicle_state, lane_semantic, left_blind.occupied, right_blind.occupied,
         side_fresh, near_lane_change_regulation(observed[0]), advice_now);
     warning_summary = warning_manager.update(
-        front_risk.warning, rear_risk.warning, left_blind.occupied,
-        right_blind.occupied, lane.departure, lane_change_result,
+        front_risk.warning, rear_risk.warning, side_fresh && left_blind.occupied,
+        side_fresh && right_blind.occupied, lane.departure, lane_change_result,
         intersection_result);
+    const auto view_levels = view_alert_levels(front_risk, rear_risk, lane,
+        lane_semantic, left_blind, right_blind, side_fresh, vehicle_state);
     const auto render_start = std::chrono::steady_clock::now();
-    adas::draw_overlay(frames[0], detections[0], lane, signal, front_risk,
-                       drive, display_fps, npu_ms, &lane_semantic);
+    adas::draw_overlay(frames[0], detections[0], lane, intersection_result.selected_signal, front_risk,
+                       adas::DriveResult(), display_fps, npu_ms, &lane_semantic);
+    if (!current_lights.empty()) {
+      const char* route = intersection_result.route == adas::ManeuverDirection::LEFT ? "LEFT" :
+          intersection_result.route == adas::ManeuverDirection::RIGHT ? "RIGHT" : "STRAIGHT";
+      caption(frames[0], intersection_result.route_valid ?
+          std::string(route) + " SIGNAL | " + adas::intersection_action_caption(intersection_result.action) :
+          "ROUTE UNKNOWN | SIGNAL NOT APPLICABLE", 12, 92, cv::Scalar(210, 220, 220), .42);
+    }
     draw_lane_geometry(frames[1], rear_lane);
     draw_boxes(frames[1], detections[1], &rear_risk);
     const bool left_intent = vehicle_state.turn_valid &&
         vehicle_state.turn == adas::TurnSignal::LEFT;
     const bool right_intent = vehicle_state.turn_valid &&
         vehicle_state.turn == adas::TurnSignal::RIGHT;
-    draw_boxes(frames[2], detections[2], nullptr, left_blind.track_id,
+    draw_rear_risk_overlay(frames[1], rear_risk, detections[1]);
+    draw_blind_spot_overlay(frames[2], left_blind, left_intent, "LEFT", side_fresh, detections[2]);
+    draw_blind_spot_overlay(frames[3], right_blind, right_intent, "RIGHT", side_fresh, detections[3]);
+    draw_boxes(frames[2], detections[2], nullptr, side_fresh && left_blind.occupied ? left_blind.track_id : -1,
                left_blind.occupied && left_intent);
-    draw_boxes(frames[3], detections[3], nullptr, right_blind.track_id,
+    draw_boxes(frames[3], detections[3], nullptr, side_fresh && right_blind.occupied ? right_blind.track_id : -1,
                right_blind.occupied && right_intent);
-    draw_rear_risk_overlay(frames[1], rear_risk);
-    draw_blind_spot_overlay(frames[2], left_blind, left_intent, "LEFT");
-    draw_blind_spot_overlay(frames[3], right_blind, right_intent, "RIGHT");
+    draw_maneuver_hud(frames[0], lane_change_result, lane_semantic,
+        lane_change_result.direction == adas::ManeuverDirection::LEFT ? left_blind.occupied : right_blind.occupied,
+        side_fresh, vehicle_state.demo);
     if (rear_risk.warning) warning_banner(frames[1], "后车快速接近  TTC预警");
-    if (left_blind.occupied)
+    if (side_fresh && left_blind.occupied && left_intent)
       warning_banner(frames[2], "左侧盲区有目标");
-    if (right_blind.occupied)
+    if (side_fresh && right_blind.occupied && right_intent)
       warning_banner(frames[3], "右侧盲区有目标");
     if (calibration_target == CalibrationTarget::FRONT)
       draw_calibration(frames[0], calibration_points, "前视");
@@ -1618,11 +1706,13 @@ int main(int argc, char** argv) {
     // safety overlays still refresh every frame; dashboard text and timeline
     // refresh at one third of the video rate.
     const bool refresh_dashboard = shown_frames < 2 || shown_frames % 3 == 0;
+    draw_global_warning(canvas, warning_summary, front_risk, rear_risk,
+                        view_levels, normal_header);
     if (refresh_dashboard) {
       const bool health_ready = shown_frames >
           std::max(10, static_cast<int>(std::max(1.0, source_fps) * 2.0));
-      draw_sidebar(canvas, display_fps, instant_fps, npu_ms, signal, detections, lane, rear_lane,
-                   drive, front_risk, rear_risk, left_blind, right_blind, side_fresh,
+      draw_sidebar(canvas, display_fps, instant_fps, npu_ms, signal, lane, rear_lane,
+                   front_risk, rear_risk, left_blind, right_blind, side_fresh,
                    health_ready,
                    last_lane_ms, lane_age_ms, vehicle_state, lane_semantic,
                    lane_change_result, intersection_result, verify_colors);
@@ -1634,6 +1724,7 @@ int main(int argc, char** argv) {
                                                     : cv::Scalar(215,188,130),.46);
       draw_progress_bar(canvas, source_frame_index, source_frames, calibration_paused);
     }
+    draw_view_alerts(canvas, view_levels);
     render_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - render_start).count();
     const int snapshot_frame = options.snapshot_frame >= 0 ? options.snapshot_frame :
@@ -1901,6 +1992,7 @@ int main(int argc, char** argv) {
         << " lane_departure=" << lane.departure << ',' << rear_lane.departure
         << " departure_side=" << static_cast<int>(lane.departure_side)
         << " lane_identity=" << lane.identity_uncertain
+        << " lane_partial=" << lane.partial
         << " lane_reassignment=" << static_cast<int>(lane.reassignment_side)
         << " risk_target=" << front_risk.target << ',' << rear_risk.target
         << " risk_warning=" << front_risk.warning << ',' << rear_risk.warning

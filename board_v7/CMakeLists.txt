@@ -80,6 +80,13 @@ target_link_libraries(perception_regression PRIVATE ${OpenCV_LIBS})
 # Release builds must still execute the regression assertions.
 target_compile_options(perception_regression PRIVATE -UNDEBUG)
 
+add_executable(overlay_regression EXCLUDE_FROM_ALL
+  tests/overlay_regression.cpp src/overlay.cpp src/text_renderer.cpp)
+target_include_directories(overlay_regression PRIVATE
+  include ${OpenCV_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIRS})
+target_link_libraries(overlay_regression PRIVATE ${OpenCV_LIBS} ${FREETYPE_LIBRARIES})
+target_compile_options(overlay_regression PRIVATE -UNDEBUG)
+
 add_executable(lane_video_replay EXCLUDE_FROM_ALL
   tests/lane_video_replay.cpp src/ufld_lane_detector.cpp src/warning_logic.cpp)
 target_include_directories(lane_video_replay PRIVATE include third_party/rknn ${OpenCV_INCLUDE_DIRS})

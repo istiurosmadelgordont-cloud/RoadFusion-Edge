@@ -14,6 +14,9 @@ struct Detection {
   float score = 0.0f;
   cv::Rect2f box;
   std::string name;
+  // Image-plane centre motion, pixels/second; never a world-space trajectory.
+  bool motion_valid = false;
+  cv::Point2f image_velocity;
 };
 
 struct LaneResult {

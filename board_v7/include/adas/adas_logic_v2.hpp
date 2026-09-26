@@ -18,6 +18,7 @@ namespace adas {
 // missing CAN data must never silently become speed=0 or signal=off.
 enum class TurnSignal { UNKNOWN, OFF, LEFT, RIGHT, HAZARD };
 enum class GearState { UNKNOWN, PARK, REVERSE, NEUTRAL, DRIVE };
+enum class ManeuverDirection { NONE, LEFT, STRAIGHT, RIGHT };
 
 struct VehicleState {
   bool speed_valid = false;
@@ -29,7 +30,16 @@ struct VehicleState {
   bool brake_valid = false;
   bool brake = false;
   bool demo = false;
+  bool route_valid = false;
+  ManeuverDirection route = ManeuverDirection::NONE;
 };
+
+inline ManeuverDirection intended_route(const VehicleState& vehicle) {
+  if (vehicle.route_valid) return vehicle.route;
+  if (vehicle.turn_valid && vehicle.turn == TurnSignal::LEFT) return ManeuverDirection::LEFT;
+  if (vehicle.turn_valid && vehicle.turn == TurnSignal::RIGHT) return ManeuverDirection::RIGHT;
+  return ManeuverDirection::NONE;  // Signal OFF does not establish a straight route.
+}
 
 class VehicleStateManager {
  public:
@@ -231,7 +241,6 @@ class LaneSemanticTracker {
   std::chrono::steady_clock::time_point previous_at_{};
 };
 
-enum class ManeuverDirection { NONE, LEFT, STRAIGHT, RIGHT };
 enum class LaneChangeState {
   IDLE, REQUEST, CHECK_RULE, CHECK_SAFE, ALLOW_CHANGE, CHANGING, DONE,
   BLOCKED, ABORT
@@ -366,9 +375,10 @@ enum class IntersectionAction { UNKNOWN, STOP, GO, WAIT };
 
 struct IntersectionResult {
   IntersectionAction action = IntersectionAction::UNKNOWN;
-  ManeuverDirection route = ManeuverDirection::STRAIGHT;
+  ManeuverDirection route = ManeuverDirection::NONE;
   bool route_valid = false;
   bool stable = false;
+  SignalResult selected_signal;
   const char* reason = "缺少路线意图";
 };
 
@@ -386,12 +396,14 @@ class IntersectionLogic {
   IntersectionResult update(const std::vector<Detection>& lights,
                             const VehicleState& vehicle) {
     IntersectionResult result;
-    result.route = vehicle.turn_valid && vehicle.turn == TurnSignal::LEFT
-                       ? ManeuverDirection::LEFT
-                       : vehicle.turn_valid && vehicle.turn == TurnSignal::RIGHT
-                             ? ManeuverDirection::RIGHT
-                             : ManeuverDirection::STRAIGHT;
-    result.route_valid = vehicle.turn_valid;
+    result.route = intended_route(vehicle);
+    result.route_valid = result.route != ManeuverDirection::NONE;
+    if (result.route != previous_route_) history_.clear();
+    previous_route_ = result.route;
+    if (!result.route_valid) {
+      history_.clear();
+      return result;
+    }
     int red_exact = -1, green_exact = -1;
     if (result.route == ManeuverDirection::LEFT) { red_exact = 8; green_exact = 12; }
     if (result.route == ManeuverDirection::RIGHT) { red_exact = 9; green_exact = 13; }
@@ -399,31 +411,47 @@ class IntersectionLogic {
     float exact_score = 0.0f, circle_score = 0.0f;
     IntersectionAction exact = IntersectionAction::UNKNOWN;
     IntersectionAction circle = IntersectionAction::UNKNOWN;
+    const Detection* exact_light = nullptr;
+    const Detection* circle_light = nullptr;
     for (const Detection& d : lights) {
       if (d.score < 0.4f) continue;
       if ((d.class_id == red_exact || d.class_id == green_exact) &&
-          d.score > exact_score) {
+          (!exact_light || (d.class_id == red_exact && exact != IntersectionAction::STOP) ||
+           ((d.class_id == red_exact) == (exact == IntersectionAction::STOP) && d.score > exact_score))) {
         exact_score = d.score;
         exact = d.class_id == red_exact ? IntersectionAction::STOP
                                         : IntersectionAction::GO;
+        exact_light = &d;
       }
-      if ((d.class_id == 7 || d.class_id == 11) && d.score > circle_score) {
+      if ((d.class_id == 7 || d.class_id == 11) &&
+          (!circle_light || (d.class_id == 7 && circle != IntersectionAction::STOP) ||
+           ((d.class_id == 7) == (circle == IntersectionAction::STOP) && d.score > circle_score))) {
         circle_score = d.score;
         circle = d.class_id == 7 ? IntersectionAction::STOP
                                  : IntersectionAction::GO;
+        circle_light = &d;
       }
     }
     result.action = exact != IntersectionAction::UNKNOWN ? exact : circle;
+    const Detection* selected = exact_light ? exact_light : circle_light;
+    if (selected) {
+      result.selected_signal.box = cv::Rect(selected->box);
+      result.selected_signal.score = selected->score;
+      result.selected_signal.state = result.action == IntersectionAction::STOP
+          ? SignalState::RED : SignalState::GREEN;
+    }
     if (result.action == IntersectionAction::UNKNOWN) {
       history_.clear();
       result.reason = "未获得匹配方向灯";
       return result;
     }
+    if (!history_.empty() && history_.back() != result.action) history_.clear();
     history_.push_back(result.action);
     if (history_.size() > 5) history_.pop_front();
     int same = 0;
     for (IntersectionAction value : history_) if (value == result.action) ++same;
     result.stable = same >= 3;
+    result.selected_signal.stable = result.stable;
     if (!result.stable) {
       result.action = IntersectionAction::WAIT;
       result.reason = "方向灯结果确认中";
@@ -436,6 +464,7 @@ class IntersectionLogic {
 
  private:
   std::deque<IntersectionAction> history_;
+  ManeuverDirection previous_route_ = ManeuverDirection::NONE;
 };
 
 enum class WarningCode { NONE, FCW, RCW, BSD_LEFT, BSD_RIGHT, LDW, LANE_CHANGE, INTERSECTION };
@@ -457,6 +486,11 @@ class WarningManager {
     add(result, rcw, WarningCode::RCW, 90, "后车快速接近 RCW");
     add(result, lane_change.state == LaneChangeState::ABORT,
         WarningCode::LANE_CHANGE, 88, lane_change.reason);
+    const bool occupied_request =
+        (lane_change.direction == ManeuverDirection::LEFT && left_bsd) ||
+        (lane_change.direction == ManeuverDirection::RIGHT && right_bsd);
+    add(result, occupied_request && lane_change.state != LaneChangeState::IDLE,
+        WarningCode::LANE_CHANGE, 88, "目标侧盲区占用，暂勿变道 LCA");
     add(result, left_bsd, WarningCode::BSD_LEFT, 80, "左侧盲区有目标");
     add(result, right_bsd, WarningCode::BSD_RIGHT, 80, "右侧盲区有目标");
     add(result, ldw, WarningCode::LDW, 70, "车道偏离预警 LDW");
