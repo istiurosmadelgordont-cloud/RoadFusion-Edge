@@ -1,0 +1,145 @@
+# RK3568 V7 single-model demo
+
+This board program uses the preserved 21-class V7 P2 model. Classes 7–14 are
+red/green circle, left, right and straight traffic lights in the exact order
+defined by `adas_training/configs/unified21_names.yaml`. It is not a 23-class
+model. The old 17-class board program remains in the sibling `board` folder.
+
+The PC pipeline exports `unified21_p2_v7_domestic_preserved.pt` to a 640-pixel
+Rockchip ONNX model, selects 400 class-balanced training images for INT8
+calibration, and converts that graph with RKNN Toolkit2 1.5.0 for `rk3568`.
+The installed RKNN model is `models/unified21_p2_v7_640_int8.rknn`.
+
+On the board, build and run from `/home/cat/rk3568_adas/board_v7`:
+
+```sh
+./scripts/build.sh
+./scripts/run.sh --source samples/project_video.mp4
+./scripts/run.sh --source test_inputs/ccf7_full_01470.jpg --headless --dump-detections
+./scripts/run_four_view.sh
+./scripts/run_four_view.sh \
+  --ufld-model models/ufldv2_culane_res18_1600x320_int8.rknn \
+  --ufld-every 2 --no-rear-lane
+```
+
+The four-view demo first builds the same 1920x1080 four-quadrant frame that
+the production FPGA will output: front and rear on the top row, left and right
+on the bottom row. That full frame is letterboxed to the fixed 640x640 RKNN
+input and sent through one NPU call. The video area in the UI is 1280x720
+(four 640x360 tiles). `--legacy-mosaic` retains the earlier direct 640x640
+composition for A/B checks. Press `C` to calibrate the front lane or
+`R` for the rear lane. Playback freezes while four points on the two lane
+markings are selected, then resumes after the ROI is validated and saved in
+`config/front_lane_roi.txt` or `config/rear_lane_roi.txt`. The green ROI and
+`CALIBRATED / LANE FOUND` status stay visible so loading the calibration can
+be distinguished from a temporary lane miss. The bottom bar can be clicked
+or dragged to seek all four clips to the same frame.
+
+Each view needs four clicks. For both front and rear, use the same clockwise
+order: **near left (bottom-left) -> far left (top-left) -> far right
+(top-right) -> near right (bottom-right)**. The program sorts the four points
+into `top-left, top-right, bottom-right, bottom-left`, so click order is not
+strict, but the recommended order makes mistakes easy to see. Put every point
+on the corresponding lane marking and keep the upper pair on roughly the same
+row. Front and rear therefore use eight points in total.
+
+Use the `PREV SCENE` and `NEXT SCENE` buttons, or the `[` and `]` keys, to
+cycle through the bundled synchronized scenes. Switching resets decoding,
+the timeline, ByteTrack, collision state and lane history. The lane detector is
+a C++ port of the PC demo's `LaneGeometryEstimator`: 640-pixel processing, dynamic road
+exposure, five-scale apparent-stripe-width filtering, HLS/HSV color masks,
+Sobel support, IPM, tracked-pixel search, robust quadratic fitting and the same
+five-update curve hold. Its converging-line fallback is also retained. The
+four-view loop uses the estimator's own temporal result directly instead of
+passing it through the older board-side geometry interpolator. Each camera and
+scene still needs an accurate `C` or `R` four-point calibration.
+
+The right sidebar includes a lightweight surround-location display. It keeps
+the ego vehicle near the bottom of a perspective road, draws the current
+front/rear lane corridors and forward traffic light, and places top-down car
+icons and pedestrians around it by camera direction and apparent image
+distance. Tracks come from ByteTrack. This is a low-cost ADAS visualization
+rather than metric BEV; real-world positions require camera intrinsics,
+extrinsics and ground-plane calibration.
+
+The camera textures and safety overlays refresh every displayed frame. Without
+`--ufld-model`, the complete PC lane estimator runs on an asynchronous
+latest-frame worker, with three front updates per rear update. Results older
+than 250 ms are discarded and render-time interpolation fills the gaps.
+
+With `--ufld-model`, YOLO and UFLD share the RK3568 NPU queue without
+overlapping. The deployed accuracy profile uses the official-width 1600x320
+UFLDv2 CULane ResNet18 model on the front view only. `--no-rear-lane` disables
+all rear lane work; rear YOLO, ByteTrack and RCW remain active. The 800x320
+student remains available as the lower-latency alternative.
+
+The full model measured 148.5 ms per standalone RKNN call and roughly
+192-244 ms for the complete asynchronous lane task while the four-view program
+was active. A 150-frame end-to-end headless run achieved 15.3 displayed FPS;
+the normal UI is not artificially FPS-limited. On simulated data each view is
+already 640x360. When a native 1920x1080 FPGA composite is supplied, the front
+UFLD path preserves the original 960x540 quadrant and scales only the resulting
+geometry to the 720p UI, avoiding an unnecessary loss of lane detail.
+
+Example accuracy-profile launch:
+
+```sh
+sh scripts/run_four_view.sh \
+  --ufld-model models/ufldv2_culane_res18_1600x320_int8.rknn \
+  --ufld-every 2 --no-rear-lane
+```
+
+The UFLD ONNX/RKNN files and calibration images are generated artifacts and
+are intentionally excluded from Git. The reproducible path is:
+
+1. `training/make_ufldv2_800x320_student.py`
+2. `training/distill_ufldv2_800x320.py`
+3. `tools/export_ufldv2_onnx.py`
+4. `tools/make_ufldv2_calibration.py`
+5. `tools/convert_ufldv2_int8.py`
+
+`ufld_benchmark` reports standalone RKNN latency on the board. Dashboard text
+refreshes every third frame.
+
+Normal playback does not use `VideoCapture::grab()` to skip source frames.
+When the complete pipeline cannot match a 30 FPS clip, it plays every source
+frame at the achieved display rate so the PC estimator receives a continuous
+motion sequence. `source_frame` should therefore advance with `shown` in the
+periodic log rather than running roughly twice as fast as it.
+
+`run_four_view.sh` uses `taskset -c 2,3` and one OpenCV worker thread. Linux
+CPU IDs 2 and 3 are the third and fourth Cortex-A55 cores. RKNN Runtime invokes
+the NPU independently; CPU affinity does not assign NPU cores on RK3568.
+Inference defaults to every second video frame to keep the UI responsive.
+The V7 P2 decoder checks for four 21-class score outputs before running.
+
+## Warning logic used by the four-view demo
+
+- Lane departure is measured relative to the calibrated ROI center. A warning
+  needs three reliable lane updates above the entry threshold and clears only
+  after four updates below the lower exit threshold. A lane inferred from one
+  visible marking may be drawn, but cannot start a warning.
+- Front/rear collision selection uses the detected lane polygon and keeps the
+  same ByteTrack ID across detection intervals. Distance, closing speed and TTC
+  update only on fresh NPU measurements; target changes reset the speed history.
+- The front wide-angle and rear telephoto NVIDIA cameras use separate focal
+  scales. Collision alerts and blind-spot alerts use consecutive-update
+  confirmation and hysteresis instead of a one-frame trigger.
+- The 1920x1080 dashboard is rendered in Chinese. Technical labels such as
+  FPS, NPU, TTC, YOLOv8 and detector class names remain in English.
+
+The eight light classes are displayed. Forward driving prompts use only
+circle and straight detections because left/right applicability requires lane
+or navigation context. These prompts are for demonstration, not vehicle
+control. V7 still has some arrow/circle confusion: on CCF frame 01470 the
+right-hand red arrow is labeled `traffic_red_circle`; the original PyTorch
+weight makes the same error. CCF frame 01445 has labeled small green arrows
+that both the PT and RKNN models miss at confidence 0.25. Quantization did not
+create those two failures.
+
+Smoke checks on the board (RKNN Runtime 1.5.0, driver 0.8.2): one source image
+gave a car box at `(1233.64, 976.32, 1270.49, 1008.03)` with confidence 0.385;
+the PT model gave `(1233.7, 974.7, 1274.3, 1011.6)` with confidence 0.358.
+On a 1080p sample video, headless 30-frame every-frame inference ran at about
+5.6 FPS, while 60 frames with every-second-frame inference ran at about
+11.1 FPS. Display FPS may be lower.

@@ -43,6 +43,11 @@ board_v7/build/
 board_v7/output/
 board_v7/four_view_sample/
 board_v7/*.log
+board_v8/build/
+board_v8/output/
+board_v8/four_view_sample/
+board_v8/*.log
+board_v8/snapshot*.png
 
 # Local board snapshots, runtime bundles and generated validation reports
 runtime_v7/
