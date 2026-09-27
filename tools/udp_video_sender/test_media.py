@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from app import App, fit_frame
 from media import parse_size, source_index, VideoFrames
-from protocol import Sender, HEADER, FRAME_BYTES
+from protocol import CHUNK_BYTES, Sender, HEADER, FRAME_BYTES
 from test_sender import FakeSocket
 
 
@@ -42,11 +42,13 @@ class MediaTests(unittest.TestCase):
                 app.run(('192.168.1.102',30,120,'图片文件',str(path),False,
                          (640,360),15,(321,181),'拉伸填满'))
             self.assertFalse(any(k in ('error','setup_error') for k,_ in app.events.queue))
-            self.assertEqual(len(sock.sent),98)
-            self.assertEqual(sock.sent[0][0],bytes.fromhex('f05aa50f014100b5'))
-            payload = b''.join(p for p,_ in sock.sent[1:])
-            self.assertEqual(len(payload),321*181*2)
-            self.assertEqual(len(sock.sent[-1][0]),1002)
+            frame_bytes = 321*181*2
+            self.assertEqual(len(sock.sent), 2 + (frame_bytes + CHUNK_BYTES - 1)//CHUNK_BYTES)
+            self.assertEqual(sock.sent[0][0],bytes.fromhex('f05aa50f'))
+            self.assertEqual(sock.sent[1][0],bytes.fromhex('014100b5'))
+            payload = b''.join(p for p,_ in sock.sent[2:])
+            self.assertEqual(len(payload),frame_bytes)
+            self.assertEqual(len(sock.sent[-1][0]),frame_bytes % CHUNK_BYTES)
             pixels = np.frombuffer(payload,dtype='>u2').reshape(181,321)
             self.assertTrue(np.all(pixels==0xf800))
             self.assertEqual(np.count_nonzero(pixels),321*181)

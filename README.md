@@ -22,6 +22,16 @@ RK3568 NPU：INT8 道路目标检测
 ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 ```
 
+## 双板采集与最新版以太网上位机（2026-09-27）
+
+系统连接、四路映射和启动步骤见 [双板系统说明](docs/dual_board_system.md)。
+最新版 [Windows UDP 上位机](tools/udp_video_sender/README.md) 支持选择本机 IPv4、
+目标 IPv4/MAC、输入与输出分辨率/帧率，以及 VS 消隐和包间隔。
+
+两份最新 FPGA 工程已在本地整理；其中厂商 IP、配置及工程材料的公开再分发授权
+尚待确认，因此本次只更新上位机和说明，未发布这两份新工程。
+已有 FPGA 历史版本继续保留，不能当作本次双板工程。
+
 ## FPGA 工程内容
 
 仓库的 [`fpga/`](fpga/) 目录包含可恢复的 Pango PDS 工程、关键 RTL、协议说明和验证记录：
@@ -177,3 +187,4 @@ intermediate source frames when necessary to preserve the video's original speed
 
 模型文件位于 `models/`。第三方 RKNN SDK、Python 虚拟环境、量化图片和
 测试视频未纳入版本控制。
+

@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 
 from app import App, fit_frame, color_bars, check_network
-from protocol import FRAME_BYTES, HEADER, Sender, packets, rgb565
+from protocol import CHUNK_BYTES, FRAME_BYTES, HEADER, MAGIC, Sender, packets, rgb565
 
 
 class FakeSocket:
@@ -34,10 +34,12 @@ class ProtocolTests(unittest.TestCase):
         data = bytes(range(256)) * 4050
         self.assertEqual(len(data), FRAME_BYTES)
         datagrams = list(packets(data))
-        self.assertEqual(datagrams[0], bytes.fromhex('f05aa50f03c0021c'))
-        self.assertEqual(len(datagrams), 865)
-        self.assertEqual(set(map(len, datagrams[1:])), {1200})
-        self.assertEqual(b''.join(datagrams[1:]), data)
+        self.assertEqual(datagrams[0], MAGIC)
+        self.assertEqual(datagrams[1], bytes.fromhex('03c0021c'))
+        self.assertEqual(datagrams[0] + datagrams[1], HEADER)
+        self.assertEqual(len(datagrams), 2 + FRAME_BYTES // CHUNK_BYTES)
+        self.assertEqual(set(map(len, datagrams[2:])), {CHUNK_BYTES})
+        self.assertEqual(b''.join(datagrams[2:]), data)
         self.assertTrue(all(len(p) % 4 == 0 and len(p) <= 1472 for p in datagrams))
 
     def test_receiver_word_order_and_two_frames(self):
@@ -80,11 +82,36 @@ class ProtocolTests(unittest.TestCase):
             now[0] = deadline + .010  # simulate a 10 ms scheduling delay
         sender = Sender('127.0.0.1', sock=sock, clock=lambda: now[0], wait=wait)
         sender.send_frame(bytes(FRAME_BYTES))
-        self.assertEqual(len(sock.sent), 865)
-        self.assertEqual(len(waits), 866)
+        self.assertEqual(len(sock.sent), 2 + FRAME_BYTES // CHUNK_BYTES)
+        self.assertEqual(len(waits), 3 + FRAME_BYTES // CHUNK_BYTES)
         self.assertAlmostEqual(waits[0], .002)
         self.assertAlmostEqual(waits[-1], .002)
-        self.assertTrue(all(v >= .0000843 for v in waits[1:-1]))
+        self.assertTrue(all(v >= .000019999 for v in waits[1:-1]))
+
+    def test_configurable_short_pixel_bursts(self):
+        sock = FakeSocket()
+        now, waits = [0.0], []
+        def wait(deadline):
+            waits.append(deadline - now[0])
+            now[0] = deadline
+        sender = Sender('127.0.0.1', sock=sock, clock=lambda: now[0], wait=wait,
+                        chunk_bytes=128, min_packet_gap_us=50)
+        sender.send_frame(bytes(FRAME_BYTES))
+        self.assertEqual(set(len(p) for p, _ in sock.sent[2:]), {128})
+        self.assertTrue(all(v >= .000049999 for v in waits[1:-1]))
+
+    def test_configurable_vs_blanking_gap(self):
+        sock = FakeSocket()
+        now, waits = [0.0], []
+        def wait(deadline):
+            waits.append(deadline - now[0])
+            now[0] = deadline
+        sender = Sender('127.0.0.1', sock=sock, clock=lambda: now[0],
+                        wait=wait, vs_blank_ms=1.67)
+        sender.send_frame(bytes(FRAME_BYTES))
+        self.assertEqual(sock.sent[0][0], MAGIC)
+        self.assertEqual(sock.sent[1][0], bytes.fromhex('03c0021c'))
+        self.assertAlmostEqual(waits[0], .00167)
 
     def test_network_error_does_not_retry(self):
         sock = FakeSocket(fail_at=5)
@@ -146,7 +173,7 @@ class ProtocolTests(unittest.TestCase):
         sender = Sender('127.0.0.1', sock=sock, wait=lambda _: None)
         with patch('app.check_network', return_value='test'), patch('app.Sender', return_value=sender):
             app.run(('192.168.1.102', 10, 120, '彩条测试', '', True))
-        self.assertEqual(len(sock.sent), 865)
+        self.assertEqual(len(sock.sent), 2 + FRAME_BYTES // CHUNK_BYTES)
         self.assertEqual(sum(len(p) for p, _ in sock.sent), FRAME_BYTES + 8)
         self.assertFalse(any(event[0] == 'error' for event in list(app.events.queue)))
 
