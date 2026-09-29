@@ -1,6 +1,6 @@
 # FPGA 视频 / 图片测试上位机
 
-最新版双板四路系统与两路以太网目标参数见 [双板系统说明](../../docs/dual_board_system.md)。板卡 1 以太网 0 为 `192.168.1.10 / A0-B1-C2-D3-E4-E4`，以太网 1 为 `192.168.1.11 / A0-B1-C2-D3-E1-E1`，当前均使用 960×540 RGB565 输入。早期快照保留于 [fpga/ethernet_video](../../fpga/ethernet_video/README.md)。
+最新版双板四路系统与两路以太网目标参数见 [fpga/dual_board](../../fpga/dual_board/README.md)。板卡 1 以太网 0 为 `192.168.1.10 / A0-B1-C2-D3-E4-E4`，以太网 1 为 `192.168.1.11 / A0-B1-C2-D3-E1-E1`，当前均使用 960×540 RGB565 输入。早期快照保留于 [fpga/ethernet_video](../../fpga/ethernet_video/README.md)。
 
 在 Windows 安装 Python 3 后双击 `start.cmd` 启动；首次运行会在本目录创建 `.venv` 并安装 `requirements.txt` 中的依赖，需要能访问 Python 包源。更新后请关闭旧窗口再打开。支持视频、静态图片和彩条。
 
