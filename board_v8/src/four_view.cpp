@@ -1,4 +1,5 @@
 #include "adas/config.hpp"
+#include "adas/avm_renderer.hpp"
 #include "adas/pcie_capture.hpp"
 #include "adas/preview_resize.hpp"
 #include "adas/adas_logic_v2.hpp"
@@ -26,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <future>
+#include <deque>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -43,6 +45,24 @@
 #include <rga/im2d.h>
 
 namespace {
+// Accepted new results only: redraws and tracker predictions never count.
+class RecognitionRate {
+ public:
+  using Clock = std::chrono::steady_clock;
+  void reset() { samples_.clear(); started_ = Clock::now(); }
+  void record() { samples_.push_back(Clock::now()); }
+  double fps() {
+    const auto now = Clock::now();
+    while (!samples_.empty() && now - samples_.front() >= std::chrono::seconds(2))
+      samples_.pop_front();
+    const double elapsed = std::chrono::duration<double>(now - started_).count();
+    return elapsed >= 1.0 ? samples_.size() / std::min(2.0, elapsed) : 0.0;
+  }
+ private:
+  Clock::time_point started_ = Clock::now();
+  std::deque<Clock::time_point> samples_;
+};
+
 volatile sig_atomic_t quit_requested = 0;
 void request_quit(int) { quit_requested = 1; }
 
@@ -57,9 +77,9 @@ const int kFpgaViewH = 540;
 const int kFpgaCompositeW = 2 * kFpgaViewW;
 const int kFpgaCompositeH = 2 * kFpgaViewH;
 const char* kFiles[] = {"front.mp4", "rear.mp4", "left.mp4", "right.mp4"};
-const cv::Rect kIntentLeft(1535, 414, 78, 35);
-const cv::Rect kIntentOff(1621, 414, 78, 35);
-const cv::Rect kIntentRight(1707, 414, 78, 35);
+const cv::Rect kIntentLeft(1740, 372, 47, 35);
+const cv::Rect kIntentOff(1791, 372, 47, 35);
+const cv::Rect kIntentRight(1842, 372, 47, 35);
 const cv::Rect kSignalVerify(1404, 563, 125, 29);
 const cv::Rect kPrevSceneButton(1040, 980, 150, 38);
 const cv::Rect kNextSceneButton(1200, 980, 150, 38);
@@ -73,7 +93,7 @@ struct Options {
   std::string model = "models/unified21_p2_v7_640_int8.rknn";
   std::string scene = "four_view_sample/e716f3ed";
   std::string snapshot;
-  std::string ufld_model;
+  std::string ufld_model = "models/ufldv2_culane_res18_1600x320_int8.rknn";
   int cpu_threads = 2;
   int detect_every = 2;
   int ufld_every = 5;
@@ -239,6 +259,35 @@ class SyncCapture {
   int height_ = 0;
 };
 
+// Rear-corner replay streams are optional and decoded only by the BEV worker.
+// Their board copies are aligned to the primary replay's frame timeline offline.
+struct AvmReplayWorker {
+  adas::AvmRenderer renderer;
+  std::array<cv::VideoCapture,3> extra;
+  std::array<int,3> next{{0,0,0}};
+  AvmReplayWorker(const adas::AvmRenderer& source, const std::string& scene, bool live)
+      : renderer(source) {
+    if (live) return;
+    const char* names[]={"rear_left.mp4","rear_right.mp4","front_tele.mp4"};
+    for (int i=0;i<3;++i) {
+      const std::string path=scene+"/"+names[i];
+      if (std::ifstream(path.c_str()).good()) extra[i].open(path);
+    }
+  }
+  cv::Mat render(const std::array<cv::Mat,4>& primary, int frame) {
+    std::array<cv::Mat,7> images;
+    for(int i=0;i<4;++i) images[i]=primary[i];
+    for(int i=0;i<3;++i) {
+      if(!extra[i].isOpened()) continue;
+      if(frame<next[i]) { extra[i].set(cv::CAP_PROP_POS_FRAMES,frame); next[i]=frame; }
+      bool ok=true;
+      while(next[i]<frame) { if(!extra[i].grab()) {ok=false;break;} ++next[i]; }
+      if(ok && extra[i].read(images[i+4])) ++next[i];
+    }
+    return renderer.render(images);
+  }
+};
+
 bool scene_complete(const std::string& scene) {
   std::ifstream synchronized((scene + "/sync_720p.mp4").c_str(), std::ios::binary);
   if (synchronized) return true;
@@ -357,6 +406,8 @@ adas::LaneResult scale_lane_result(const adas::LaneResult& source,
   scale_points(result.left);
   scale_points(result.right);
   scale_points(result.polygon);
+  for (auto& boundary : result.boundaries) scale_points(boundary);
+  for (auto& polygon : result.lane_polygons) scale_points(polygon);
   result.binary.release();
   result.bird_eye.release();
   result.curve_fit.release();
@@ -972,7 +1023,7 @@ void draw_surround_map(cv::Mat& canvas, const cv::Rect& area,
           right_level ? alert_color(right_level) : idle, .42);
 }
 
-void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms,
+void draw_sidebar(cv::Mat& canvas, double fps, double yolo_fps, double ufld_fps, double npu_ms,
                   const adas::SignalResult& signal,
                   const adas::LaneResult& front_lane, const adas::LaneResult& rear_lane,
                   const adas::RiskResult& front_risk,
@@ -994,16 +1045,12 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
     caption(canvas, title, x + 16, y + 28, white, 0.62);
     cv::line(canvas, {x + 1, y + 40}, {x + w - 2, y + 40}, cv::Scalar(85, 59, 29));
   };
-  card(86, 220, "周边风险方位    Surround Awareness");
-  draw_surround_map(canvas, {x + 12, 132, w - 24, 166}, front_risk, rear_risk,
-                    left_blind, right_blind, vehicle, side_fresh);
-
-  card(318, 144, "转向与变道    Maneuver");
-  caption(canvas, vehicle.demo ? "转向输入  DEMO" : "转向输入  CAN 未接",
-          x + 18, 391, vehicle.demo ? cyan : muted, 0.58);
-  caption(canvas, "10秒自动复位", x + 297, 391, muted, 0.50);
+  card(86, 376, "2D 鸟瞰环视    AVM");
+  caption(canvas, "转向意图", 1740, 292, white, 0.54);
+  caption(canvas, vehicle.demo ? "DEMO 输入" : "CAN 未接",
+          1740, 319, vehicle.demo ? cyan : muted, 0.48);
   caption(canvas, side_fresh ? "盲区数据有效" : "盲区数据过期",
-          x + 18, 433, side_fresh ? green : muted, 0.50);
+          1740, 343, side_fresh ? green : muted, 0.46);
   const cv::Rect buttons[] = {kIntentLeft,kIntentOff,kIntentRight};
   const char* names[] = {"左", "关闭", "右"};
   for (int i=0; i<3; ++i) {
@@ -1012,10 +1059,10 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
     const bool selected = (i==0 && vehicle.turn==adas::TurnSignal::LEFT) ||
         (i==1 && (!vehicle.turn_valid || vehicle.turn==adas::TurnSignal::OFF)) ||
         (i==2 && vehicle.turn==adas::TurnSignal::RIGHT);
-    caption(canvas,names[i],b.x+18,b.y+24,selected?cyan:muted,.51);
+    caption(canvas,names[i],b.x+10,b.y+24,selected?cyan:muted,.49);
   }
   caption(canvas, adas::lane_change_state_caption(lane_change.state),
-          x + 400, 439, lane_change.permitted ? green : muted, 0.50);
+          1740, 438, lane_change.permitted ? green : muted, 0.46);
 
   card(474, 128, "交通灯与路口决策    Traffic Light");
   const char* signal_text = "未确认";
@@ -1093,8 +1140,8 @@ void draw_sidebar(cv::Mat& canvas, double fps, double instant_fps, double npu_ms
 
   card(886, 132, "系统性能    System Performance");
   std::ostringstream perf, timing;
-  perf << std::fixed << std::setprecision(1) << "实际显示 " << fps << " FPS（1秒计数）";
-  timing << std::fixed << std::setprecision(1) << "瞬时 " << instant_fps << " FPS    "
+  perf << std::fixed << std::setprecision(1) << "识别 FPS  YOLO " << yolo_fps << "  UFLD " << ufld_fps;
+  timing << std::fixed << std::setprecision(1) << "显示 " << fps << " FPS  "
          << std::setprecision(0) << "YOLO " << npu_ms << " ms  车道 " << lane_ms << " ms";
   caption(canvas, perf.str(), x + 17, 952, green, 0.57);
   caption(canvas, timing.str(), x + 17, 980, white, 0.48);
@@ -1284,6 +1331,18 @@ int run_four_view(int argc, char** argv) {
   int last_detector_start = -1000000;
   int last_ufld_start = -1000000;
   double npu_ms = 0.0;
+  adas::AvmRenderer avm;
+  avm.load(options.scene + "/avm.yml");
+  std::shared_ptr<AvmReplayWorker> avm_worker(new AvmReplayWorker(avm,options.scene,live));
+  bool avm_visible = false;
+  cv::Mat avm_preview;
+  auto avm_updated = std::chrono::steady_clock::time_point();
+  std::future<cv::Mat> avm_future;
+  bool avm_running = false;
+  bool avm_changed = true;
+  RecognitionRate yolo_rate, ufld_rate;
+  double object_interval_ms = -1.0;
+  double object_result_ms = -1.0;
   double display_fps = 0.0;
   double instant_fps = 0.0;
   auto previous_presentation = std::chrono::steady_clock::time_point();
@@ -1319,6 +1378,8 @@ int run_four_view(int argc, char** argv) {
             << (options.legacy_mosaic ? "legacy 640x640 mosaic" : "FPGA-style 1920x1080")
             << "; video_ui=1280x720\n";
   const auto start = std::chrono::steady_clock::now();
+  auto playback_epoch = start;
+  int playback_dropped_frames = 0;
   cv::Mat canvas(kCanvasH, kCanvasW, CV_8UC3, cv::Scalar(24, 15, 7));
   cv::rectangle(canvas, cv::Rect(0, 0, kCanvasW, kHeaderH),
                 cv::Scalar(37, 24, 10), cv::FILLED);
@@ -1405,7 +1466,10 @@ int run_four_view(int argc, char** argv) {
       drive = adas::DriveResult();
       if (single_composite) streams[0].reset();
       else for (int i = 0; i < 4; ++i) streams[i].reset();
+      yolo_rate.reset();
+      ufld_rate.reset();
       source_frame_index = 0;
+      playback_epoch = std::chrono::steady_clock::now();
       signal_logic = adas::SignalLogic();
       drive_logic.reset();
       front_lane_detector.reset();
@@ -1433,6 +1497,9 @@ int run_four_view(int argc, char** argv) {
       InferenceResult result = inference_future.get();
       const auto tracking_now = std::chrono::steady_clock::now();
       if (tracking_now - result.captured_at < std::chrono::milliseconds(500)) {
+        yolo_rate.record();
+        object_result_ms = std::chrono::duration<double, std::milli>(
+            tracking_now - result.captured_at).count();
         for (int i = 0; i < 4; ++i) {
           detections[i] = trackers[i].update(result.detections[i], result.captured_at, tracking_now);
           observed[i] = trackers[i].observations();
@@ -1469,6 +1536,7 @@ int run_four_view(int argc, char** argv) {
                               // Preserve the existing 1s display expiry below.
                               std::chrono::milliseconds(live ? 450 : 300);
       if (fresh_lane) {
+        if (result.neural && result.camera == 0) ufld_rate.record();
         const int c = result.camera;
         auto& target = c == 0 ? front_lane_target : rear_lane_target;
         auto& monitor = c == 0 ? front_lane_warning : rear_lane_warning;
@@ -1504,12 +1572,16 @@ int run_four_view(int argc, char** argv) {
     if (detector_pending && !inference_running &&
         (!lane_running || !lane_task_uses_npu)) {
       last_detector_start = shown_frames;
+      if (task_launched[0] != std::chrono::steady_clock::time_point())
+        object_interval_ms = std::chrono::duration<double, std::milli>(
+            frame_start - task_launched[0]).count();
       task_launched[0] = frame_start;
       if (options.separate) {
         const int camera = (shown_frames / options.detect_every) % 4;
         const auto measured_at = std::chrono::steady_clock::now();
         detections[camera] = trackers[camera].update(
             detector.detect(frames[camera], &npu_ms), measured_at, measured_at);
+        yolo_rate.record();
         observed[camera] = trackers[camera].observations();
         detection_seconds[camera] = (live ? std::chrono::duration<double>(frame_captured - start).count() : source_frame_index / source_fps);
         fresh_measurement[camera] = true;
@@ -1714,7 +1786,7 @@ int run_four_view(int argc, char** argv) {
         lane_semantic, left_blind, right_blind, side_fresh, vehicle_state);
     const auto render_start = std::chrono::steady_clock::now();
     adas::draw_overlay(frames[0], detections[0], lane, intersection_result.selected_signal, front_risk,
-                       adas::DriveResult(), display_fps, npu_ms, &lane_semantic);
+                       adas::DriveResult(), yolo_rate.fps(), npu_ms, &lane_semantic);
     if (!current_lights.empty()) {
       const char* route = intersection_result.route == adas::ManeuverDirection::LEFT ? "LEFT" :
           intersection_result.route == adas::ManeuverDirection::RIGHT ? "RIGHT" : "STRAIGHT";
@@ -1759,7 +1831,7 @@ int run_four_view(int argc, char** argv) {
     if (refresh_dashboard) {
       const bool health_ready = shown_frames >
           std::max(10, static_cast<int>(std::max(1.0, source_fps) * 2.0));
-      draw_sidebar(canvas, display_fps, instant_fps, npu_ms, signal, lane, rear_lane,
+      draw_sidebar(canvas, display_fps, yolo_rate.fps(), ufld_rate.fps(), npu_ms, signal, lane, rear_lane,
                    front_risk, rear_risk, left_blind, right_blind, side_fresh,
                    health_ready,
                    last_lane_ms, lane_age_ms, vehicle_state, lane_semantic,
@@ -1773,13 +1845,63 @@ int run_four_view(int argc, char** argv) {
       if (!live) draw_progress_bar(canvas, source_frame_index, source_frames, calibration_paused);
     }
     draw_view_alerts(canvas, view_levels);
+    // AVM warps run on a worker. The camera and UI presentation never wait for
+    // a new BEV image; a late result simply stays on the last known preview.
+    if (avm_running && avm_future.wait_for(std::chrono::milliseconds(0)) ==
+                           std::future_status::ready) {
+      avm_preview = avm_future.get();
+      avm_running = false;
+      avm_changed = true;
+    }
+    if (!avm_running && avm.count() > 0 && !calibration_paused &&
+        frame_start - avm_updated >= std::chrono::milliseconds(500)) {
+      std::array<cv::Mat,4> avm_input;
+      for (int i=0; i<4; ++i) avm_input[i] = source_images[i].clone();
+      const auto worker=avm_worker;
+      const int avm_frame=source_frame_index;
+      avm_future = std::async(std::launch::async, [worker,avm_input,avm_frame]() {
+        return worker->render(avm_input,avm_frame);
+      });
+      avm_running = true;
+      avm_updated = frame_start;
+    }
+    if (avm_preview.empty()) {
+      avm_preview = avm.render(std::array<cv::Mat,4>());
+      avm_changed = true;
+    }
+    if (refresh_dashboard || avm_changed) {
+      cv::rectangle(canvas,cv::Rect(1402,130,326,329),cv::Scalar(20,28,35),-1);
+      cv::Mat avm_thumb;
+      const cv::Rect near_vehicle(90,90,460,460);
+      cv::resize(avm_preview(near_vehicle),avm_thumb,cv::Size(326,326),0,0,cv::INTER_AREA);
+      avm_thumb.copyTo(canvas(cv::Rect(1402,132,326,326)));
+      caption(canvas,"前 FRONT",1526,153,cv::Scalar(245,232,216),.37);
+      caption(canvas,"后 REAR",1532,449,cv::Scalar(245,232,216),.37);
+      caption(canvas,avm.count() ? (avm.approximate() ? "近似投影" : "地面投影") : "待标定",1740,158,cv::Scalar(90,210,245),.52);
+      caption(canvas,std::to_string(avm.count()) + " 路相机",1740,184,cv::Scalar(190,195,200),.44);
+      caption(canvas,"斜纹：盲区",1740,214,cv::Scalar(190,195,200),.43);
+      caption(canvas,"V 放大查看",1740,247,cv::Scalar(190,195,200),.43);
+      avm_changed = false;
+    }
+    const cv::Rect avm_button(800, 980, 220, 40);
+    cv::rectangle(canvas, avm_button, cv::Scalar(65,100,130), 1);
+    caption(canvas, avm_visible ? "V 四路视频" : "V 2D环视 / AVM", 814,1007,cv::Scalar(240,220,170),.55);
+    if (avm_visible) {
+      cv::rectangle(canvas, cv::Rect(10,85,1365,870),cv::Scalar(20,28,35),-1);
+      cv::Mat bird = avm_preview, enlarged;
+      cv::resize(bird,enlarged,cv::Size(810,810));
+      enlarged.copyTo(canvas(cv::Rect(285,125,810,810)));
+      caption(canvas,"2D AVM  地面投影 / 有效范围内融合",30,112,cv::Scalar(240,220,170),.65);
+      caption(canvas,std::string(avm.approximate() ? "估计参数 " : "已标定 ") + std::to_string(avm.count()) + " 路   斜纹：未覆盖区域",30,950,cv::Scalar(160,190,220),.55);
+      if (!avm.count()) caption(canvas,"请加载当前素材组的 avm.yml 标定",360,500,cv::Scalar(70,210,255),.65);
+    }
     render_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - render_start).count();
     const int snapshot_frame = options.snapshot_frame >= 0 ? options.snapshot_frame :
         (options.max_frames > 0 ? std::min(4, options.max_frames - 1) : 4);
     if (!options.snapshot.empty() && shown_frames == snapshot_frame) {
       cv::Mat snapshot = canvas;
-      if (gl_presenter) {
+      if (gl_presenter && !avm_visible) {
         snapshot = canvas.clone();
         for (int i = 0; i < 4; ++i) draw_tile(snapshot, frames[i], i);
       }
@@ -1790,13 +1912,14 @@ int run_four_view(int argc, char** argv) {
       int click_x = -1, click_y = -1;
       int scene_delta = 0;
       if (gl_presenter) {
-        gl_presenter->present(canvas, frames, kViewRects);
+        gl_presenter->present(canvas, avm_visible ? std::array<cv::Mat,4>() : frames, kViewRects);
         key = gl_presenter->poll_input(&click_x, &click_y);
       } else {
         cv::imshow("RK3568 V7 | NVIDIA 4 VIEW", canvas);
         key = cv::waitKey(1) & 0xff;
       }
       if (key == 'q' || key == 27) break;
+      if (key == 'v' || avm_button.contains(cv::Point(click_x,click_y))) avm_visible = !avm_visible;
       if (!live && key == 'm') {
         options.separate = !options.separate;
         for (auto& tracker : trackers) tracker.reset();
@@ -1836,7 +1959,7 @@ int run_four_view(int argc, char** argv) {
         if (kPrevSceneButton.contains(click)) scene_delta = -1;
         if (kNextSceneButton.contains(click)) scene_delta = 1;
       }
-      if (key == 'c' || key == 'r') {
+      if (!avm_visible && (key == 'c' || key == 'r')) {
         finish_lane_task();
         calibration_target = key == 'c' ? CalibrationTarget::FRONT : CalibrationTarget::REAR;
         calibration_points.clear();
@@ -1857,6 +1980,11 @@ int run_four_view(int argc, char** argv) {
           signal = adas::SignalResult();
           drive = adas::DriveResult();
           source_frame_index = target;
+          playback_epoch = std::chrono::steady_clock::now() -
+              std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                  std::chrono::duration<double>(target / source_fps));
+          avm_preview.release();
+          avm_changed = true;
           for (auto& tracker : trackers) tracker.reset();
           for (auto& view : detections) view.clear();
           signal_logic = adas::SignalLogic();
@@ -1931,10 +2059,17 @@ int run_four_view(int argc, char** argv) {
                        streams, next_fps, next_frames, next_single_composite)) {
           scene_index = target_scene;
           options.scene = scene_paths[scene_index];
+          if (avm_running) { avm_future.wait(); avm_running = false; }
+          avm.load(options.scene + "/avm.yml");
+          avm_worker.reset(new AvmReplayWorker(avm,options.scene,live));
+          avm_preview.release();
+          avm_changed = true;
+          avm_updated = std::chrono::steady_clock::time_point();
           source_fps = next_fps;
           source_frames = next_frames;
           single_composite = next_single_composite;
           source_frame_index = 0;
+          playback_epoch = std::chrono::steady_clock::now();
           shown_frames = 0;
           lane_task_sequence = 0;
           ufld_task_sequence = 0;
@@ -1966,6 +2101,8 @@ int run_four_view(int argc, char** argv) {
           right_blind_monitor.reset();
           for (auto& tracker : trackers) tracker.reset();
           for (auto& view : detections) view.clear();
+          yolo_rate.reset();
+          ufld_rate.reset();
           display_fps = 0.0;
           instant_fps = 0.0;
           previous_presentation = std::chrono::steady_clock::time_point();
@@ -1999,26 +2136,54 @@ int run_four_view(int argc, char** argv) {
     if (!calibration_paused) ++source_frame_index;
     if (options.max_frames > 0 && shown_frames >= options.max_frames) break;
     if (calibration_paused) {
+      // Keep the media clock still while a calibration frame is frozen.
+      playback_epoch = std::chrono::steady_clock::now() -
+          std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+              std::chrono::duration<double>(source_frame_index / source_fps));
       std::this_thread::sleep_for(std::chrono::milliseconds(33));
     } else if (!options.benchmark && (!live || options.display_fps_limit > 0)) {
       const double playback_fps = options.display_fps_limit > 0.0
           ? (live ? options.display_fps_limit : std::min(source_fps, options.display_fps_limit)) : source_fps;
-      const double period = 1.0 / playback_fps;
-      const double spent = std::chrono::duration<double>(
-          std::chrono::steady_clock::now() - frame_start).count();
-      if (spent < period) {
-        std::this_thread::sleep_for(std::chrono::duration<double>(period - spent));
+      if (!live) {
+        // Decode only the most recent frame needed for the source time line.
+        // All four synchronized streams advance together; inference uses the
+        // displayed source frame's timestamp and never invents dropped results.
+        const double elapsed = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - playback_epoch).count();
+        const int target = static_cast<int>(elapsed * playback_fps);
+        const int wanted = std::max(0, std::min({target - source_frame_index,
+                                                 source_frames - source_frame_index - 1, 8}));
+        for (int dropped=0; dropped<wanted; ++dropped) {
+          bool grabbed = streams[0].grab();
+          if (!single_composite)
+            for (int i=1; i<4; ++i) grabbed = streams[i].grab() && grabbed;
+          if (!grabbed) break;
+          ++source_frame_index;
+          ++playback_dropped_frames;
+        }
+        const double until_next = (source_frame_index / playback_fps) -
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - playback_epoch).count();
+        if (until_next > 0.0)
+          std::this_thread::sleep_for(std::chrono::duration<double>(until_next));
       } else {
-        // Do not grab/drop source frames. The PC demo processes frames in
-        // sequence; skipping here made its temporal lane tracker jump several
-        // frames at a time. When RK3568 is slower than the 30 FPS source, play
-        // the demo slower instead of corrupting the lane motion sequence.
+        const double period = 1.0 / playback_fps;
+        const double spent = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - frame_start).count();
+        if (spent < period)
+          std::this_thread::sleep_for(std::chrono::duration<double>(period - spent));
       }
     }
     if (shown_frames % 30 == 0) std::cout << "shown=" << shown_frames
-        << " source_frame=" << source_frame_index << " fps_1s=" << display_fps
+        << " source_frame=" << source_frame_index
+        << " playback_dropped=" << playback_dropped_frames << " fps_1s=" << display_fps
         << " fps_instant=" << instant_fps
+        << " yolo_result_fps=" << yolo_rate.fps()
+        << " ufld_front_result_fps=" << ufld_rate.fps()
         << " npu_ms=" << npu_ms << " lanes=" << lane.valid << ',' << rear_lane.valid
+        << " object_interval_ms=" << object_interval_ms
+        << " object_result_ms=" << object_result_ms
+        << " object_age_ms=" << (last_detection_at == std::chrono::steady_clock::time_point() ? -1.0 :
+            std::chrono::duration<double, std::milli>(frame_start - last_detection_at).count())
         << " capture_ms=" << capture_ms << " wait_ms=" << wait_ms << " split_ms=" << split_ms << " lane_ms=" << last_lane_ms
         << " compose_ms=" << compose_ms << " render_ms=" << render_ms
         << " frame_ms=" << std::chrono::duration<double, std::milli>(
@@ -2041,6 +2206,11 @@ int run_four_view(int argc, char** argv) {
         << " departure_side=" << static_cast<int>(lane.departure_side)
         << " lane_identity=" << lane.identity_uncertain
         << " lane_partial=" << lane.partial
+        << " lane_coverage=" << lane.boundary_coverage[0] << ','
+        << lane.boundary_coverage[1] << ',' << lane.boundary_coverage[2] << ','
+        << lane.boundary_coverage[3]
+        << " adjacent_polygons=" << !lane.lane_polygons[0].empty() << ','
+        << !lane.lane_polygons[2].empty()
         << " lane_reassignment=" << static_cast<int>(lane.reassignment_side)
         << " risk_target=" << front_risk.target << ',' << rear_risk.target
         << " risk_warning=" << front_risk.warning << ',' << rear_risk.warning

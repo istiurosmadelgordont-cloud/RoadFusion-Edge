@@ -91,6 +91,8 @@ struct LaneMarkingObservation {
   LaneMarking right = LaneMarking::UNKNOWN;
   float left_coverage = 0.0f;
   float right_coverage = 0.0f;
+  std::array<LaneMarking, 4> boundaries{};
+  std::array<float, 4> boundary_coverage{};
 };
 
 struct LaneSemantic {
@@ -104,6 +106,9 @@ struct LaneSemantic {
   bool right_change_allowed = false;
   float left_evidence = 0.0f;
   float right_evidence = 0.0f;
+  // UFLD outer/ego-left/ego-right/outer. Only ego boundaries govern changes.
+  std::array<LaneMarking, 4> boundaries{};
+  std::array<float, 4> boundary_evidence{};
 };
 
 inline LaneMarking classify_lane_pixels(const cv::Mat& paint,
@@ -160,6 +165,15 @@ inline LaneMarkingObservation observe_lane_markings(const cv::Mat& bgr,
   cv::bitwise_or(white, yellow, paint);
   result.left = classify_lane_pixels(paint, lane.left, &result.left_coverage);
   result.right = classify_lane_pixels(paint, lane.right, &result.right_coverage);
+  result.boundaries[1] = result.left;
+  result.boundaries[2] = result.right;
+  result.boundary_coverage[1] = result.left_coverage;
+  result.boundary_coverage[2] = result.right_coverage;
+  for (int slot : {0, 3}) {
+    if (lane.lane_polygons[slot == 0 ? 0 : 2].empty()) continue;
+    result.boundaries[slot] = classify_lane_pixels(
+        paint, lane.boundaries[slot], &result.boundary_coverage[slot]);
+  }
   return result;
 }
 
@@ -174,17 +188,33 @@ class LaneSemanticTracker {
     result.lane_valid = lane.valid && (!lane.partial || visual_evidence);
     result.left_evidence = observed.left_coverage;
     result.right_evidence = observed.right_coverage;
+    result.boundary_evidence = observed.boundary_coverage;
     result.crossing = CrossingSide::NONE;
     result.trend = CrossingSide::NONE;
     result.tlc_s = -1.0f;
     if (!result.lane_valid || !std::isfinite(lane.offset_ratio)) {
       result.left_change_allowed = result.right_change_allowed = false;
+      result.boundaries.fill(LaneMarking::UNKNOWN);
       last_ = result;
       return result;
     }
 
     result.left = stabilize(observed.left, left_candidate_, left_streak_, result.left);
     result.right = stabilize(observed.right, right_candidate_, right_streak_, result.right);
+    result.boundaries[1] = result.left;
+    result.boundaries[2] = result.right;
+    for (int side = 0; side < 2; ++side) {
+      const int slot = side == 0 ? 0 : 3;
+      if (lane.lane_polygons[side == 0 ? 0 : 2].empty() ||
+          observed.boundaries[slot] == LaneMarking::UNKNOWN) {
+        result.boundaries[slot] = LaneMarking::UNKNOWN;
+        outer_candidate_[side] = LaneMarking::UNKNOWN;
+        outer_streak_[side] = 0;
+      } else {
+        result.boundaries[slot] = stabilize(observed.boundaries[slot],
+            outer_candidate_[side], outer_streak_[side], result.boundaries[slot]);
+      }
+    }
     result.left_change_allowed = result.left == LaneMarking::DASHED;
     result.right_change_allowed = result.right == LaneMarking::DASHED;
     if (lane.offset_ratio < -0.16f ||
@@ -236,6 +266,8 @@ class LaneSemanticTracker {
   LaneMarking right_candidate_ = LaneMarking::UNKNOWN;
   int left_streak_ = 0;
   int right_streak_ = 0;
+  std::array<LaneMarking, 2> outer_candidate_{};
+  std::array<int, 2> outer_streak_{};
   float previous_offset_ = 0.0f;
   float lateral_speed_mps_ = 0.0f;
   std::chrono::steady_clock::time_point previous_at_{};

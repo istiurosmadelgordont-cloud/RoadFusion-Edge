@@ -1,6 +1,7 @@
 #pragma once
 
 #include <opencv2/core.hpp>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,12 @@ struct LaneResult {
   std::vector<cv::Point> left;
   std::vector<cv::Point> right;
   std::vector<cv::Point> polygon;
+  // UFLD slots are ordered left outer, ego left, ego right, right outer.
+  // Every curve runs from near (bottom) to far (top). Empty means unobserved.
+  std::array<std::vector<cv::Point>, 4> boundaries;
+  std::array<float, 4> boundary_coverage{};
+  // Left adjacent, ego, right adjacent. Polygons require two observed edges.
+  std::array<std::vector<cv::Point>, 3> lane_polygons;
   cv::Mat binary;
   cv::Mat bird_eye;
   cv::Mat curve_fit;

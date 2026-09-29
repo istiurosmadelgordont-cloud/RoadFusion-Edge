@@ -77,5 +77,52 @@ int main() {
   const cv::Vec3b right = frame.at<cv::Vec3b>(350, 460);
   assert(left[1] > left[2] && right[2] > right[1]);
 
-  std::cout << "PASS: FCW confirmation, risk tiers/halo, side cue, LDW color\n";
+  adas::LaneResult display = lane;
+  display.departure = false;
+  display.departure_side = adas::LaneDepartureSide::NONE;
+  display.partial = true;  // Exactly half of V2's anchors is safety-partial.
+  display.boundary_coverage[1] = 0.50f;
+  display.boundary_coverage[2] = 0.51f;
+  frame = render(display, adas::RiskResult(), {});
+  const cv::Vec3b dense_partial = frame.at<cv::Vec3b>(300, 320);
+  assert(dense_partial[1] > dense_partial[0] + 10);
+  display.boundary_coverage[1] = 0.20f;
+  frame = render(display, adas::RiskResult(), {});
+  const cv::Vec3b sparse_partial = frame.at<cv::Vec3b>(300, 320);
+  assert(sparse_partial[1] < sparse_partial[0] + 5);
+
+  // Adjacent candidates require a supported outer slot and a reliable ego pair.
+  adas::LaneResult multi;
+  multi.valid = true;
+  multi.boundary_coverage[0] = 0.50f;
+  multi.boundary_coverage[3] = 0.50f;
+  multi.boundaries[0] = {{80, 350}, {85, 325}, {90, 300},
+                         {95, 275}, {100, 250}, {105, 225}};
+  multi.boundaries[3] = {{590, 350}, {575, 325}, {560, 300},
+                         {545, 275}, {530, 250}, {515, 225}};
+  multi.lane_polygons[0] = {{80, 225}, {150, 225}, {190, 350}, {50, 350}};
+  multi.lane_polygons[2] = {{470, 225}, {550, 225}, {620, 350}, {520, 350}};
+  adas::LaneSemantic multi_semantics;
+  multi_semantics.lane_valid = true;
+  multi_semantics.left = adas::LaneMarking::DASHED;
+  multi_semantics.right = adas::LaneMarking::DASHED;
+  frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
+  assert(frame.at<cv::Vec3b>(300, 110)[2] > 45);
+  assert(frame.at<cv::Vec3b>(300, 560)[0] >
+         frame.at<cv::Vec3b>(300, 560)[2] + 8);
+  multi.identity_uncertain = true;
+  frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
+  assert(frame.at<cv::Vec3b>(300, 110) == cv::Vec3b(40, 40, 40));
+  multi.identity_uncertain = false;
+  multi_semantics.right = adas::LaneMarking::SOLID;
+  frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
+  assert(frame.at<cv::Vec3b>(300, 560)[0] > 40);
+  multi_semantics.lane_valid = false;
+  frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
+  assert(frame.at<cv::Vec3b>(300, 560)[0] > 40);
+  multi.boundary_coverage[3] = 0.20f;
+  frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
+  assert(frame.at<cv::Vec3b>(300, 560) == cv::Vec3b(40, 40, 40));
+
+  std::cout << "PASS: FCW confirmation, risk tiers/halo, side cue, LDW color, adjacent lanes\n";
 }

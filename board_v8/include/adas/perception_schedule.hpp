@@ -12,16 +12,16 @@ struct PerceptionPeriods {
 inline PerceptionPeriods lane_priority_periods(bool high_precision) {
   PerceptionPeriods periods;
   if (high_precision) {
-    // A full-width UFLDv2 pass costs about 148 ms on this RK3568. Leave
-    // enough NPU budget for object detection and a low-rate rear update.
-    periods.object_ms = 700;
-    periods.front_lane_ms = 160;
+    // Full-width UFLDv2 occupies the shared NPU for roughly 200 ms. Service
+    // objects between lane jobs: a 700 ms object target visibly lagged traffic.
+    periods.object_ms = 120;
+    periods.front_lane_ms = 320;
     periods.rear_lane_ms = 1500;
   } else {
     // The 800-wide student measures about 92 ms standalone. Prefer fresh
     // front geometry while retaining object and rear-view service.
-    periods.object_ms = 350;
-    periods.front_lane_ms = 180;
+    periods.object_ms = 120;
+    periods.front_lane_ms = 240;
     periods.rear_lane_ms = 1000;
   }
   return periods;
@@ -42,6 +42,10 @@ inline int next_perception_task(
         launched[selected] + std::chrono::milliseconds(period_ms[selected])) {
       selected = i;
     }
+  // Two long lane jobs back-to-back would leave fast vehicles unobserved.
+  // Insert one object update after any lane job before serving another lane.
+  if (selected != 0 && (launched[1] > launched[0] ||
+      (rear_enabled && launched[2] > launched[0]))) return 0;
   return selected;
 }
 }  // namespace adas

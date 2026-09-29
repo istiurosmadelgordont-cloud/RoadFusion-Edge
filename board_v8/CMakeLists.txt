@@ -87,6 +87,11 @@ target_include_directories(overlay_regression PRIVATE
 target_link_libraries(overlay_regression PRIVATE ${OpenCV_LIBS} ${FREETYPE_LIBRARIES})
 target_compile_options(overlay_regression PRIVATE -UNDEBUG)
 
+add_executable(ufld_decode_regression EXCLUDE_FROM_ALL tests/ufld_decode_regression.cpp)
+target_include_directories(ufld_decode_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(ufld_decode_regression PRIVATE ${OpenCV_LIBS})
+target_compile_options(ufld_decode_regression PRIVATE -UNDEBUG)
+
 add_executable(lane_video_replay EXCLUDE_FROM_ALL
   tests/lane_video_replay.cpp src/ufld_lane_detector.cpp src/warning_logic.cpp)
 target_include_directories(lane_video_replay PRIVATE include third_party/rknn ${OpenCV_INCLUDE_DIRS})
@@ -96,3 +101,8 @@ add_executable(preview_resize_regression EXCLUDE_FROM_ALL tests/preview_resize_r
 target_include_directories(preview_resize_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(preview_resize_regression PRIVATE ${OpenCV_LIBS})
 target_compile_options(preview_resize_regression PRIVATE -O3)
+
+add_executable(avm_regression EXCLUDE_FROM_ALL tests/avm_regression.cpp)
+target_include_directories(avm_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(avm_regression PRIVATE ${OpenCV_LIBS})
+target_compile_options(avm_regression PRIVATE -UNDEBUG)

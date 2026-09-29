@@ -1,9 +1,11 @@
 #pragma once
 
 #include "adas/types.hpp"
+#include "adas/ufld_v2_decode.hpp"
 #include "rknn_api.h"
 
 #include <opencv2/core.hpp>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -27,16 +29,13 @@ class UfldLaneDetector {
   void reset() {}
 
  private:
-  struct Points {
-    std::vector<cv::Point2f> values;
-    float confidence = 0.0f;
-  };
+  using Points = UfldLaneSamples;
 
   LaneResult decode_v1(const std::vector<rknn_output>& outputs,
                        int width, int height) const;
   LaneResult decode_v2(const std::vector<rknn_output>& outputs,
                        int width, int height) const;
-  LaneResult make_result(const Points& left, const Points& right,
+  LaneResult make_result(const std::array<Points, 4>& slots,
                          int width, int height) const;
   cv::Mat preprocess(const cv::Mat& bgr) const;
   void fail(const std::string& message);

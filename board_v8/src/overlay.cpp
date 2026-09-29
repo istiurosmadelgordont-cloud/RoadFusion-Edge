@@ -187,9 +187,45 @@ void blend_vertical_polygon(cv::Mat& frame, const std::vector<cv::Point>& polygo
   }
 }
 
+bool visually_trustworthy_lane(const LaneResult& lane) {
+  // V2 often supplies exactly half the row anchors. Keep the stricter partial
+  // flag for LDW/rules, but allow a dense, geometrically valid fit to be shown.
+  return lane.valid && !lane.identity_uncertain &&
+      (!lane.partial || (lane.boundary_coverage[1] >= .45f &&
+                         lane.boundary_coverage[2] >= .45f));
+}
+
+void draw_adjacent_lanes(cv::Mat& frame, const LaneResult& lane,
+                         const LaneSemantic* semantics) {
+  // A held or uncertain ego pair cannot establish left/right relationships.
+  if (!visually_trustworthy_lane(lane)) return;
+  for (int side : {0, 2}) {
+    // A well-supported outer slot may be drawn as a candidate lane even when
+    // dark paint cannot be classified. This never grants lane-change permission.
+    const int slot = side == 0 ? 0 : 3;
+    if (lane.boundary_coverage[slot] <= .25f) continue;
+    const auto& area = lane.lane_polygons[side];
+    const auto& outer = lane.boundaries[slot];
+    if (area.size() < 3 || outer.size() < 2) continue;
+    const LaneMarking divider = semantics && semantics->lane_valid ?
+        (side == 0 ? semantics->left : semantics->right) : LaneMarking::UNKNOWN;
+    const bool confirmed = divider == LaneMarking::DASHED;
+    const cv::Scalar tint = side == 0 ? cv::Scalar(70, 145, 230)
+                                       : cv::Scalar(230, 130, 160);
+    blend_vertical_polygon(frame, area, tint, confirmed ? .27 : .20,
+                           outer.front().y, outer.back().y);
+    // Unknown paint stays dotted; even a solid divider does not remove the
+    // observed lane, and no outer line alone grants lane-change permission.
+    const LaneMarking marking = semantics && semantics->lane_valid ?
+        semantics->boundaries[slot] : LaneMarking::UNKNOWN;
+    draw_lane_boundary(frame, outer, marking, tint, 2);
+  }
+}
+
 void draw_visual_corridor(cv::Mat& frame, const LaneResult& lane,
                           const LaneSemantic* semantics, bool fcw_warning) {
   if (!lane.valid || lane.left.size() < 8 || lane.right.size() < 8) return;
+  const bool visual_partial = !visually_trustworthy_lane(lane);
   const size_t count = std::min(lane.left.size(), lane.right.size());
   const size_t near_count = std::max<size_t>(5, count * 3 / 4);
   std::vector<cv::Point> left_band, right_band, center;
@@ -211,14 +247,18 @@ void draw_visual_corridor(cv::Mat& frame, const LaneResult& lane,
     const bool approaching = semantics && semantics->trend != CrossingSide::NONE &&
         std::isfinite(semantics->tlc_s) && semantics->tlc_s > 0.0f &&
         semantics->tlc_s < 2.5f;
-    const cv::Scalar band_color = lane.partial ? cv::Scalar(200, 150, 100) :
-        fcw_warning ? cv::Scalar(35, 45, 245) : cv::Scalar(215, 175, 60);
+    const cv::Scalar band_color = visual_partial ? cv::Scalar(170, 155, 125) :
+        fcw_warning ? cv::Scalar(35, 45, 245) : cv::Scalar(55, 205, 65);
+    if (!lane.polygon.empty())
+      blend_vertical_polygon(frame, lane.polygon, band_color,
+                             visual_partial ? .08 : .14,
+                             lane.left.front().y, lane.left.back().y);
     std::vector<cv::Point> corridor = left_band;
     corridor.insert(corridor.end(), right_band.rbegin(), right_band.rend());
     blend_vertical_polygon(frame, corridor, band_color,
-                           lane.partial ? .20 : fcw_warning ? .35 : .30,
+                           visual_partial ? .17 : fcw_warning ? .31 : .25,
                            left_band.front().y, left_band.back().y);
-    if (approaching && !lane.partial && !lane.departure) {
+    if (approaching && !visual_partial && !lane.departure) {
       const bool left_approach = semantics->trend == CrossingSide::LEFT;
       const cv::Scalar edge_color = semantics->tlc_s < 1.5f
           ? cv::Scalar(30, 145, 245) : cv::Scalar(35, 225, 245);
@@ -234,11 +274,24 @@ void draw_visual_corridor(cv::Mat& frame, const LaneResult& lane,
       blend_vertical_polygon(frame, side, edge_color, .24,
                              left_band.front().y, left_band.back().y);
     }
-    // This is the observed lane centre, not a predicted vehicle trajectory.
-    if (!lane.partial) {
-      for (size_t i = 3; i < center.size(); i += 5)
-        cv::circle(frame, center[i], 2, cv::Scalar(205, 235, 190), cv::FILLED,
-                   cv::LINE_AA);
+    // Chevrons mark the observed ego corridor, not a predicted trajectory.
+    if (!visual_partial) {
+      const cv::Scalar chevron = fcw_warning || lane.departure
+          ? cv::Scalar(70, 165, 255) : cv::Scalar(110, 250, 115);
+      for (size_t i = 3; i + 2 < center.size(); i += 4) {
+        const int half = std::max(4, (right_band[i].x - left_band[i].x) / 4);
+        const int y0 = center[i].y;
+        const int y1 = center[i + 2].y;
+        if (y0 - y1 < 4) continue;
+        std::vector<cv::Point> arrow = {
+            {center[i].x - half, y0}, {center[i].x, y1},
+            {center[i].x + half, y0},
+            {center[i].x + half * 3 / 4, y0},
+            {center[i].x, y1 + (y0 - y1) / 3},
+            {center[i].x - half * 3 / 4, y0}};
+        cv::fillPoly(frame, std::vector<std::vector<cv::Point>>{arrow},
+                     chevron, cv::LINE_AA);
+      }
     }
   }
 
@@ -402,10 +455,11 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
                   double fps, double npu_ms,
                   const LaneSemantic* semantics) {
   if (frame.empty()) return;
+  draw_adjacent_lanes(frame, lane, semantics);
   draw_visual_corridor(frame, lane, semantics, risk.reliable &&
       (risk.warning || (std::isfinite(risk.ttc_s) && risk.ttc_s > 0.0f && risk.ttc_s < 1.5f)));
   if (lane.valid) {
-    const bool uncertain = lane.partial || lane.identity_uncertain;
+    const bool uncertain = !visually_trustworthy_lane(lane);
     const cv::Scalar normal = uncertain ? cv::Scalar(130, 145, 145)
                                         : cv::Scalar(55, 255, 70);
     const cv::Scalar caution(35, 225, 245), urgent(30, 145, 245);
@@ -469,7 +523,7 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
           "左边界" : "右边界";
       label(frame, std::string(lane_departure_name(lane.departure_side)) +
             "  越过" + side, {12, 45}, cv::Scalar(35, 45, 245), 0.60, 2);
-    } else if (lane.partial || lane.identity_uncertain) {
+    } else if (!visually_trustworthy_lane(lane)) {
       label(frame, "车道几何待确认", {12, 45}, cv::Scalar(180, 190, 190), 0.48, 1);
     } else if (semantics && semantics->trend != CrossingSide::NONE &&
                semantics->tlc_s > 0.0f && semantics->tlc_s < 2.5f) {

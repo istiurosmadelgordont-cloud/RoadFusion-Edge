@@ -105,14 +105,20 @@ UfldLaneDetector::UfldLaneDetector(const std::string& model_path) {
   if (v2_) {
     bool has_loc_row = false;
     bool has_exist_row = false;
+    bool has_loc_col = false;
+    bool has_exist_col = false;
     for (const rknn_tensor_attr& attr : output_attrs_) {
       const std::string name = attr.name;
-      if (name == "loc_row" && attr.n_elems >= 200U * 72U * 4U)
+      if (name == "loc_row" && attr.n_elems == 200U * 72U * 4U)
         has_loc_row = true;
-      if (name == "exist_row" && attr.n_elems >= 2U * 72U * 4U)
+      if (name == "exist_row" && attr.n_elems == 2U * 72U * 4U)
         has_exist_row = true;
+      if (name == "loc_col" && attr.n_elems == 100U * 81U * 4U)
+        has_loc_col = true;
+      if (name == "exist_col" && attr.n_elems == 2U * 81U * 4U)
+        has_exist_col = true;
     }
-    if (!has_loc_row || !has_exist_row) {
+    if (!has_loc_row || !has_exist_row || !has_loc_col || !has_exist_col) {
       fail("UFLDv2 output tensor schema is incompatible");
       return;
     }
@@ -232,46 +238,41 @@ LaneResult UfldLaneDetector::decode_v1(const std::vector<rknn_output>& outputs,
     decoded.confidence = decoded.values.size() / 18.0f;
     return decoded;
   };
-  return make_result(lane_points(1), lane_points(2), width, height);
+  return make_result({{lane_points(0), lane_points(1),
+                       lane_points(2), lane_points(3)}}, width, height);
 }
 
 LaneResult UfldLaneDetector::decode_v2(const std::vector<rknn_output>& outputs,
                                        int width, int height) const {
-  int loc_index = -1, exist_index = -1;
+  const float* loc_row = nullptr;
+  const float* loc_col = nullptr;
+  const float* exist_row = nullptr;
+  const float* exist_col = nullptr;
   for (size_t i = 0; i < output_attrs_.size(); ++i) {
     const std::string name = output_attrs_[i].name;
-    if (name == "loc_row") loc_index = static_cast<int>(i);
-    if (name == "exist_row") exist_index = static_cast<int>(i);
+    const float* data = static_cast<const float*>(outputs[i].buf);
+    if (name == "loc_row") loc_row = data;
+    if (name == "loc_col") loc_col = data;
+    if (name == "exist_row") exist_row = data;
+    if (name == "exist_col") exist_col = data;
   }
-  if (loc_index < 0 || exist_index < 0) return LaneResult();
-  const float* loc = static_cast<const float*>(outputs[loc_index].buf);
-  const float* exists = static_cast<const float*>(outputs[exist_index].buf);
-  auto lane_points = [&](int lane) {
-    Points decoded;
-    for (int row = 0; row < 72; ++row) {
-      const float absent = exists[index4(0, 0, row, lane, 2, 72, 4)];
-      const float present = exists[index4(0, 1, row, lane, 2, 72, 4)];
-      if (present <= absent) continue;
-      std::vector<float> logits(200);
-      int best = 0;
-      for (int grid = 0; grid < 200; ++grid) {
-        logits[grid] = loc[index4(0, grid, row, lane, 200, 72, 4)];
-        if (logits[grid] > logits[best]) best = grid;
-      }
-      const float position = stable_softmax_expectation(logits.data(), 200, best, 1, 0.5f);
-      const float x = position / 199.0f * width;
-      const float y = (0.42f + 0.58f * row / 71.0f) * height;
-      decoded.values.emplace_back(x, y);
-    }
-    decoded.confidence = decoded.values.size() / 72.0f;
-    return decoded;
-  };
-  return make_result(lane_points(1), lane_points(2), width, height);
+  if (!loc_row || !loc_col || !exist_row || !exist_col) return LaneResult();
+  return make_result(decode_ufld_v2_slots(loc_row, loc_col, exist_row,
+                                        exist_col, width, height), width, height);
 }
 
-LaneResult UfldLaneDetector::make_result(const Points& left, const Points& right,
+LaneResult UfldLaneDetector::make_result(const std::array<Points, 4>& slots,
                                          int width, int height) const {
   LaneResult result;
+  for (size_t slot = 0; slot < slots.size(); ++slot) {
+    result.boundary_coverage[slot] = slots[slot].confidence;
+    for (const cv::Point2f& point : slots[slot].values)
+      result.boundaries[slot].emplace_back(cvRound(point.x), cvRound(point.y));
+    std::sort(result.boundaries[slot].begin(), result.boundaries[slot].end(),
+        [](const cv::Point& a, const cv::Point& b) { return a.y > b.y; });
+  }
+  const Points& left = slots[1];
+  const Points& right = slots[2];
   if (left.values.size() < 5 || right.values.size() < 5) return result;
   float first_y = std::max(
       std::min_element(left.values.begin(), left.values.end(),
@@ -315,14 +316,14 @@ LaneResult UfldLaneDetector::make_result(const Points& left, const Points& right
   for (int i = 0; i < 32; ++i) {
     const int lx = result.left[31 - i].x;
     const int rx = result.right[i].x;
-    if (rx - lx <= 5) return LaneResult();
+    if (rx - lx <= 5) return result;
   }
   const float left_bottom = result.left.front().x;
   const float right_bottom = result.right.back().x;
   const float bottom_width = right_bottom - left_bottom;
   if (bottom_width < width * 0.15f || bottom_width >= width * 0.75f ||
       left_bottom >= width * 0.62f || right_bottom <= width * 0.38f)
-    return LaneResult();
+    return result;
   result.polygon = result.left;
   result.polygon.insert(result.polygon.end(), result.right.begin(), result.right.end());
   result.offset_ratio = (width * 0.5f - (left_bottom + right_bottom) * 0.5f) /
@@ -332,6 +333,58 @@ LaneResult UfldLaneDetector::make_result(const Points& left, const Points& right
   // Official V2 requires > half the row anchors. Sparse curves remain visible
   // for diagnostics but cannot initiate LDW (coverage is not a probability).
   result.partial = v2_ && (left.confidence <= 0.5f || right.confidence <= 0.5f);
+  result.boundaries[1] = result.left;
+  result.boundaries[2].assign(result.right.rbegin(), result.right.rend());
+  result.boundary_coverage[1] = left.confidence;
+  result.boundary_coverage[2] = right.confidence;
+  result.lane_polygons[1] = result.polygon;
+
+  // Adjacent slots are independent observations. Never extend an outer curve
+  // beyond its supported anchors or assume that it describes another lane.
+  for (int slot : {0, 3}) {
+    const Points& outer = slots[slot];
+    // The official column head accepts > 1/4 of its 81 anchors. Its coverage
+    // is not comparable to the row head's > 1/2 of 72 anchors.
+    if (outer.values.size() < 5 || outer.confidence <= (v2_ ? 0.25f : 0.30f)) continue;
+    cv::Vec3d fit;
+    if (!fit_quadratic(outer.values, fit) || !refine(outer.values, fit)) continue;
+    const auto limits = std::minmax_element(outer.values.begin(), outer.values.end(),
+        [](const cv::Point2f& a, const cv::Point2f& b) { return a.y < b.y; });
+    const float top = std::max(first_y, limits.first->y);
+    const float bottom = std::min(last_y, limits.second->y);
+    if (bottom - top < height * 0.15f) continue;
+    const cv::Vec3d& inner_fit = slot == 0 ? left_fit : right_fit;
+    bool ordered = true;
+    for (int i = 0; i < 7; ++i) {
+      const double y = top + (bottom - top) * i / 6.0;
+      const double outside = curve_x(fit, y);
+      const double inside = curve_x(inner_fit, y);
+      const double ego_width = curve_x(right_fit, y) - curve_x(left_fit, y);
+      const double gap = slot == 0 ? inside - outside : outside - inside;
+      if (outside < 0 || outside >= width || ego_width < 10 ||
+          gap < std::max(8.0, ego_width * 0.35) || gap > ego_width * 2.2) {
+        ordered = false;
+        break;
+      }
+    }
+    if (!ordered) continue;
+    std::vector<cv::Point> outer_curve, inner_curve;
+    for (int i = 0; i < 24; ++i) {
+      const double y = bottom - (bottom - top) * i / 23.0;
+      outer_curve.emplace_back(cvRound(curve_x(fit, y)), cvRound(y));
+      inner_curve.emplace_back(cvRound(curve_x(inner_fit, y)), cvRound(y));
+    }
+    result.boundaries[slot] = outer_curve;
+    result.boundary_coverage[slot] = outer.confidence;
+    std::vector<cv::Point>& area = result.lane_polygons[slot == 0 ? 0 : 2];
+    if (slot == 0) {
+      area = outer_curve;
+      area.insert(area.end(), inner_curve.rbegin(), inner_curve.rend());
+    } else {
+      area = inner_curve;
+      area.insert(area.end(), outer_curve.rbegin(), outer_curve.rend());
+    }
+  }
   return result;
 }
 

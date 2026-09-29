@@ -23,10 +23,26 @@ int main() {
   assert(next_perception_task(launched, true) == 2);
   assert(next_perception_task(launched, false) == 1);
   const PerceptionPeriods precision = lane_priority_periods(true);
-  assert(precision.object_ms == 700 && precision.front_lane_ms == 160 &&
-         precision.rear_lane_ms == 1500);
   launched = {{at(0), at(0), at(0)}};
-  assert(next_perception_task(launched, true, precision) == 1);
+  assert(next_perception_task(launched, true, precision) == 0);
+  // Model a shared NPU with 100 ms YOLO, 220 ms UFLD and 30 ms dispatch cost.
+  // Neither task may be starved, including when rear inference is enabled.
+  for (bool rear : {false, true}) {
+    launched = {{at(0), at(0), at(0)}};
+    int simulated_ms = 0;
+    int count[3] = {0, 0, 0};
+    for (int iteration = 0; iteration < 60; ++iteration) {
+      const int task = next_perception_task(launched, rear, precision);
+      const int gap = std::chrono::duration_cast<std::chrono::milliseconds>(
+          at(simulated_ms) - launched[task]).count();
+      if (count[task] > 0) assert(gap <= (task == 0 ? 550 : task == 1 ? 800 : 2100));
+      launched[task] = at(simulated_ms);
+      ++count[task];
+      simulated_ms += task == 0 ? 130 : 250;
+    }
+    assert(count[0] > count[1] && count[1] > 5);
+    if (rear) assert(count[2] > 0);
+  }
   LaneResult lane;
   lane.valid = true;
   lane.offset_ratio = 0.25f;

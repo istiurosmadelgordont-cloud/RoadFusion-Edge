@@ -241,7 +241,7 @@ void GlPresenter::present(const cv::Mat& ui, const std::array<cv::Mat, 4>& camer
   glClear(GL_COLOR_BUFFER_BIT);
   draw_texture(ui_texture_, ui, 0, 0, width_, height_);
   for (int i = 0; i < 4; ++i)
-    draw_texture(camera_textures_[i], cameras[i],
+    if (!cameras[i].empty()) draw_texture(camera_textures_[i], cameras[i],
                  view_rects[i].x, view_rects[i].y,
                  view_rects[i].width, view_rects[i].height);
   if (!eglSwapBuffers(egl_display_, egl_surface_))
