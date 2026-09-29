@@ -22,15 +22,18 @@ RK3568 NPU：INT8 道路目标检测
 ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 ```
 
-## 双板采集与最新版以太网上位机（2026-09-27）
+## 双板采集与光口/PCIe 链路（2026-09-27）
 
-系统连接、四路映射和启动步骤见 [双板系统说明](docs/dual_board_system.md)。
-最新版 [Windows UDP 上位机](tools/udp_video_sender/README.md) 支持选择本机 IPv4、
-目标 IPv4/MAC、输入与输出分辨率/帧率，以及 VS 消隐和包间隔。
+新增[双板系统说明](fpga/dual_board/README.md)，包含可直接打开的两份 PDS 工程：
 
-两份最新 FPGA 工程已在本地整理；其中厂商 IP、配置及工程材料的公开再分发授权
-尚待确认，因此本次只更新上位机和说明，未发布这两份新工程。
-已有 FPGA 历史版本继续保留，不能当作本次双板工程。
+- [板卡 1：四路采集与光口回传](fpga/dual_board/board1_capture/README.md)：当前接入 HDMI、板卡 2 的 SFP 视频、以太网 0、以太网 1，合成 1920×1080 四宫格。
+- [板卡 2：HDMI 光口发送与 PCIe 输出](fpga/dual_board/board2_sfp_pcie/README.md)：HDMI 送板卡 1，反向接收四宫格，经 DDR/增强/PCIe 四缓冲握手送鲁班猫 2。
+- [最新版 Windows 以太网上位机](tools/udp_video_sender/README.md)：可配置本机 IP、目标 IP/MAC、输入/输出尺寸与帧率、VS 消隐及包间隔。
+
+两份新工程使用普通源码目录保存，无需解压；旧基线继续保留。当前接线、OV5640 保留状态、通道 1 VS 连接、HS2 驱动依赖与验证边界见系统说明。此次整合不等同于双板链路已完成时序签核及板级验收。
+
+该快照位于私有仓库，仅作内部备份和调试；第三方材料仍受其原许可约束。详见
+[免责声明与权利通知](fpga/dual_board/DISCLAIMER.md)。
 
 ## FPGA 工程内容
 
@@ -43,13 +46,13 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 | [`fpga/pcie_video`](fpga/pcie_video/) | 1080p RGB565 PCIe 彩条基线及 ARM 操作说明 | 用于先验证 BAR 命令、TLP/DMA 和四缓冲传输，不代表摄像头链路完成 |
 | [`fpga/ethernet_video`](fpga/ethernet_video/README.md) | 千兆以太网接收 960×540 RGB565、写 DDR 并显示，配套 Windows UDP 发送器 | 已有彩条显示现场观察；协议没有包序号、确认或重传 |
 
-完整 PDS 工程以 ZIP 或分卷形式保存，恢复命令、SHA-256、工具版本、已知 RTL/CDC
-问题均写在各目录 README 和 `BUILD_STATUS.md` 中。综合成功不等于板级数据完整性、
+早期 PDS 基线以 ZIP 或分卷形式保存；新增双板版本在 `fpga/dual_board` 中按源码目录保存。
+恢复方式、SHA-256、工具版本、已知 RTL/CDC 问题见各目录 README 和验证记录。综合成功不等于板级数据完整性、
 缓存一致性和时序已经签核。
 
-RK3568 四路演示目前用四个同步视频模拟 FPGA 的单路 `1920×1080` 四宫格输出。
-现有 FPGA 交付工程重点验证单路 1080p RGB565 的采集、DDR 和 PCIe DMA；四摄同步、
-四路缩放拼接以及 FPGA→RK3568 的完整联合链路仍需在后续 RTL 和板级联调中验收。
+`board_v7` 保留同步视频演示；[`board_v8`](board_v8/PCIE_INPUT.md) 增加 PCIe 实时合成帧输入。
+双板工程提供四路采集/拼接、SFP 互传和 PCIe 输出源码；完整联合链路仍需对应位流、
+HS2 驱动及鲁班猫板级验收，不能将旧版历史验证记录视为本次链路验证结果。
 
 ## 功能
 
@@ -187,4 +190,3 @@ intermediate source frames when necessary to preserve the video's original speed
 
 模型文件位于 `models/`。第三方 RKNN SDK、Python 虚拟环境、量化图片和
 测试视频未纳入版本控制。
-
