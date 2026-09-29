@@ -3,4 +3,5 @@
 *.rknn binary
 *.jpg binary
 *.png binary
+*.sh text eol=lf
 
