@@ -1,0 +1,24 @@
+1. 准备输入
+连接 FPGA 的 HDMI 输入和 PCIe，确认 FPGA 已烧录匹配的程序。关闭其他占用 PCIe 的采集软件。
+2. 加载驱动（板子重启后需要）
+
+
+if [ ! -d /sys/module/pcie_hdmi_host ]; then
+    sudo insmod /home/cat/PCIE/host_system/driver/pcie_hdmi_host.ko \
+        direct_copy=1 newest_first=1
+fi
+
+sudo chown cat:cat /dev/pcie_hdmi_host
+ls -l /dev/pcie_hdmi_host
+
+
+如果没有生成设备节点，先检查 lspci -nn 和 sudo dmesg | tail -30。
+3. 启动上位机
+
+
+cd /home/cat/rk3568_adas/board_v8
+
+export DISPLAY=:0
+export XAUTHORITY=/home/cat/.Xauthority
+
+sh scripts/run_pcie.sh

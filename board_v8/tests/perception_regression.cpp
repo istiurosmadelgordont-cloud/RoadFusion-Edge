@@ -15,6 +15,40 @@ int main() {
   using namespace adas;
   const auto base = std::chrono::steady_clock::now();
   const auto at = [&](int ms) { return base + std::chrono::milliseconds(ms); };
+  {
+    ByteTracker lamp_tracker;
+    Detection red_bulb;
+    red_bulb.class_id=7;red_bulb.name="red_circle";red_bulb.score=.95f;
+    red_bulb.box=cv::Rect2f(100,40,20,20);
+    Detection neighbor=red_bulb;neighbor.box.x=160;
+    auto initial=lamp_tracker.update({red_bulb,neighbor},at(0),at(0));
+    assert(initial.size()==2);
+    const int bulb_id=initial[0].track_id;
+    Detection green_bulb=red_bulb;green_bulb.class_id=11;green_bulb.name="green_circle";
+    auto changed=lamp_tracker.update({green_bulb,neighbor},at(100),at(100));
+    assert(changed.size()==2); // No lingering red track at the changed bulb.
+    int changed_count=0;
+    for(const auto& bulb:changed) if(bulb.box.x<130) {
+      assert(bulb.class_id==11 && bulb.track_id==bulb_id);++changed_count;
+    }
+    assert(changed_count==1);
+    Detection car=green_bulb;car.class_id=2;
+    auto different_object=lamp_tracker.update({car,neighbor},at(200),at(200));
+    bool new_car_id=false;
+    for(const auto& object:different_object) if(object.class_id==2) new_car_id=object.track_id!=bulb_id;
+    assert(new_car_id);
+    auto expired=lamp_tracker.predict(at(1250));
+    assert(expired.empty()); // No indefinite boxes when inference stops updating.
+    ByteTracker vehicle_tracker;
+    vehicle_tracker.update({car},at(0),at(0));
+    assert(vehicle_tracker.predict(at(600)).size()==1);
+    assert(vehicle_tracker.predict(at(700)).empty());
+    vehicle_tracker.update({},at(200),at(200));
+    assert(vehicle_tracker.predict(at(200)).size()==1);
+    vehicle_tracker.update({},at(300),at(300));
+    assert(vehicle_tracker.predict(at(300)).empty());
+    std::cout<<"PASS: one lamp track across red/green transitions; adjacent lamps and cars remain distinct\n";
+  }
   std::array<std::chrono::steady_clock::time_point, 3> launched{{at(0),at(0),at(0)}};
   assert(next_perception_task(launched, true) == 1);
   launched[1] = at(200);
@@ -161,7 +195,7 @@ int main() {
   close.box.x += 5;
   const auto moving = tracker.update({close}, at(200), at(200));
   assert(moving.size() == 1 && moving.front().motion_valid && moving.front().image_velocity.x > 0);
-  assert(!tracker.predict(at(1100)).front().motion_valid);
+  assert(tracker.predict(at(1100)).empty()); // Expired predictions must disappear.
   BlindSpotMonitor side;
   Detection side_car = close;
   side_car.box = cv::Rect2f(200, 190, 160, 120);

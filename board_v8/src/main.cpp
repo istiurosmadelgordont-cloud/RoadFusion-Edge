@@ -26,7 +26,7 @@
 namespace {
 
 struct Options {
-  std::string model = "models/unified21_p2_v7_640_int8.rknn";
+  std::string model = "models/yolo14_960x544_ptq_int8.rknn";
   std::string source = "0";
   std::string output;
   bool display = true;
@@ -36,6 +36,7 @@ struct Options {
   int cpu_threads = 2;
   float confidence = 0.25f;
   bool dump_detections = false;
+  bool lanes_enabled = false;
   std::string roi_file = "config/lane_roi.txt";
 };
 
@@ -48,6 +49,8 @@ void usage(const char* program) {
             << "  --max-frames N        stop after N frames (0 = all)\n"
             << "  --detect-every N      NPU inference interval\n"
             << "  --lane-every N        CPU lane detection interval\n"
+            << "  --enable-lanes        enable lane inference and dashboard (default off)\n"
+            << "  --no-lanes            disable lane inference and overlay\n"
             << "  --cpu-threads N       OpenCV CPU worker threads\n"
             << "  --confidence FLOAT    detection threshold\n"
             << "  --dump-detections     print first-frame detections for verification\n"
@@ -61,6 +64,8 @@ bool parse(int argc, char** argv, Options& options) {
     if (arg == "--help" || arg == "-h") { usage(argv[0]); return false; }
     if (arg == "--headless") { options.display = false; continue; }
     if (arg == "--dump-detections") { options.dump_detections = true; continue; }
+    if (arg == "--enable-lanes") { options.lanes_enabled = true; continue; }
+    if (arg == "--no-lanes") { options.lanes_enabled = false; continue; }
     if (i + 1 >= argc) { std::cerr << "Missing value for " << arg << std::endl; return false; }
     const std::string value = argv[++i];
     if (arg == "--model") options.model = value;
@@ -340,7 +345,8 @@ int main(int argc, char** argv) {
   CalibrationUi calibration;
   calibration.detector = &lane_detector;
   calibration.roi_file = options.roi_file;
-  const bool saved_roi_loaded = load_roi(options.roi_file, lane_detector, &calibration.points);
+  const bool saved_roi_loaded = !options.lanes_enabled || load_roi(options.roi_file, lane_detector, &calibration.points);
+  if (!options.lanes_enabled) std::cout << "Lane detection and overlay: disabled" << std::endl;
 
   cv::Mat still;
   cv::VideoCapture capture;
@@ -377,7 +383,7 @@ int main(int argc, char** argv) {
         if (!options.display || !capture.set(cv::CAP_PROP_POS_FRAMES, 0) || !capture.read(frame)) break;
       }
       if (frame.empty()) break;
-      if (frame_index == 0 || (frame_index + 1) % options.lane_interval == 0) {
+      if (options.lanes_enabled && (frame_index == 0 || (frame_index + 1) % options.lane_interval == 0)) {
         lane = lane_detector.detect(frame);
         if (options.dump_detections && lane.valid && !lane.left.empty() && !lane.right.empty()) {
           std::cout << "lane_frame=" << frame_index
@@ -430,7 +436,9 @@ int main(int argc, char** argv) {
     if (options.display) {
       const size_t slash = options.source.find_last_of("/\\");
       const std::string source_name = slash == std::string::npos ? options.source : options.source.substr(slash + 1);
-      cv::Mat display_frame = compose_dashboard(frame, lane, calibration, paused, fps_smoothed, source_name);
+      cv::Mat display_frame;
+      if (options.lanes_enabled) display_frame = compose_dashboard(frame, lane, calibration, paused, fps_smoothed, source_name);
+      else cv::resize(frame, display_frame, cv::Size(1280, std::max(1, cvRound(frame.rows * 1280.0 / frame.cols))));
       cv::imshow("RK3568 ADAS", display_frame);
       int wait_ms = single_image || paused ? 20 : 1;
       int skip_frames = 0;
@@ -463,6 +471,7 @@ int main(int argc, char** argv) {
         calibration.pause_requested = false;
         paused = !paused;
       }
+      if (!options.lanes_enabled) calibration.calibrate_requested = false;
       if (calibration.calibrate_requested) {
         calibration.calibrate_requested = false;
         calibration.points.clear();

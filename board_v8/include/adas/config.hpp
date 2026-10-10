@@ -6,7 +6,7 @@
 namespace adas {
 
 struct DetectorConfig {
-  std::string model_path = "models/unified21_p2_v7_640_int8.rknn";
+  std::string model_path = "models/yolo14_960x544_ptq_int8.rknn";
   int input_size = 640;
   int class_count = 21;
   float confidence = 0.25f;

@@ -39,7 +39,9 @@ void ByteTracker::associate(const std::vector<Detection>& detections,
       if (track_used[t]) continue;
       const cv::Rect2f predicted = project(tracks_[t], measured_at);
       for (int d : indices) {
-        if (detection_used[d] || tracks_[t].class_id != detections[d].class_id) continue;
+        const bool same_lamp = tracks_[t].class_id >= 7 && tracks_[t].class_id <= 14 &&
+                               detections[d].class_id >= 7 && detections[d].class_id <= 14;
+        if (detection_used[d] || (!same_lamp && tracks_[t].class_id != detections[d].class_id)) continue;
         const float overlap = iou(predicted, detections[d].box);
         if (overlap > best) { best = overlap; best_track = static_cast<int>(t); best_detection = d; }
       }
@@ -57,6 +59,7 @@ void ByteTracker::associate(const std::vector<Detection>& detections,
                                      : track.velocity * 0.65f + measured_velocity * 0.35f;
     }
     track.box = detections[best_detection].box;
+    track.class_id = detections[best_detection].class_id;
     track.score = detections[best_detection].score;
     track.name = detections[best_detection].name;
     track.measured_at = measured_at;
@@ -100,6 +103,9 @@ std::vector<Detection> ByteTracker::update(
 std::vector<Detection> ByteTracker::predict(std::chrono::steady_clock::time_point now) const {
   std::vector<Detection> result;
   for (const Track& track : tracks_) {
+    const bool lamp=(track.class_id>=7 && track.class_id<=14) || track.class_id==21;
+    const auto maximum_age=std::chrono::milliseconds(lamp ? 1000 : 650);
+    if (now-track.measured_at>maximum_age || (!lamp && track.missed>1)) continue;
     Detection detection;
     detection.class_id = track.class_id;
     detection.track_id = track.id;

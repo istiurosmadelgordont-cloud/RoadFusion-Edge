@@ -15,7 +15,7 @@ inline PerceptionPeriods lane_priority_periods(bool high_precision) {
     // Full-width UFLDv2 occupies the shared NPU for roughly 200 ms. Service
     // objects between lane jobs: a 700 ms object target visibly lagged traffic.
     periods.object_ms = 120;
-    periods.front_lane_ms = 320;
+    periods.front_lane_ms = 240;
     periods.rear_lane_ms = 1500;
   } else {
     // The 800-wide student measures about 92 ms standalone. Prefer fresh

@@ -15,6 +15,7 @@ endif()
 add_executable(adas_demo
   src/main.cpp
   src/rknn_detector.cpp
+  src/lamp_classifier.cpp
   src/lane_detector.cpp
   src/signal_logic.cpp
   src/drive_decision.cpp
@@ -28,6 +29,7 @@ add_executable(adas_four_view
   src/byte_tracker.cpp
   src/warning_logic.cpp
   src/rknn_detector.cpp
+  src/lamp_classifier.cpp
   src/signal_logic.cpp
   src/lane_detector.cpp
   src/drive_decision.cpp
@@ -49,6 +51,18 @@ endif()
 target_sources(adas_four_view PRIVATE src/gl_presenter.cpp)
 target_compile_definitions(adas_four_view PRIVATE ADAS_HAVE_GLES=1)
 target_link_libraries(adas_four_view PRIVATE ${EGL_LIBRARY} ${GLES_LIBRARY} ${X11_LIBRARY} ${RGA_LIBRARY})
+
+# Use MPP NV12 metadata directly; videoconvert on this board is too slow.
+find_path(GSTREAMER_INCLUDE_DIR gst/gst.h PATH_SUFFIXES gstreamer-1.0 REQUIRED)
+find_path(GLIB_INCLUDE_DIR glib.h PATH_SUFFIXES glib-2.0 REQUIRED)
+find_path(GLIB_CONFIG_INCLUDE_DIR glibconfig.h
+  PATHS /usr/lib/aarch64-linux-gnu/glib-2.0/include /usr/lib/glib-2.0/include REQUIRED)
+foreach(GST_LIB gstapp-1.0 gstvideo-1.0 gstreamer-1.0 gobject-2.0 glib-2.0)
+  find_library(GST_${GST_LIB}_LIBRARY NAMES ${GST_LIB} REQUIRED)
+  target_link_libraries(adas_four_view PRIVATE ${GST_${GST_LIB}_LIBRARY})
+endforeach()
+target_include_directories(adas_four_view PRIVATE
+  ${GSTREAMER_INCLUDE_DIR} ${GLIB_INCLUDE_DIR} ${GLIB_CONFIG_INCLUDE_DIR})
 
 target_include_directories(adas_demo PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -106,3 +120,14 @@ add_executable(avm_regression EXCLUDE_FROM_ALL tests/avm_regression.cpp)
 target_include_directories(avm_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(avm_regression PRIVATE ${OpenCV_LIBS})
 target_compile_options(avm_regression PRIVATE -UNDEBUG)
+
+add_executable(ui_upload_regression EXCLUDE_FROM_ALL tests/ui_upload_regression.cpp)
+target_include_directories(ui_upload_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(ui_upload_regression PRIVATE ${OpenCV_LIBS})
+target_compile_options(ui_upload_regression PRIVATE -UNDEBUG)
+
+# 灯态确认、漏检保持和方向切换回归；Release 模式也必须执行断言。
+add_executable(signal_demo_regression EXCLUDE_FROM_ALL tests/signal_demo_regression.cpp)
+target_include_directories(signal_demo_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(signal_demo_regression PRIVATE ${OpenCV_LIBS})
+target_compile_options(signal_demo_regression PRIVATE -UNDEBUG)

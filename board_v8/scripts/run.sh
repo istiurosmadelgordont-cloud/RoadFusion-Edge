@@ -5,9 +5,9 @@ PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$PROJECT_DIR"
 
 # Support both the existing board layout and a fresh repository clone.
-MODEL=models/unified21_p2_v7_640_int8.rknn
+MODEL=models/yolo14_960x544_qat_int8.rknn
 if [ ! -f "$MODEL" ]; then
-  MODEL=../models/unified21_p2_v7_640_int8.rknn
+  MODEL=../models/yolo14_960x544_qat_int8.rknn
 fi
 
 # With no command-line arguments, open the bundled demonstration video so the

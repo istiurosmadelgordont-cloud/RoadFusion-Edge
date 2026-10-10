@@ -1,5 +1,6 @@
 #include "adas/rknn_detector.hpp"
 #include "adas/model_file.hpp"
+#include "adas/lamp_classifier.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -103,6 +104,14 @@ RknnDetector::RknnDetector(const DetectorConfig& config) : config_(config) {
     }
   }
   output_attrs_.resize(io_num_.n_output);
+  const auto& input_attr = input_attrs_[0];
+  if (input_attr.n_dims != 4) { fail("Expected a four-dimensional input"); return; }
+  input_width_ = input_attr.fmt == RKNN_TENSOR_NHWC ? input_attr.dims[2] : input_attr.dims[3];
+  input_height_ = input_attr.fmt == RKNN_TENSOR_NHWC ? input_attr.dims[1] : input_attr.dims[2];
+  // 按 RKNN 张量契约识别新双阶段模型：960×544、9 个输出、14 个定位类别。
+  // 历史 21 类 P2 模型仍走旧解码分支，不能混用它的类别 ID。
+  two_stage_ = io_num_.n_output == 9 && input_width_ == 960 && input_height_ == 544;
+  config_.class_count = two_stage_ ? 14 : 21;
   int class_score_outputs = 0;
   for (uint32_t i = 0; i < io_num_.n_output; ++i) {
     std::memset(&output_attrs_[i], 0, sizeof(rknn_tensor_attr));
@@ -115,9 +124,17 @@ RknnDetector::RknnDetector(const DetectorConfig& config) : config_(config) {
     std::cout << "RKNN output " << i << ": c=" << v.c << " h=" << v.h << " w=" << v.w << std::endl;
     if (v.c == config_.class_count) ++class_score_outputs;
   }
-  if (io_num_.n_output != 12 || class_score_outputs != 4) {
-    fail("model output shape does not match the V7 P2 21-class detector");
+  if ((!two_stage_ && (io_num_.n_output != 12 || class_score_outputs != 4)) ||
+      (two_stage_ && class_score_outputs != 3)) {
+    fail("Expected legacy P2/21 or 960x544 P3/14 output tensors");
     return;
+  }
+  if (two_stage_) {
+    const auto slash=config_.model_path.find_last_of('/');
+    const std::string directory=slash==std::string::npos ? "." : config_.model_path.substr(0,slash);
+    lamp_classifier_.reset(new LampClassifier(directory+"/mo_fp16_baseline.rknn"));
+    if (!lamp_classifier_->ready()) { fail(lamp_classifier_->error()); return; }
+    std::cout<<"YOLO14 960x544 INT8 + MobileNet128 FP16 NPU"<<std::endl;
   }
   ready_ = true;
 }
@@ -138,13 +155,13 @@ void RknnDetector::fail(const std::string& message) {
 cv::Mat RknnDetector::preprocess(const cv::Mat& bgr, Letterbox& meta) const {
   meta.source_w = bgr.cols;
   meta.source_h = bgr.rows;
-  meta.scale = std::min(static_cast<float>(config_.input_size) / bgr.cols,
-                        static_cast<float>(config_.input_size) / bgr.rows);
+  meta.scale = std::min(static_cast<float>(input_width_) / bgr.cols,
+                        static_cast<float>(input_height_) / bgr.rows);
   const int resized_w = static_cast<int>(std::round(bgr.cols * meta.scale));
   const int resized_h = static_cast<int>(std::round(bgr.rows * meta.scale));
-  meta.pad_x = (config_.input_size - resized_w) / 2;
-  meta.pad_y = (config_.input_size - resized_h) / 2;
-  cv::Mat resized, canvas(config_.input_size, config_.input_size, CV_8UC3, cv::Scalar(114, 114, 114));
+  meta.pad_x = (input_width_ - resized_w) / 2;
+  meta.pad_y = (input_height_ - resized_h) / 2;
+  cv::Mat resized, canvas(input_height_, input_width_, CV_8UC3, cv::Scalar(114, 114, 114));
   cv::resize(bgr, resized, cv::Size(resized_w, resized_h), 0, 0, cv::INTER_LINEAR);
   resized.copyTo(canvas(cv::Rect(meta.pad_x, meta.pad_y, resized_w, resized_h)));
   cv::cvtColor(canvas, canvas, cv::COLOR_BGR2RGB);
@@ -183,6 +200,42 @@ std::vector<Detection> RknnDetector::detect(const cv::Mat& bgr, double* inferenc
   if (inference_ms) *inference_ms = std::chrono::duration<double, std::milli>(stop - start).count();
   std::vector<Detection> result = postprocess(outputs, meta);
   rknn_outputs_release(context_, io_num_.n_output, outputs.data());
+  if (two_stage_) {
+    std::vector<Detection> mapped;
+    int classified_housings=0;
+    static const char* names[]={"行人","骑行者","汽车","公交车","卡车","摩托车","自行车",
+        "交通灯","交通标志","人行横道","地面导向箭头","交通锥","施工区域","道路导向柱"};
+    for (Detection detection : result) {
+      const int native=detection.class_id;
+      // YOLO 原生交通灯 ID=7 只表示灯组定位，映射到内部 ID=21。
+      // MO 的 8 个红绿灯类别占内部 ID=7..14；其余道路类别顺延到 15..20。
+      detection.class_id=native<7 ? native : native==7 ? 21 : native+7;
+      detection.name=names[native];
+      if (native==7) {
+        // 每次 YOLO 结果最多处理 8 个灯组，限制 MO 裁剪调用总量。
+        // 超出预算的框标为“待识别”，不伪装成已确认的灯态。
+        const bool classified=classified_housings++<8;
+        auto lamps=classified ? lamp_classifier_->classify(bgr,detection) : std::vector<Detection>{};
+        detection.name=lamps.empty() ? (classified ? "交通灯（MO未确认）" : "交通灯（待识别）") : "交通灯";
+        mapped.push_back(detection);
+        mapped.insert(mapped.end(),lamps.begin(),lamps.end());
+      } else { mapped.push_back(detection); }
+    }
+    // 相邻灯组框可能重复包含同一亮灯；灯态框按 IoU>0.45 跨类别去重。
+    // 先保留置信度高的结果，避免同一灯泡重复画框或同时输出不同方向。
+    std::stable_sort(mapped.begin(),mapped.end(),[](const Detection& a,const Detection& b){return a.score>b.score;});
+    std::vector<Detection> unique;
+    for (const auto& candidate : mapped) {
+      bool duplicate=false;
+      if (candidate.class_id>=7 && candidate.class_id<=14) {
+        for (const auto& selected : unique) {
+          if (selected.class_id>=7 && selected.class_id<=14 && iou(candidate,selected)>.45f) {duplicate=true;break;}
+        }
+      }
+      if (!duplicate) unique.push_back(candidate);
+    }
+    result.swap(unique);
+  }
   return result;
 }
 
@@ -205,8 +258,8 @@ std::vector<Detection> RknnDetector::postprocess(const std::vector<rknn_output>&
     if (score_index < 0) continue;
     const TensorView& score = views[score_index];
     const int bins = box.c / 4;
-    const float stride_x = static_cast<float>(config_.input_size) / box.w;
-    const float stride_y = static_cast<float>(config_.input_size) / box.h;
+    const float stride_x = static_cast<float>(input_width_) / box.w;
+    const float stride_y = static_cast<float>(input_height_) / box.h;
     for (int y = 0; y < box.h; ++y) {
       for (int x = 0; x < box.w; ++x) {
         int best_class = -1;

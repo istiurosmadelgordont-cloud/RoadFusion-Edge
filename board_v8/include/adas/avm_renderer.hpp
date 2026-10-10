@@ -11,6 +11,7 @@ class AvmRenderer {
   bool load(const std::string& path) {
     if (car_asset_.empty()) car_asset_=cv::imread("assets/avm_car_top.png",cv::IMREAD_UNCHANGED);
     ready_.fill(false); error_.clear(); approximate_=false; calibrated_maps_=false;
+    fill_observed_.release();
     pixels_per_metre_=25; vehicle_width_=2; vehicle_length_=4.72;
     try {
       cv::FileStorage fs(path, cv::FileStorage::READ);
@@ -64,6 +65,9 @@ class AvmRenderer {
     return count()>0;
   }
   bool approximate() const { return approximate_; }
+  // Presentation only: observed pixels and calibrated coverage stay unchanged.
+  void set_visual_fill(bool enabled) { visual_fill_=enabled; }
+  bool visual_fill() const { return visual_fill_; }
   int count() const { return std::count(ready_.begin(),ready_.end(),true); }
   const std::string& error() const { return error_; }
   template<size_t N>
@@ -85,11 +89,12 @@ class AvmRenderer {
       if(w>1e-5) out.at<cv::Vec3b>(y,x)=total.at<cv::Vec3f>(y,x)/w;
       else if(((x+y)/12)%2==0) out.at<cv::Vec3b>(y,x)=cv::Vec3b(30,38,45);
     }
+    if (visual_fill_) extend_ground(out,weights>1e-5);
     cv::resize(out,out,cv::Size(640,640),0,0,cv::INTER_LINEAR);
-    // Top-down body with measured footprint; no change to the ground geometry.
-    const int halfw=cvRound(vehicle_width_*pixels_per_metre_*.5);
-    const int halfh=cvRound(vehicle_length_*pixels_per_metre_*.5);
-    cv::Rect body(320-halfw,320-halfh,2*halfw,2*halfh);
+    // Enlarge the display model in presentation mode, not the measured footprint.
+    const double display_scale=visual_fill_ ? 1.55 : 1.;
+    const int halfw=std::min(300,cvRound(vehicle_width_*pixels_per_metre_*.5*display_scale));
+    const int halfh=std::min(300,cvRound(vehicle_length_*pixels_per_metre_*.5*display_scale));
     if (car_asset_.empty() || car_asset_.type()!=CV_8UC4) {
     cv::ellipse(out,{320,322},{halfw+7,halfh+8},0,0,360,{8,12,16},-1,cv::LINE_AA);
     cv::ellipse(out,{320,320},{halfw,halfh},0,0,360,{185,195,205},-1,cv::LINE_AA);
@@ -104,6 +109,16 @@ class AvmRenderer {
       const int width=std::max(10,cvRound(car_asset_.cols*height/double(car_asset_.rows)));
       cv::resize(car_asset_,sprite,cv::Size(width,height),0,0,cv::INTER_AREA);
       const int left=320-width/2, top=320-height/2;
+      if (visual_fill_) {
+        cv::Mat shadow(640,640,CV_8U,cv::Scalar());
+        for(int y=0;y<height;++y) for(int x=0;x<width;++x) {
+          if(left+x>=0 && left+x<640 && top+y>=0 && top+y<640)
+            shadow.at<uchar>(top+y,left+x)=sprite.at<cv::Vec4b>(y,x)[3];
+        }
+        cv::GaussianBlur(shadow,shadow,{21,21},5);
+        for(int y=0;y<640;++y) for(int x=0;x<640;++x)
+          out.at<cv::Vec3b>(y,x)*=1.-.45*shadow.at<uchar>(y,x)/255.;
+      }
       for(int y=0;y<height;++y) for(int x=0;x<width;++x) {
         if(left+x<0 || left+x>=out.cols || top+y<0 || top+y>=out.rows) continue;
         const cv::Vec4b p=sprite.at<cv::Vec4b>(y,x);
@@ -118,6 +133,41 @@ class AvmRenderer {
     return out;
   }
  private:
+  void extend_ground(cv::Mat& out, const cv::Mat& observed) {
+    if (cv::countNonZero(observed)==0) return;
+    if (fill_observed_.empty() || cv::norm(observed,fill_observed_,cv::NORM_INF)>0) {
+      fill_observed_=observed.clone();
+      cv::Mat unknown, distance, labels;
+      cv::bitwise_not(observed,unknown);
+      cv::distanceTransform(unknown,distance,labels,cv::DIST_L2,5,cv::DIST_LABEL_PIXEL);
+      double max_label=0; cv::minMaxLoc(labels,nullptr,&max_label);
+      std::vector<cv::Point> seeds(size_t(max_label)+1);
+      for(int y=0;y<256;++y) for(int x=0;x<256;++x)
+        if(observed.at<uchar>(y,x)) seeds[labels.at<int>(y,x)]={x,y};
+      fill_x_.create(256,256,CV_32F); fill_y_.create(256,256,CV_32F);
+      fill_alpha_.create(256,256,CV_32F);
+      const double limit=3.5*pixels_per_metre_*.4;
+      const double fade=std::max(1.,pixels_per_metre_*.4*.5);
+      for(int y=0;y<256;++y) for(int x=0;x<256;++x) {
+        const auto seed=seeds[labels.at<int>(y,x)];
+        cv::Point reflected(std::max(0,std::min(255,2*seed.x-x)),std::max(0,std::min(255,2*seed.y-y)));
+        if(!observed.at<uchar>(reflected)) reflected=seed;
+        fill_x_.at<float>(y,x)=float(reflected.x); fill_y_.at<float>(y,x)=float(reflected.y);
+        fill_alpha_.at<float>(y,x)=observed.at<uchar>(y,x) ? 0.f :
+          float(std::max(0.,std::min(1.,(limit-distance.at<float>(y,x))/fade)));
+      }
+    }
+    cv::Mat texture, smooth;
+    cv::remap(out,texture,fill_x_,fill_y_,cv::INTER_LINEAR);
+    // Match the PC preview: keep road texture at the seam and soften only
+    // presentation fill. This never changes observed ground or coverage.
+    cv::GaussianBlur(texture,smooth,{5,5},.9);
+    cv::addWeighted(texture,.6,smooth,.4,0,texture);
+    for(int y=0;y<256;++y) for(int x=0;x<256;++x) {
+      const float alpha=fill_alpha_.at<float>(y,x);
+      if(alpha>0) out.at<cv::Vec3b>(y,x)=texture.at<cv::Vec3b>(y,x)*alpha+out.at<cv::Vec3b>(y,x)*(1-alpha);
+    }
+  }
   void prepare(int i, cv::Size size) {
     sizes_[i]=size;
     if (calibrated_maps_) {
@@ -150,6 +200,8 @@ class AvmRenderer {
   std::string error_;
   cv::Mat car_asset_;
   bool approximate_=false, calibrated_maps_=false;
+  bool visual_fill_=false;
+  cv::Mat fill_observed_,fill_x_,fill_y_,fill_alpha_;
   double pixels_per_metre_=25, vehicle_width_=2, vehicle_length_=4.72;
   std::array<cv::Mat,7> normalized_x_,normalized_y_,valid_mask_,map_x_,map_y_;
 };

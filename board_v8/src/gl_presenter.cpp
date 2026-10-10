@@ -1,4 +1,5 @@
 #include "adas/gl_presenter.hpp"
+#include "adas/ui_upload_regions.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -194,6 +195,10 @@ GlPresenter::GlPresenter(int width, int height) : width_(width), height_(height)
     for (GLuint& texture : camera_textures_) init_texture(texture, 640, 360);
     const GLubyte* name = glGetString(GL_RENDERER);
     renderer_ = name ? reinterpret_cast<const char*>(name) : "unknown";
+    const GLubyte* extensions = glGetString(GL_EXTENSIONS);
+    const std::string extension_list = " " + std::string(extensions ?
+        reinterpret_cast<const char*>(extensions) : "") + " ";
+    unpack_subimage_ = extension_list.find(" GL_EXT_unpack_subimage ") != std::string::npos;
   } catch (...) {
     cleanup();
     throw;
@@ -221,6 +226,44 @@ void GlPresenter::draw_texture(GLuint texture, const cv::Mat& image,
   glBindTexture(GL_TEXTURE_2D, texture);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.cols, image.rows,
                   GL_RGB, GL_UNSIGNED_BYTE, image.data);
+  draw_bound_texture(x, y, width, height);
+}
+
+void GlPresenter::upload_ui(const cv::Mat& image,
+                           const std::array<cv::Rect, 4>& views,
+                           unsigned camera_mask) {
+  if (image.type() != CV_8UC3 || image.size() != cv::Size(width_, height_) ||
+      !image.isContinuous())
+    throw std::runtime_error("GLES UI must be contiguous full-size BGR8");
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, ui_texture_);
+  if (!ui_initialized_ || camera_mask == 0) {
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.cols, image.rows,
+                    GL_RGB, GL_UNSIGNED_BYTE, image.data);
+    ui_initialized_ = true;
+    return;
+  }
+  const auto regions = visible_ui_regions(image.size(), views, camera_mask);
+  // GLES2 may lack strided uploads. Retain reusable packed buffers for that
+  // fallback; Mali supports EXT_unpack_subimage and uploads source ROIs directly.
+  const GLenum unpack_row_length = 0x0CF2;  // GL_UNPACK_ROW_LENGTH_EXT
+  if (unpack_subimage_) glPixelStorei(unpack_row_length, image.step/image.elemSize());
+  else ui_upload_buffers_.resize(regions.size());
+  for (size_t i = 0; i < regions.size(); ++i) {
+    const cv::Rect& r = regions[i];
+    const unsigned char* pixels = image.ptr<unsigned char>(r.y) + r.x*3;
+    if (!unpack_subimage_) {
+      image(r).copyTo(ui_upload_buffers_[i]);
+      pixels = ui_upload_buffers_[i].data;
+    }
+    glTexSubImage2D(GL_TEXTURE_2D, 0, r.x, r.y, r.width, r.height,
+                   GL_RGB, GL_UNSIGNED_BYTE, pixels);
+  }
+  // Camera textures are packed: never leak the UI stride into their uploads.
+  if (unpack_subimage_) glPixelStorei(unpack_row_length, 0);
+}
+
+void GlPresenter::draw_bound_texture(int x, int y, int width, int height) {
   glViewport(x, height_ - y - height, width, height);
   const GLfloat vertices[] = {
       -1.0f, -1.0f, 0.0f, 1.0f,
@@ -239,7 +282,10 @@ void GlPresenter::present(const cv::Mat& ui, const std::array<cv::Mat, 4>& camer
   glViewport(0, 0, width_, height_);
   glClearColor(0.07f, 0.09f, 0.11f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
-  draw_texture(ui_texture_, ui, 0, 0, width_, height_);
+  unsigned camera_mask = 0;
+  for (int i = 0; i < 4; ++i) if (!cameras[i].empty()) camera_mask |= 1U << i;
+  upload_ui(ui, view_rects, camera_mask);
+  draw_bound_texture(0, 0, width_, height_);
   for (int i = 0; i < 4; ++i)
     if (!cameras[i].empty()) draw_texture(camera_textures_[i], cameras[i],
                  view_rects[i].x, view_rects[i].y,
@@ -269,6 +315,14 @@ int GlPresenter::poll_input(int* click_x, int* click_y) {
       if (key == XK_m || key == XK_M) return 'm';
       if (key == XK_c || key == XK_C) return 'c';
       if (key == XK_r || key == XK_R) return 'r';
+      if (key == XK_h || key == XK_H) return 'h';
+      if (key == XK_1) return '1';
+      if (key == XK_2) return '2';
+      if (key == XK_3) return '3';
+      if (key == XK_space) return ' ';
+      if (key == XK_a || key == XK_A) return 'a';
+      if (key == XK_g || key == XK_G) return 'g';
+      if (key == XK_s || key == XK_S) return 's';
       if (key == XK_bracketleft) return '[';
       if (key == XK_bracketright) return ']';
     }

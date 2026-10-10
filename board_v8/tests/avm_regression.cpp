@@ -15,8 +15,17 @@ int main() {
   auto out=renderer.render(frames);
   auto p=out.at<cv::Vec3b>(170,170); assert(p[0]>=99&&p[0]<=101&&p[2]>=99&&p[2]<=101);
   assert(out.at<cv::Vec3b>(470,470)[2]<60); // no extrapolation into unseen rear/right
+  renderer.set_visual_fill(true);
+  auto extended=renderer.render(frames);
+  assert(extended.at<cv::Vec3b>(170,170)==p); // observed ground is preserved
+  assert(extended.at<cv::Vec3b>(170,110)[2]>80); // nearby missing ground gains texture
+  assert(extended.at<cv::Vec3b>(470,470)[2]<60); // distant unknown stays unknown
+  std::array<cv::Mat,4> empty;
+  assert(renderer.render(empty).at<cv::Vec3b>(170,110)[2]<60); // absent frames cannot seed fill
+  assert(renderer.render(frames).at<cv::Vec3b>(170,110)[2]>80); // coverage restored
+  renderer.set_visual_fill(false);
   frames[0]=cv::Mat(200,200,CV_8UC3,cv::Scalar(0,0,200));
   assert(cv::norm(renderer.render(frames),out,cv::NORM_INF)<2);
   assert(!renderer.load("/tmp/nonexistent_avm.yml")); assert(renderer.count()==0);
-  std::remove(path.c_str()); std::cout<<"AVM projection / overlap / blind area / resize / reset PASS\n";
+  std::remove(path.c_str()); std::cout<<"AVM projection / overlap / bounded visual fill / missing frames / resize / reset PASS\n";
 }

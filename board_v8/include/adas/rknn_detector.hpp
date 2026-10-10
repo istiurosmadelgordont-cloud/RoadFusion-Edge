@@ -5,8 +5,10 @@
 #include "rknn_api.h"
 #include <opencv2/core.hpp>
 #include <vector>
+#include <memory>
 
 namespace adas {
+class LampClassifier;
 
 class RknnDetector {
  public:
@@ -16,6 +18,7 @@ class RknnDetector {
   RknnDetector& operator=(const RknnDetector&) = delete;
 
   bool ready() const { return ready_; }
+  bool two_stage() const { return two_stage_; }
   const std::string& error() const { return error_; }
   const std::string& runtime_version() const { return runtime_version_; }
   std::vector<Detection> detect(const cv::Mat& bgr, double* inference_ms = nullptr);
@@ -42,6 +45,10 @@ class RknnDetector {
   bool ready_ = false;
   std::string error_;
   std::string runtime_version_;
+  int input_width_ = 640;
+  int input_height_ = 640;
+  bool two_stage_ = false;
+  std::unique_ptr<LampClassifier> lamp_classifier_;
 };
 
 }  // namespace adas

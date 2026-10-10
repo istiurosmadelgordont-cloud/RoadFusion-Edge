@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     if (!detector.ready()) throw std::runtime_error(detector.error());
     std::ofstream output(argv[3]);
     if (!output) throw std::runtime_error("cannot open CSV");
-    output << "frame,seconds,mirrored,valid,partial,raw_offset,offset,identity,reassignment,departure,side\n";
+    output << "frame,seconds,mirrored,valid,partial,raw_offset,offset,identity,reassignment,departure,side,left_points,right_points,left_coverage,right_coverage\n";
     adas::NeuralLaneGeometryTracker tracker;
     adas::LaneDepartureMonitor monitor;
     const auto origin = std::chrono::steady_clock::time_point(std::chrono::seconds(1));
@@ -47,7 +47,9 @@ int main(int argc, char** argv) {
         output << index << ',' << index / fps << ',' << mirror << ',' << raw.valid
                << ',' << raw.partial << ',' << raw.offset_ratio << ',' << lane.offset_ratio
                << ',' << lane.identity_uncertain << ',' << static_cast<int>(lane.reassignment_side)
-               << ',' << lane.departure << ',' << static_cast<int>(lane.departure_side) << '\n';
+               << ',' << lane.departure << ',' << static_cast<int>(lane.departure_side)
+               << ',' << raw.boundaries[1].size() << ',' << raw.boundaries[2].size()
+               << ',' << raw.boundary_coverage[1] << ',' << raw.boundary_coverage[2] << '\n';
         ++samples;
       }
       ++index;

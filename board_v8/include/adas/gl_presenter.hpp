@@ -3,6 +3,7 @@
 #include <array>
 #include <opencv2/core.hpp>
 #include <string>
+#include <vector>
 
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
@@ -25,6 +26,9 @@ class GlPresenter {
  private:
   void draw_texture(GLuint texture, const cv::Mat& image,
                     int x, int y, int width, int height);
+  void draw_bound_texture(int x, int y, int width, int height);
+  void upload_ui(const cv::Mat& image, const std::array<cv::Rect, 4>& views,
+                 unsigned camera_mask);
   void init_texture(GLuint& texture, int width, int height);
   void cleanup();
 
@@ -46,6 +50,9 @@ class GlPresenter {
   GLint pos_location_ = -1;
   GLint uv_location_ = -1;
   std::string renderer_;
+  bool unpack_subimage_ = false;
+  bool ui_initialized_ = false;
+  std::vector<cv::Mat> ui_upload_buffers_;
 
   void set_fullscreen(bool enabled);
 };

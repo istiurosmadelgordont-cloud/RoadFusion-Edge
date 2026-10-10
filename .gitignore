@@ -74,3 +74,7 @@ tools/make_nvidia_scene_contact_sheets.py
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Two-stage local model artifacts and experiment environments
+board_v8/models/
+two_stage_qat_20261010/

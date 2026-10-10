@@ -492,7 +492,11 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
                        right_color, right_danger ? 7 : 4);
   }
   const Detection* selected_target = nullptr;
+  std::vector<cv::Rect> lamp_labels;
+  bool mo_signal_label = false;
   for (const Detection& detection : detections) {
+    // Confirmed lamp children carry the label; keep the housing only for logic.
+    if (detection.class_id == 21 && detection.name == "交通灯") continue;
     const bool selected = is_risk_target(detection, risk);
     const bool current_signal = is_current_signal(detection, signal);
     const bool confirmed_target = selected && risk.reliable;
@@ -503,6 +507,27 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
     cv::rectangle(frame, detection.box, color,
                   confirmed_target && risk.warning ? 5 : confirmed_target || current_signal ? 3 : 1,
                   cv::LINE_AA);
+    if (detection.class_id == 21 || detection.name.find(" MO ") != std::string::npos) {
+      const cv::Scalar lamp_color = detection.class_id == 21 ? cv::Scalar(40,210,245) :
+          detection.class_id <= 10 ? cv::Scalar(45,65,245) : cv::Scalar(80,235,95);
+      cv::rectangle(frame,detection.box,lamp_color,1,cv::LINE_AA);
+      std::ostringstream caption;
+      caption<<detection.name;
+      if(detection.class_id==21) caption<<' '<<int(std::round(detection.score*100))<<'%';
+      const cv::Size text_size=ui::measure_text(caption.str(),18);
+      int x=std::max(0,std::min(int(detection.box.x),frame.cols-text_size.width-8));
+      int y=std::max(text_size.height+6,int(detection.box.y)-4);
+      for(int attempt=0;attempt<12;++attempt) {
+        const cv::Rect proposed(x,y-text_size.height-6,text_size.width+8,text_size.height+9);
+        bool collision=false;
+        for(const auto& previous:lamp_labels) if((proposed&previous).area()>0) {collision=true;break;}
+        if(!collision) {lamp_labels.push_back(proposed);break;}
+        y-=text_size.height+13;
+        if(y<text_size.height+6) y=std::min(frame.rows-4,int(detection.box.y+detection.box.height)+text_size.height+10+attempt*(text_size.height+13));
+      }
+      label(frame,caption.str(),{x,y},lamp_color,.64,1);
+      if(current_signal && detection.name.find(" MO ")!=std::string::npos) mo_signal_label=true;
+    }
   }
   if (selected_target) draw_risk_card(frame, *selected_target, risk, "FCW");
   if (signal.state != SignalState::NONE && signal.box.area() > 0) {
@@ -514,8 +539,9 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
     const char* state = signal.state == SignalState::RED ? "RED" :
         signal.state == SignalState::GREEN ? "GREEN" :
         signal.state == SignalState::YELLOW ? "YELLOW" : "UNKNOWN";
-    label(frame, std::string(signal.stable ? "CURRENT " : "CHECK ") + state,
-          {signal.box.x, signal.box.y - 4}, color, 0.43, 1);
+    if(!mo_signal_label)
+      label(frame, std::string(signal.stable ? "CURRENT " : "CHECK ") + state,
+            {signal.box.x, signal.box.y - 4}, color, 0.43, 1);
   }
   if (lane.valid) {
     if (lane.departure) {
