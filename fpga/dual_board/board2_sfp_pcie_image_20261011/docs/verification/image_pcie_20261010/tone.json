@@ -1,0 +1,32 @@
+{
+  "verified": true,
+  "unit_checked_cycles": 720899,
+  "unit_coverage": "all 256 Y x 256 thresholds for independent lightdown/darkup/bypass; all 256x256 dual thresholds at 8 boundary/interior Y values",
+  "pipeline_checked_pixels": 7168,
+  "pipeline_changed_pixels": 4567,
+  "pipeline_frames": 7,
+  "pipeline_coverage": [
+    "off exact RGB",
+    "darkup only",
+    "lightdown only",
+    "both",
+    "both then highlight reference/knee",
+    "overlapping thresholds 255/0",
+    "back to off"
+  ],
+  "static_pipeline_latency": 30,
+  "runtime_pipeline_latency_formula": "PIC_WIDTH + H_BLANK + 48",
+  "full_chain_latency_formula": "2 * (PIC_WIDTH + H_BLANK) + 96",
+  "fixed_tone_latency": 2,
+  "configuration": {
+    "lightdown_enable": "word0[11]",
+    "darkup_enable": "word0[12]",
+    "lightdown_threshold": "word2[31:24]",
+    "darkup_threshold": "word2[23:16]"
+  },
+  "new_rtl_hashes": {
+    "legacy_tone_luma.v": "ba0fe45fd0ba3cfa07673bf94a37b8ff0e80444e209601da20d957792c2f73bc",
+    "rgb_enhancement_pipeline.v": "a8efaea1271ace1c0e90db64237e4728da88ddc24e5d49d355e8a8346680d65c"
+  },
+  "limitations": "These tests validate arithmetic, saturation, metadata and parameter/frame alignment; board timing and image quality are handled by the parent integration."
+}

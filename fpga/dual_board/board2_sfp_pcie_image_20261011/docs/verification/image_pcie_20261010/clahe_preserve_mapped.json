@@ -1,0 +1,47 @@
+{
+  "target": {
+    "rounded_amount_fabric_registers": 9,
+    "preserve_attribute_mapped": true,
+    "netlist_path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/synthesize/hdmi_ddr_pcie_syn.vm",
+    "netlist_sha256": "dd7c9e9570fe4b205d8c9ef16ac4dd3c5851c5960bd53cf7d1bfe153836a5d67",
+    "source_sha256": "1c337e975a28902afde701b5499c3201c5b0d8d173782ae68fe511aba59c9577",
+    "bits": [
+      {
+        "bit": 0,
+        "line": 298719
+      },
+      {
+        "bit": 1,
+        "line": 298729
+      },
+      {
+        "bit": 2,
+        "line": 298739
+      },
+      {
+        "bit": 3,
+        "line": 298749
+      },
+      {
+        "bit": 4,
+        "line": 298759
+      },
+      {
+        "bit": 5,
+        "line": 298769
+      },
+      {
+        "bit": 6,
+        "line": 298779
+      },
+      {
+        "bit": 7,
+        "line": 298789
+      },
+      {
+        "bit": 8,
+        "line": 298799
+      }
+    ]
+  }
+}

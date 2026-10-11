@@ -1,0 +1,36 @@
+{
+  "change": "Preserve existing Stage 10 rounded_amount register in fabric",
+  "oracle_sha256": "df8fbcc9be1e4d758d07971d5cf5aaa3ffbf95d77aca5c2575a7b7c17fa7a154",
+  "algorithm_changed": false,
+  "clahe_latency_clocks": 13,
+  "runtime_config_delay_clocks": {
+    "blend": 7,
+    "finish": 11
+  },
+  "equivalence": {
+    "passed": true,
+    "cycle_comparisons": 370852,
+    "pixels": 24576,
+    "pixels_changed_from_aligned_original": 19194,
+    "frames": 48,
+    "donor_modes": [0, 1],
+    "coverage": ["runtime settings per frame", "stats flush", "reset during streaming", "independent CDF corner values", "exact 13 clock sync"],
+    "errors": 0,
+    "warnings": 0
+  },
+  "full_core": {
+    "passed": true,
+    "dimensions": [16, 16],
+    "latency_clocks": 192,
+    "sync_checks": 46405,
+    "off_pixels": 768,
+    "dcp_pixels": 512,
+    "tone_pixels": 1024,
+    "combined_pixels": 768,
+    "frame_config_changes": 11,
+    "errors": 0,
+    "warnings": 0,
+    "log": "../tests_core/clahe_preserve_serial.log"
+  },
+  "timing_implementation_requires_new_build": true
+}

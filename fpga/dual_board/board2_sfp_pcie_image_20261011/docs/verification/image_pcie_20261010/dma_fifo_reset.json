@@ -1,0 +1,56 @@
+{
+  "rtl_file": "../payload_target/source/source/pcie_dma_ctrl.v",
+  "rtl_sha256": "7dcf4f610cf9f878df1a0877129261e4baef2b852ccd63ba746496f737e823c8",
+  "old_rtl_sha256": "bc6bab60368438ae9ac334507cd1f93e83804aa1a46557906fec7eb0dce3e5f3",
+  "oracle_file": "pcie_dma_ctrl_reference.v",
+  "oracle_module": "pcie_dma_ctrl_reference",
+  "rtl_change": "Local pixel-clock FIFO write-reset register; gate writes during VS/reset; no image-pixel latency change or timing exceptions.",
+  "encoding": "Original byte encoding and CRLF preserved",
+  "release_extra_pixel_clocks": 1,
+  "measured_actual_top_vs_fall_to_first_de_clocks": 79392,
+  "timing_generator_copy": "sync_generator_reference.v",
+  "real_fifo_model": "fifo_reset_model.v",
+  "model_capacity": "32768 x 16 input -> 4096 x 128 output",
+  "model_limit": "Data-bearing asynchronous-reset model with registered reads and ideal cross-domain pointer visibility; vendor analog/CDC metastability and routed timing are not simulated.",
+  "regressions": [
+    {
+      "do": "run_dma.do",
+      "log": "dma_regression.log",
+      "passed": true,
+      "errors": 0,
+      "warnings": 0,
+      "checks": "Four-buffer ownership; stale/duplicate release; real VS/Header, VS/TLAST, STOP/TLAST handshake collisions; randomized backpressure; overflow and token exhaustion",
+      "completions": 42,
+      "packets": 139
+    },
+    {
+      "do": "run_dma_full.do",
+      "log": "dma_full_regression.log",
+      "passed": true,
+      "pass_flag": "sim:/handshake_tb/test_passed = 1",
+      "errors": 0,
+      "warnings": 0,
+      "image_packets": 64800,
+      "frame_completions": 1,
+      "total_packets_including_stop": 64802
+    },
+    {
+      "do": "run_dma_reset.do",
+      "log": "dma_reset_data.log",
+      "tb": "fifo_reset_tb.sv",
+      "passed": true,
+      "pass_flag": "sim:/fifo_reset_tb/test_passed = 1",
+      "errors": 0,
+      "warnings": 0,
+      "input_pixels": 2073600,
+      "checked_output_pixels": 2073600,
+      "image_packets": 64800,
+      "first_rgb565": "a55a",
+      "last_rgb565": "7d3c",
+      "checks": "Actual 1080p sync generator and top two-register VS/DE path; write-enable asserted for every DE pixel; no first/last or intermediate pixel lost; each MWr32 payload pixel checked; old/new complete AXIS trace identical; valid frame token release, STOP cookie and all four buffers free"
+    }
+  ],
+  "command": "vsim -c -l dma_reset_data.log -do run_dma_reset.do",
+  "working_directory": "tests_dma",
+  "modelsim": "SE-64 10.5"
+}

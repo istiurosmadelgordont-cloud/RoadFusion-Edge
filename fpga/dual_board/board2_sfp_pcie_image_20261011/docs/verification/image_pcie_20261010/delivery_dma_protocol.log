@@ -1,0 +1,51 @@
+# do run_dma_protocol.do
+# C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap work_dma_protocol work_dma_protocol 
+# Modifying C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/modelsim.ini
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:56:33 on Oct 11,2026
+# vlog -sv -work work_dma_protocol C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/source/pcie_dma_ctrl.v fifo_model.v handshake_tb.sv 
+# -- Compiling module pcie_dma_ctrl
+# -- Compiling module hdmi_pcie_fifo
+# -- Compiling module handshake_tb
+# 
+# Top level modules:
+# 	handshake_tb
+# End time: 10:56:33 on Oct 11,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# vsim -voptargs="+acc" -onfinish stop work_dma_protocol.handshake_tb 
+# Start time: 10:56:34 on Oct 11,2026
+# ** Note: (vsim-3813) Design is being optimized due to module recompilation...
+# ** Note: (vopt-143) Recognized 3 FSMs in module "pcie_dma_ctrl(fast)".
+# //  ModelSim SE-64 10.5 Feb 13 2016 
+# //
+# //  Copyright 1991-2016 Mentor Graphics Corporation
+# //  All Rights Reserved.
+# //
+# //  ModelSim SE-64 and its associated documentation contain trade
+# //  secrets and commercial or financial information that are the property of
+# //  Mentor Graphics Corporation and are privileged, confidential,
+# //  and exempt from disclosure under the Freedom of Information Act,
+# //  5 U.S.C. Section 552. Furthermore, this information
+# //  is prohibited from disclosure under the Trade Secrets Act,
+# //  18 U.S.C. Section 1905.
+# //
+# Loading sv_std.std
+# Loading work.handshake_tb(fast)
+# Loading work.pcie_dma_ctrl(fast)
+# Loading work.hdmi_pcie_fifo(fast)
+# PASS allocation, all-held drop, out-of-order/stale/duplicate release, empty FIFO
+# PASS VS/header handshake collision and recovery
+# PASS STOP under header backpressure and ordered cookie
+# PASS VS/TLAST collision and STOP during completion packet
+# PASS 32 frames with reproducible random backpressure and payload scoreboard
+# PASS STOP/TLAST simultaneous handshake
+# PASS overflow cancellation and token exhaustion
+# ALL TESTS PASSED image_packets=2 completions=42 packets=139
+# ** Note: $finish    : handshake_tb.sv(278)
+#    Time: 39530 ns  Iteration: 1  Instance: /handshake_tb
+# Break in Module handshake_tb at handshake_tb.sv line 278
+# Stopped at handshake_tb.sv line 278
+# End time: 10:56:35 on Oct 11,2026, Elapsed time: 0:00:01
+# Errors: 0, Warnings: 0

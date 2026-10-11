@@ -1,0 +1,21 @@
+{
+  "test": "mandatory_smooth_tb",
+  "status": "pass",
+  "frames": 12,
+  "clock_comparisons": 7472,
+  "pixel_comparisons": 1536,
+  "raw_A_publications": 12,
+  "smooth_updates": 9,
+  "removed_bit_requests": 9,
+  "compile_errors": 0,
+  "compile_warnings": 0,
+  "simulation_errors": 0,
+  "simulation_warnings": 0,
+  "checks": [
+    "src_cal_A_rgb always equals smoothed_A_rgb",
+    "Original smoothing mode preserves pixel/t outputs and sync latency",
+    "Former freeze/raw-bypass bits 9 and 10 cannot affect DCP operation",
+    "Former diagnostic bits 9 and 10 are cleared on runtime frame-boundary commit",
+    "Sky disabled, sky enabled, and protected-t bilateral filtering modes retain original outputs"
+  ]
+}

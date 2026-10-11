@@ -1,0 +1,634 @@
+{
+  "current_architecture": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+  "current_top_sha256": "d35b0697b7730ee15a7a09fe58852ca98f34d7427befd19e21faf8b0fc890a5c",
+  "latest_delivery_reports": [
+    "delivery_control_checks.json",
+    "delivery_vendor_checks.json",
+    "delivery_post_ddr_check.json",
+    "delivery_dma_timing_checks.json"
+  ],
+  "artifacts": [
+    {
+      "file": "mandatory_smooth_a.log",
+      "sha256": "2c61472c49cb819cd183da8a139c9ea0a6a6dc20b00fb30e0513c906e5ce53f3",
+      "bytes": 9158,
+      "classification": "prior_layer_run",
+      "layer": "Atmospheric-light mandatory smoothing only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_a_only/mandatory_smooth.log"
+    },
+    {
+      "file": "mandatory_smooth_a.json",
+      "sha256": "195c0473a0155ae41f9e36b1dd3ca625a840b8533a0103665b172d8a76ae1010",
+      "bytes": 712,
+      "classification": "prior_layer_run",
+      "layer": "Atmospheric-light mandatory smoothing only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_a_only/verification.json"
+    },
+    {
+      "file": "tone.log",
+      "sha256": "3fba49f74fee6b48e6979042f17c905010b938904adb4e9773b471d5206f90b5",
+      "bytes": 9755,
+      "classification": "prior_layer_run",
+      "layer": "Legacy brightness/highlight threshold and chroma alignment only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests/tone/tone.log"
+    },
+    {
+      "file": "tone.json",
+      "sha256": "b764e819d11e4b82a682355b5717bef1e2c3214dfba5419c8fe9bc21479b3237",
+      "bytes": 1298,
+      "classification": "prior_layer_run",
+      "layer": "Legacy brightness/highlight threshold and chroma alignment only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests/tone/verification.json"
+    },
+    {
+      "file": "image_serial.log",
+      "sha256": "fdf973e259d4652b1af770e31cab5b546d9a0027215684d30c2a2da70b9fcc64",
+      "bytes": 11234,
+      "classification": "prior_layer_run",
+      "layer": "Image-core frame configuration and serial modes only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_core/image_serial.log"
+    },
+    {
+      "file": "image_serial.json",
+      "sha256": "7fe209042edd0cea66fb5d669ebfbe4cb5fd663d09994716829ffbe87a23fae7",
+      "bytes": 1227,
+      "classification": "prior_layer_run",
+      "layer": "Image-core frame configuration and serial modes only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_core/verification.json"
+    },
+    {
+      "file": "range_equivalence.log",
+      "sha256": "82f770ba3f7092ceb5f583037ade55bda77348074e206791baaddd6c16829b4c",
+      "bytes": 2021,
+      "classification": "prior_layer_run",
+      "layer": "Bilateral range-weight LUT arithmetic only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_timing/range_equivalence.log"
+    },
+    {
+      "file": "timing_equivalence.log",
+      "sha256": "ce8933b71ddf5692941d01670d41ec59060414cc0a52fae996e4eca984d8f983",
+      "bytes": 2380,
+      "classification": "prior_layer_run",
+      "layer": "Sky protection and colour-conversion arithmetic only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_timing/equivalence.log"
+    },
+    {
+      "file": "atmosphere_stage.log",
+      "sha256": "fc4d0cc35afa33e22778374e11a76f4add6411e8180250c634200e244aad6cea",
+      "bytes": 2586,
+      "classification": "prior_layer_run",
+      "layer": "Atmospheric-light temporal arithmetic/pipeline only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_atmosphere_stage/atmosphere_stage_test.log"
+    },
+    {
+      "file": "atmosphere_stage.json",
+      "sha256": "fc55f2e13548e0d430ca10aa5e294084b8f20aa986c0fba016c78b795d5798bf",
+      "bytes": 1561,
+      "classification": "prior_layer_run",
+      "layer": "Atmospheric-light temporal arithmetic/pipeline only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_atmosphere_stage/test_summary.json"
+    },
+    {
+      "file": "clahe_equivalence.log",
+      "sha256": "68c0e6c7c82c25dc96df527bf86c56a6ba67d142b4801c591acec60a5380b644",
+      "bytes": 3609,
+      "classification": "prior_layer_run",
+      "layer": "CLAHE arithmetic, pipeline or mapped-register witness only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_clahe_timing/equivalence.log"
+    },
+    {
+      "file": "clahe_equivalence.json",
+      "sha256": "b5a08c104e23d3248a263b23861ea2b7cb236f14184bda69c66c8cc7b7ea7084",
+      "bytes": 1068,
+      "classification": "prior_layer_run",
+      "layer": "CLAHE arithmetic, pipeline or mapped-register witness only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_clahe_timing/verification.json"
+    },
+    {
+      "file": "sky_carry.json",
+      "sha256": "1984711c85bb996642d4fe744efb8b1a30e36285012e49a43700e770cae98277",
+      "bytes": 890,
+      "classification": "prior_layer_run",
+      "layer": "Sky-protection sum arithmetic and fixed latency only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_sky_carry/verification.json"
+    },
+    {
+      "file": "sky_carry.log",
+      "sha256": "9679be40fb248530a51947c6cd15b9873eafa5a2c6569abed54d8a508d921aef",
+      "bytes": 2395,
+      "classification": "prior_layer_run",
+      "layer": "Sky-protection sum arithmetic and fixed latency only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_sky_carry/sky_carry.log"
+    },
+    {
+      "file": "clahe_preserve_mapped.json",
+      "sha256": "86cd7eea6e8e8c10bbc88abf5b1a5ce7e54bdb37da25468682dde63faf258c67",
+      "bytes": 1015,
+      "classification": "prior_layer_run",
+      "layer": "CLAHE arithmetic, pipeline or mapped-register witness only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/clahe_preserve_mapped.json"
+    },
+    {
+      "file": "delivery_test_layout.json",
+      "sha256": "114b8c57bbee747bda64343721386c7dce13b1705468eb6101aa7eb983335eba",
+      "bytes": 1686,
+      "classification": "prior_layer_run",
+      "layer": "Historical test layout check; not current rerun",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/delivery_test_layout.json"
+    },
+    {
+      "file": "dma_timing_protocol.log",
+      "sha256": "41b94f9d392e327dec49a414512e23402c41d26b3b24232968337c67d0cbaa12",
+      "bytes": 2581,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/dma_protocol.log"
+    },
+    {
+      "file": "dma_timing_vendor.log",
+      "sha256": "9b3691c1b2e307135ff8684950de6a4c0237af52a42a00ff20dac27eaecd75fa",
+      "bytes": 5167,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/dma_vendor.log"
+    },
+    {
+      "file": "dma_timing_vendor_full.log",
+      "sha256": "ff8142d4facdad49704998e11e47d79d0052a0eb911dfd6c3c4a7b43f76ed351",
+      "bytes": 5487,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/dma_vendor_full.log"
+    },
+    {
+      "file": "dma_timing_command_guard.log",
+      "sha256": "1536ed5277417a045c4fa69c834e5972a289e674d5955caa881217c2909cf7bc",
+      "bytes": 1462,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/command_guard.log"
+    },
+    {
+      "file": "dma_timing_command_guard_full.log",
+      "sha256": "cb9305c2df001ac4b7fe2e735b5206f7cd70b3897a75973852c4ce45499724e1",
+      "bytes": 1055,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/command_guard_full.log"
+    },
+    {
+      "file": "dma_timing_summary.json",
+      "sha256": "4e23cb6f8275990bb3fbc5a1386d17ca6b05d54873d396b18e8b95f808bcfd68",
+      "bytes": 12264,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/dma_timing_summary.json"
+    },
+    {
+      "file": "dma_timing_manifest.json",
+      "sha256": "0a0a7ad91271524baaec21de5d9814609ae480de433f78cd42352521fd9f192b",
+      "bytes": 1160,
+      "classification": "current_layer_run",
+      "layer": "Current DMA command-guard and real vendor FIFO/packet equivalence",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Current DMA source against its pre-change oracle, including complete 1080p packets. This module-layer proof does not replace restored-stream top integration or routed STA.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma_timing/dma_timing_manifest.json"
+    },
+    {
+      "file": "pcie_control.log",
+      "sha256": "4cb5594d27fbc325b812c86bd74c9969b6ea46b0ccf63c99ec1a21a3d42aa5e6",
+      "bytes": 4598,
+      "classification": "prior_layer_run",
+      "layer": "PCIe command/ACK/configuration CDC protocol only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests/pcie_control.log"
+    },
+    {
+      "file": "dma_handshake.log",
+      "sha256": "5adbdadf91384d482ee2b3f567690e312dec2873a66a3da64a5f675594566ed0",
+      "bytes": 2367,
+      "classification": "prior_layer_run",
+      "layer": "PCIe image DMA ownership, FIFO or packet protocol only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma/dma_regression.log"
+    },
+    {
+      "file": "dma_full.log",
+      "sha256": "eafb51aca04d68d0643255af1643cdf69593c092ef1e3c7e1d40d546e2527a37",
+      "bytes": 2289,
+      "classification": "prior_layer_run",
+      "layer": "PCIe image DMA ownership, FIFO or packet protocol only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma/dma_full_regression.log"
+    },
+    {
+      "file": "dma_fifo_reset.log",
+      "sha256": "2d1a9055cdf87ecd428a834ab355954b62fcc967d17c24a8f24e874cace24ec3",
+      "bytes": 2570,
+      "classification": "prior_layer_run",
+      "layer": "PCIe image DMA ownership, FIFO or packet protocol only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma/dma_reset_data.log"
+    },
+    {
+      "file": "dma_fifo_reset.json",
+      "sha256": "839cb4f51be5c1aec14cc66a09509e8ed491b301da4f45bc8774a85c6f1e47e3",
+      "bytes": 2498,
+      "classification": "prior_layer_run",
+      "layer": "PCIe image DMA ownership, FIFO or packet protocol only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma/fifo_reset_summary.json"
+    },
+    {
+      "file": "dma_fifo_reset_manifest.json",
+      "sha256": "f2b68a340ba76b226c7a6e731a651cc364f935847cd058eac1f706c77be28e74",
+      "bytes": 540,
+      "classification": "prior_layer_run",
+      "layer": "PCIe image DMA ownership, FIFO or packet protocol only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_dma/fifo_reset_manifest.json"
+    },
+    {
+      "file": "raster_rate.log",
+      "sha256": "c51ae0e995a45331ed15a6d71bb6b372242877a6efb060030b9290236a75e9ee",
+      "bytes": 3476,
+      "classification": "prior_layer_run",
+      "layer": "Standalone SFP raster buffering/read-rate model only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_raster/raster_rate.log"
+    },
+    {
+      "file": "raster_rate.json",
+      "sha256": "068e342a43538ab6db5732c002697655d9d5d143dc603750af7f43ea34a5d42c",
+      "bytes": 3965,
+      "classification": "prior_layer_run",
+      "layer": "Standalone SFP raster buffering/read-rate model only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_raster/verification.json"
+    },
+    {
+      "file": "host_reference_test.json",
+      "sha256": "242aedd824ca4a0629a77567889de83108fbd266993b1e3e75ab82ea393383ea",
+      "bytes": 213,
+      "classification": "prior_layer_run",
+      "layer": "Host C helper mock only; no actual PCIe driver/device",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests/reference_test_result.json"
+    },
+    {
+      "file": "accounting_equivalence.log",
+      "sha256": "00a07887012f58f475869a2cd56a787b4319487c0e1be7010ca205b6f2b9de4d",
+      "bytes": 2424,
+      "classification": "prior_layer_run",
+      "layer": "PCIe rejection/overflow bookkeeping equivalence only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_accounting/accounting_equivalence.log"
+    },
+    {
+      "file": "accounting_build_equivalence.log",
+      "sha256": "7245a34093c49634ff93c2c8903a7af7554b65a32b44bd4f69cd7362eaae915b",
+      "bytes": 2532,
+      "classification": "prior_layer_run",
+      "layer": "PCIe rejection/overflow bookkeeping equivalence only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_accounting/accounting_build_equivalence.log"
+    },
+    {
+      "file": "sfp_register.log",
+      "sha256": "046f99192d91852cc25cc69fdbdab28b7b9f041a158f3f9489059efade153f56",
+      "bytes": 5291,
+      "classification": "prior_layer_run",
+      "layer": "Standalone SFP FIFO/decode output-phase mirror only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_sfp_register/sfp_register.log"
+    },
+    {
+      "file": "sfp_register_full.log",
+      "sha256": "cb5da6dfcee480a91121d8a3cb50c6ce6887bc47e07b0ee3ae4dd9e63ac46b3f",
+      "bytes": 14803,
+      "classification": "prior_layer_run",
+      "layer": "Standalone SFP FIFO/decode output-phase mirror only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_sfp_register/sfp_register_full.log"
+    },
+    {
+      "file": "sfp_register.json",
+      "sha256": "dbe3a6d6b5e98ce474ccde75bac53cc260245b8ae001b4fcc6fe18dd837af1e4",
+      "bytes": 4329,
+      "classification": "prior_layer_run",
+      "layer": "Standalone SFP FIFO/decode output-phase mirror only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_sfp_register/sfp_register_summary.json"
+    },
+    {
+      "file": "ddr_read_alignment.log",
+      "sha256": "8e1d7cccbf62c6b767afd3d75b1c981da0b6f9457b003d6c477825cd40363764",
+      "bytes": 5836,
+      "classification": "prior_layer_run",
+      "layer": "Standalone restored DDR FIFO/video phase only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_ddr_read_alignment/ddr_read_alignment.log"
+    },
+    {
+      "file": "ddr_read_alignment_full.log",
+      "sha256": "23e15d0435dc51c6e3e9e2b5a43f1d7302031316384603f7078628e099e411ff",
+      "bytes": 5856,
+      "classification": "prior_layer_run",
+      "layer": "Standalone restored DDR FIFO/video phase only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_ddr_read_alignment/ddr_read_alignment_full.log"
+    },
+    {
+      "file": "ddr_read_alignment.json",
+      "sha256": "8250c2fef0d59dc579c0d13508b6cf6cfffb33eeb360b52318655b663ae9ab4e",
+      "bytes": 5674,
+      "classification": "prior_layer_run",
+      "layer": "Standalone restored DDR FIFO/video phase only",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_ddr_read_alignment/ddr_read_alignment_summary.json"
+    },
+    {
+      "file": "post_ddr_integration.log",
+      "sha256": "dd4b0243137528a2cc7e2756f46a8670275060ddedfc62ddd2e16344153d3465",
+      "bytes": 12995,
+      "classification": "prior_layer_run",
+      "layer": "Earlier post-DDR top/core run with peripheral stubs",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_post_ddr_integration/post_ddr_integration.log"
+    },
+    {
+      "file": "post_ddr_integration.json",
+      "sha256": "9c848a765a27925addf741bdfbca8c4ee15528ba03457b2ae63ca8226fb58e65",
+      "bytes": 3551,
+      "classification": "prior_layer_run",
+      "layer": "Earlier post-DDR top/core run with peripheral stubs",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Historical evidence for its explicitly named module/test layer. Not proof of current top placement, routing or delivery execution; before-DDR entry mirrors remain historical transport witnesses.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_post_ddr_integration/verification.json"
+    },
+    {
+      "file": "delivery_control_checks.json",
+      "sha256": "95f89e50324bb15be4fa132024629b1868c893e692c677d82c12714a14a033de",
+      "bytes": 4832,
+      "classification": "current_delivery_run",
+      "layer": "PCIe parser/controller/DMA arbitration and configuration CDC",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/delivery_control_checks.json"
+    },
+    {
+      "file": "delivery_vendor_checks.json",
+      "sha256": "e56c30f5ff7d44d6d5f053a8b5875a8011459f786342e2cc3ba6f7e60706c14f",
+      "bytes": 5167,
+      "classification": "current_delivery_run",
+      "layer": "SFP decode and restored DDR FIFO stream, real vendor RAM models",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/delivery_vendor_checks.json"
+    },
+    {
+      "file": "delivery_post_ddr_check.json",
+      "sha256": "b8a1f02d871cfa9e27c574ea419015dc2a3e576f0c7d4c9a00bb6b3dcf61b0ed",
+      "bytes": 6021,
+      "classification": "current_delivery_run",
+      "layer": "Current DDR-after processing top wiring and complete image core",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/delivery_post_ddr_check.json"
+    },
+    {
+      "file": "delivery_dma_timing_checks.json",
+      "sha256": "fee246435653e4181aa0602d863c1134fb9abe0a13a218bfe24d3ba168790aac",
+      "bytes": 10872,
+      "classification": "current_delivery_run",
+      "layer": "Current delivered DMA protocol, vendor FIFO and command-guard tests",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/delivery_dma_timing_checks.json"
+    },
+    {
+      "file": "delivery_pcie_control.log",
+      "sha256": "9eaccdd1620d2fc0ef6846502889a551ac5ef20254b494144dfee4d724918694",
+      "bytes": 4695,
+      "classification": "current_delivery_run",
+      "layer": "PCIe parser/controller/DMA arbitration and configuration CDC",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/pcie_control/delivery_test.log"
+    },
+    {
+      "file": "delivery_accounting_equivalence.log",
+      "sha256": "c729cf90c001b927690d1b1bb3ab02bde2b208da8ab367bec38b2fd20e532fea",
+      "bytes": 2355,
+      "classification": "current_delivery_run",
+      "layer": "PCIe parser/controller/DMA arbitration and configuration CDC",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/accounting_equivalence/delivery_test.log"
+    },
+    {
+      "file": "delivery_sfp_register_short.log",
+      "sha256": "c3a44b788b1d15b7f4176d152467d80779d3e6772fbdc7e218b7b12db8e51430",
+      "bytes": 15057,
+      "classification": "current_delivery_run",
+      "layer": "SFP decode and restored DDR FIFO stream, real vendor RAM models",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/sfp_register/delivery_test.log"
+    },
+    {
+      "file": "delivery_ddr_read_alignment_full.log",
+      "sha256": "e34ce1bf08a63e72cbb7db013275879a372c85e8a422064904891083df9ec127",
+      "bytes": 11656,
+      "classification": "current_delivery_run",
+      "layer": "SFP decode and restored DDR FIFO stream, real vendor RAM models",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/ddr_read_alignment/delivery_test.log"
+    },
+    {
+      "file": "delivery_post_ddr_integration.log",
+      "sha256": "0817c9f58c913c5bc990855cfc0656c82507ce4f8658a9da617ec2b9e83957ec",
+      "bytes": 13047,
+      "classification": "current_delivery_run",
+      "layer": "Current DDR-after processing top wiring and complete image core",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/post_ddr_integration/delivery_test.log"
+    },
+    {
+      "file": "delivery_dma_protocol.log",
+      "sha256": "aa82457a8060164bf9d3923dab8bc4db5bcb5fc72c0e57012f5ef59d4453eb8e",
+      "bytes": 2684,
+      "classification": "current_delivery_run",
+      "layer": "Current delivered DMA protocol, vendor FIFO and command-guard tests",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_dma_protocol.log"
+    },
+    {
+      "file": "delivery_dma_vendor.log",
+      "sha256": "cb49e088506ebff71145136a8f83e44069269b80a5d55ee3904e451cb78de831",
+      "bytes": 5363,
+      "classification": "current_delivery_run",
+      "layer": "Current delivered DMA protocol, vendor FIFO and command-guard tests",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_dma_vendor.log"
+    },
+    {
+      "file": "delivery_command_guard_outer.log",
+      "sha256": "b801159445ed548ecad07a5b25a5d299bb003919a917f282eb796b59420060ad",
+      "bytes": 1024,
+      "classification": "current_delivery_run",
+      "layer": "Current delivered DMA protocol, vendor FIFO and command-guard tests",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_command_guard_outer.log"
+    },
+    {
+      "file": "delivery_command_guard_short.log",
+      "sha256": "81d952407fe45afb294573e4a35d47f0b7fec5662c99f627e0b3776c8ee460a8",
+      "bytes": 1462,
+      "classification": "current_delivery_run",
+      "layer": "Current delivered DMA protocol, vendor FIFO and command-guard tests",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_command_guard_short.log"
+    },
+    {
+      "file": "delivery_command_guard_full.log",
+      "sha256": "b9c43fc871d512cff3eee6199456df7c3d16c4f5840efca35494a93180a17599",
+      "bytes": 1055,
+      "classification": "current_delivery_run",
+      "layer": "Current delivered DMA protocol, vendor FIFO and command-guard tests",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Current delivered test run; covers the named layer. Only the post-DDR integration run proves system placement, using peripheral stubs.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_command_guard_full.log"
+    },
+    {
+      "file": "bilateral_preserve_change.json",
+      "sha256": "634ed8330259630dd46a25136207432ee071dd6a9fd0d40a3d4fe6b9cbecbe80",
+      "bytes": 53500,
+      "classification": "current_layer_run",
+      "layer": "Current bilateral synthesis attributes and image-core connection regression",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Strict byte/token equivalence after removing only synthesis attributes/comments. Mapped registers and physical timing require the current netlist/routed report.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_bilateral_timing/bilateral_preserve_change.json"
+    },
+    {
+      "file": "bilateral_preserve_core.log",
+      "sha256": "eff292990d158a5bdad3768e55d572bd58abc6896c0094b0ed90897e91d9b6f6",
+      "bytes": 11756,
+      "classification": "current_layer_run",
+      "layer": "Current bilateral synthesis attributes and image-core connection regression",
+      "architecture_scope": "No current full-top claim",
+      "scope": "Strict byte/token equivalence after removing only synthesis attributes/comments. Mapped registers and physical timing require the current netlist/routed report.",
+      "source": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests_bilateral_timing/bilateral_core.log"
+    },
+    {
+      "file": "implementation.json",
+      "sha256": "ddcf03a0df2bbefe4d1ee94893099d361b99f286391042810c5de7a8e870252a",
+      "bytes": 81758,
+      "classification": "current_qualified_implementation",
+      "layer": "Current PDS routed physical implementation under existing constraints",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Matching input audit and bitstream; not an FPGA hardware quality result.",
+      "source": "Current package_build audit"
+    },
+    {
+      "file": "implementation.rtr",
+      "sha256": "67a59c919c6bbb365801b387e617346a6993df8246e4439bf9d47f1c4e11b57b",
+      "bytes": 22055795,
+      "classification": "current_qualified_implementation",
+      "layer": "Current PDS routed physical implementation under existing constraints",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Matching input audit and bitstream; not an FPGA hardware quality result.",
+      "source": "Current package_build audit"
+    },
+    {
+      "file": "implementation.prr",
+      "sha256": "3bf585c8e0757b90af6d91c0377988bcf0b23aeb8d3b0bffaa246fcb8c4d6b37",
+      "bytes": 192369,
+      "classification": "current_qualified_implementation",
+      "layer": "Current PDS routed physical implementation under existing constraints",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Matching input audit and bitstream; not an FPGA hardware quality result.",
+      "source": "Current package_build audit"
+    },
+    {
+      "file": "pds_implementation.log",
+      "sha256": "000ad08ae8eca021fabdc7459a50f610e36fc50df74be36a239691fc5f17b7b2",
+      "bytes": 4148134,
+      "classification": "current_qualified_implementation",
+      "layer": "Current PDS routed physical implementation under existing constraints",
+      "architecture_scope": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one IMG pipeline -> shared HDMI/PCIe output",
+      "scope": "Matching input audit and bitstream; not an FPGA hardware quality result.",
+      "source": "Current package_build audit"
+    }
+  ],
+  "missing_optional_historical_artifacts": [],
+  "interpretation": "Historical artifacts do not certify current architecture. Current physical timing and matching bitstream are gated separately."
+}

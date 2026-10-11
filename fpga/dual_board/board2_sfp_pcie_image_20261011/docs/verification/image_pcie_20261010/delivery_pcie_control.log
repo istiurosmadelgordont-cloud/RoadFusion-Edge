@@ -1,0 +1,88 @@
+# do run_pcie_control.do
+# C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target
+# C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/payload_target
+# C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap work_pcie_control work_pcie_control 
+# Modifying C:\Users\hero\Documents\ChatGPT\haze_removal\pcie_image_integration_20261010\build_target\tests\pcie_control\modelsim.ini
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:55:59 on Oct 11,2026
+# vlog -sv -work work_pcie_control C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/source/pcie_dma_ctrl.v 
+# -- Compiling module pcie_dma_ctrl
+# 
+# Top level modules:
+# 	pcie_dma_ctrl
+# End time: 10:55:59 on Oct 11,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:55:59 on Oct 11,2026
+# vlog -sv -work work_pcie_control C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/src/img/pcie_image_control.v 
+# -- Compiling module pcie_image_control
+# 
+# Top level modules:
+# 	pcie_image_control
+# End time: 10:55:59 on Oct 11,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:56:00 on Oct 11,2026
+# vlog -sv -work work_pcie_control C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/src/img/pcie_tlp_arbiter.v 
+# -- Compiling module pcie_tlp_arbiter
+# 
+# Top level modules:
+# 	pcie_tlp_arbiter
+# End time: 10:56:00 on Oct 11,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:56:00 on Oct 11,2026
+# vlog -sv -work work_pcie_control C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/src/img/image_runtime_control.v 
+# -- Compiling module image_runtime_control
+# 
+# Top level modules:
+# 	image_runtime_control
+# End time: 10:56:00 on Oct 11,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:56:00 on Oct 11,2026
+# vlog -sv -work work_pcie_control fifo_model.v pcie_image_control_tb.sv 
+# -- Compiling module hdmi_pcie_fifo
+# -- Compiling module pcie_image_control_tb
+# 
+# Top level modules:
+# 	hdmi_pcie_fifo
+# 	pcie_image_control_tb
+# End time: 10:56:00 on Oct 11,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# vsim -voptargs="+acc" -onfinish stop work_pcie_control.pcie_image_control_tb 
+# Start time: 10:56:00 on Oct 11,2026
+# ** Note: (vsim-3813) Design is being optimized due to module recompilation...
+# ** Note: (vopt-143) Recognized 3 FSMs in module "pcie_dma_ctrl(fast)".
+# //  ModelSim SE-64 10.5 Feb 13 2016 
+# //
+# //  Copyright 1991-2016 Mentor Graphics Corporation
+# //  All Rights Reserved.
+# //
+# //  ModelSim SE-64 and its associated documentation contain trade
+# //  secrets and commercial or financial information that are the property of
+# //  Mentor Graphics Corporation and are privileged, confidential,
+# //  and exempt from disclosure under the Freedom of Information Act,
+# //  5 U.S.C. Section 552. Furthermore, this information
+# //  is prohibited from disclosure under the Trade Secrets Act,
+# //  18 U.S.C. Section 1905.
+# //
+# Loading sv_std.std
+# Loading work.pcie_image_control_tb(fast)
+# Loading work.pcie_dma_ctrl(fast)
+# Loading work.hdmi_pcie_fifo(fast)
+# Loading work.pcie_image_control(fast)
+# Loading work.pcie_tlp_arbiter(fast)
+# Loading work.image_runtime_control(fast)
+# PASS RX no-idle stream: eight Header/Payload packets, exact address/value order
+# PASS RX VALID bubbles: invalid metadata ignored; pending header preserved
+# PASS RX half-packet reset: parsed header and buffered payload discarded; fresh command recovered
+# PASS PCIe image control: 27 replies, 3 STOP packets; snapshot/frame atomicity, CDC, even-toggle pixel reset, overflow, mutual address guards and TLP backpressure
+# ** Note: $finish    : pcie_image_control_tb.sv(629)
+#    Time: 19250 ns  Iteration: 1  Instance: /pcie_image_control_tb
+# Break in NamedBeginStat main at pcie_image_control_tb.sv line 629
+# Stopped at pcie_image_control_tb.sv line 629
+# End time: 10:56:01 on Oct 11,2026, Elapsed time: 0:00:01
+# Errors: 0, Warnings: 0

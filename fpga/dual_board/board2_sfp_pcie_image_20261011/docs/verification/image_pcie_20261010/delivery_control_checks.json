@@ -1,0 +1,95 @@
+{
+  "checked_at": "2026-10-11T10:56:04+08:00",
+  "build_root": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target",
+  "source_files": [
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/src/img/pcie_image_control.v",
+      "bytes": 26568,
+      "sha256": "c3ce23a836bbc9c5ff59eab35f14f0480a37c8f91c587c987dd6414053452611",
+      "matches_payload": true
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/source/pcie_dma_ctrl.v",
+      "bytes": 39706,
+      "sha256": "bf8aa9e4bcf4c72f2565c78c447cbe09f2d29477db364720e9d8e853a6edd6d0",
+      "matches_payload": true
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/src/img/pcie_tlp_arbiter.v",
+      "bytes": 2750,
+      "sha256": "2991e02631f0f02af1ad323ef709be39b54c794a77e3e5abea0c702c565c33b2",
+      "matches_payload": true
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/src/img/image_runtime_control.v",
+      "bytes": 4476,
+      "sha256": "15312a08f8779b94c1bfb3ef15e3716bde5e4e974f83dc1c8b8e0ba1b47ffa18",
+      "matches_payload": true
+    }
+  ],
+  "tests": [
+    {
+      "directory": "pcie_control",
+      "script": "run_pcie_control.do",
+      "do_sha256": "b61578cd4022903e13b818cae02e9163ce0fced28779ad8d37f2f6ebecf694e5",
+      "exit_code": 0,
+      "pass": true,
+      "errors": 0,
+      "warnings": 0,
+      "local_modelsim_ini": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/pcie_control/modelsim.ini",
+      "log": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/pcie_control/delivery_test.log",
+      "log_bytes": 4695,
+      "log_sha256": "9eaccdd1620d2fc0ef6846502889a551ac5ef20254b494144dfee4d724918694",
+      "pass_lines": [
+        "# PASS RX no-idle stream: eight Header/Payload packets, exact address/value order",
+        "# PASS RX VALID bubbles: invalid metadata ignored; pending header preserved",
+        "# PASS RX half-packet reset: parsed header and buffered payload discarded; fresh command recovered",
+        "# PASS PCIe image control: 27 replies, 3 STOP packets; snapshot/frame atomicity, CDC, even-toggle pixel reset, overflow, mutual address guards and TLP backpressure"
+      ],
+      "command": [
+        "C:\\Users\\hero\\Desktop\\modlesim\\win64\\vsim.exe",
+        "-c",
+        "-modelsimini",
+        "C:\\Users\\hero\\Documents\\ChatGPT\\haze_removal\\pcie_image_integration_20261010\\build_target\\tests\\pcie_control\\modelsim.ini",
+        "-do",
+        "do run_pcie_control.do",
+        "-l",
+        "delivery_test.log"
+      ]
+    },
+    {
+      "directory": "accounting_equivalence",
+      "script": "run_accounting_build_equivalence.do",
+      "do_sha256": "13c661ab448bebc3ea93413e8e4980138b6f7bb735c0eb7d5c1ad79b4ef7cd7c",
+      "exit_code": 0,
+      "pass": true,
+      "errors": 0,
+      "warnings": 0,
+      "local_modelsim_ini": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/accounting_equivalence/modelsim.ini",
+      "log": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/accounting_equivalence/delivery_test.log",
+      "log_bytes": 2355,
+      "log_sha256": "c729cf90c001b927690d1b1bb3ab02bde2b208da8ab367bec38b2fd20e532fea",
+      "pass_lines": [
+        "# PASS accounting equivalence: 10690 cycles, 1990 TX beats, 2341 rejected+lost collisions, 183 double losses, 645 adjacent QUERY"
+      ],
+      "command": [
+        "C:\\Users\\hero\\Desktop\\modlesim\\win64\\vsim.exe",
+        "-c",
+        "-modelsimini",
+        "C:\\Users\\hero\\Documents\\ChatGPT\\haze_removal\\pcie_image_integration_20261010\\build_target\\tests\\accounting_equivalence\\modelsim.ini",
+        "-do",
+        "do run_accounting_build_equivalence.do",
+        "-l",
+        "delivery_test.log"
+      ]
+    }
+  ],
+  "all_pass": true,
+  "production_sources_modified": false,
+  "production_input_count": 448,
+  "production_input_snapshot_sha256": "78b0bc491557866f2526191757fcc322bcd14d3c2e34d8253db0f4890b996a04",
+  "local_modelsim_ini": true,
+  "global_modelsim_ini_modified": false,
+  "proof_generator_sha256": "66167c6b1e616bf7eacd1a21d3aae970faad13d6b032f7581185cc1fe043558f",
+  "rerun_command_powershell": "& 'C:\\Users\\hero\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe' 'C:\\Users\\hero\\Documents\\ChatGPT\\haze_removal\\pcie_image_integration_20261010\\run_delivery_control_checks.py' --modelsim 'C:\\Users\\hero\\Desktop\\modlesim\\win64\\vsim.exe'"
+}

@@ -1,0 +1,29 @@
+{
+  "test": "image_serial_tb",
+  "status": "pass",
+  "dimensions": [16, 16],
+  "frames": 12,
+  "line_clocks": 48,
+  "total_latency_clocks": 192,
+  "sync_checks": 46405,
+  "exact_RGB_bypass_pixels": 768,
+  "DCP_only_pixels": 512,
+  "tone_RGB_oracle_pixels": 1024,
+  "combined_DCP_Gamma_CLAHE_tone_highlight_pixels": 768,
+  "two_clock_tone_arithmetic_and_chroma_checks": 46595,
+  "mid_frame_changes_deferred_to_next_frame": 11,
+  "compile_errors": 0,
+  "compile_warnings": 0,
+  "simulation_errors": 0,
+  "simulation_warnings": 0,
+  "checks": [
+    "All-off path preserves exact RGB and fixed VS/DE latency",
+    "DCP-only RGB agrees with the DCP output after enhancement bypass delay",
+    "Legacy dark lift, light reduction and overlap match an independent full RGB/Y/RGB oracle",
+    "Tone-Y and Cb/Cr retain two-clock alignment for all serial modes",
+    "Every output pixel has the frame configuration belonging to its input pixel",
+    "Mid-frame configuration submission remains pending until the next frame",
+    "A diagnostic bits 9 and 10 are cleared without suppressing new tone bits 11 and 12"
+  ],
+  "dimension_note": "The existing CLAHE core requires both dimensions to be at least 16; use 16x16 instead of 16x8."
+}

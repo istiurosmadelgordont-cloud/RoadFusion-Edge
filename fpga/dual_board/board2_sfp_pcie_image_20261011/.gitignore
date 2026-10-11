@@ -1,0 +1,14 @@
+compile/
+synthesize/
+device_map/
+place_route/
+report_timing/
+generate_bitstream/
+constraint_check/
+log/
+logbackup/
+tests/.out/
+*.lock
+*.log
+*.vvp
+*.exe

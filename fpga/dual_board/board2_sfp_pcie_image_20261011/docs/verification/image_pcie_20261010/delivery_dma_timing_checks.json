@@ -1,0 +1,210 @@
+{
+  "checked_at": "2026-10-11T10:57:59+08:00",
+  "scope": "Current delivered DMA timing/command guard module tests, not full relocated video/physical implementation",
+  "architecture_scope": "PCIe image DMA consumes shared post-DDR processed output; tests isolate DMA packet/CDC/FIFO/command layers",
+  "all_pass": true,
+  "production_sources_modified": false,
+  "production_rtl_ip_constraint_inputs_unchanged": true,
+  "externally_changed_during_run": [],
+  "producer": {
+    "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/source/pcie_dma_ctrl.v",
+    "bytes": 39706,
+    "sha256": "bf8aa9e4bcf4c72f2565c78c447cbe09f2d29477db364720e9d8e853a6edd6d0"
+  },
+  "producer_matches_payload": true,
+  "oracle": {
+    "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/pcie_dma_ctrl_timing_reference.v",
+    "bytes": 38121,
+    "sha256": "f63346afa306096fd8cb8afe4117992d737ab91229ccd1d2e3978407d69ddcf1"
+  },
+  "compiled_inputs": [
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/source/pcie_dma_ctrl.v",
+      "bytes": 39706,
+      "sha256": "bf8aa9e4bcf4c72f2565c78c447cbe09f2d29477db364720e9d8e853a6edd6d0"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/source/source/sync_generator.v",
+      "bytes": 4671,
+      "sha256": "7dc94cee98d6c4822292e3c05bcbc97a74cb599e0ddf1b30f8966e36928a7252"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/ipcore/hdmi_pcie_fifo/hdmi_pcie_fifo.v",
+      "bytes": 8869,
+      "sha256": "5abe6cf34d32b8ba26fc86ff7b7e58689066d1e64e65ecec643ba5a9865ecee5"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/ipcore/hdmi_pcie_fifo/rtl/ipml_fifo_ctrl_v1_3.v",
+      "bytes": 13845,
+      "sha256": "f666f7b42d1de14a8d1707861b8c8f9ca4bbcebfde656d725571cb00fda3da4a"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/ipcore/hdmi_pcie_fifo/rtl/ipml_reg_fifo_v1_0.v",
+      "bytes": 2267,
+      "sha256": "439180d83a0ed98e958f073ef02b5b2a75cb5ec4fc17b975f8e0e0eb4e5800d8"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/ipcore/hdmi_pcie_fifo/rtl/ipml_prefetch_fifo_v1_6_hdmi_pcie_fifo.v",
+      "bytes": 7686,
+      "sha256": "81df7db50f5b74c16d18abf0a28c9e2e5e172abd7e2b0009c0b5153df26a33d4"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/ipcore/hdmi_pcie_fifo/rtl/ipml_sdpram_v1_6_hdmi_pcie_fifo.v",
+      "bytes": 91990,
+      "sha256": "1b7e13824da2f8e3fc363bd4b6806f3f45e1c1cd9600ff89f490676ee5dca40b"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/ipcore/hdmi_pcie_fifo/rtl/ipml_fifo_v1_6_hdmi_pcie_fifo.v",
+      "bytes": 7346,
+      "sha256": "700939aa9bbeb86c5e2064cc6c41bcce2222c92c3d070698e42b61d5650aef3f"
+    }
+  ],
+  "vendor_models": [
+    {
+      "path": "C:/pango/PDS_2022.2-SP6.4/arch/vendor/pango/verilog/simulation/GTP_GRS.v",
+      "bytes": 2472,
+      "sha256": "dae720bcc467ddb4ff99f2753368934e2649b87f6ac63b8a0d7219699bac1dec"
+    },
+    {
+      "path": "C:/pango/PDS_2022.2-SP6.4/arch/vendor/pango/verilog/simulation/GTP_DRM18K.v",
+      "bytes": 48045,
+      "sha256": "d8ea932d33c088ab6a459c305a60ac28017c7b0594984d33b2d367c891df951a"
+    }
+  ],
+  "delivered_tests": [
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/handshake_tb.sv",
+      "bytes": 14876,
+      "sha256": "af8e8ce50f7296ad28754a4d84e6ff1857929aa1f46361b83ab0aa19198ca324"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/fifo_model.v",
+      "bytes": 1014,
+      "sha256": "691ecb5b3dae3da615d90c4ac4f0a02bc7adeffe0c90589585ca5ebc1d19dcb9"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/dma_timing_vendor_tb.sv",
+      "bytes": 17115,
+      "sha256": "e056ac6f90c27005a5f8efbc9cd65f50986d468cfcee09dfd709a3384bdc4017"
+    },
+    {
+      "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/command_guard_tb.sv",
+      "bytes": 29083,
+      "sha256": "1f09fe3dbf66664f23ec9e006ab6b92fb8518b46fffc327e40218bf95257856e"
+    }
+  ],
+  "results": {
+    "dma_protocol": {
+      "script": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/run_dma_protocol.do",
+        "bytes": 529,
+        "sha256": "9b9bdb8f2de9302f31589971c07a0db86daecf31918ea3f966e0f9bd1d18e6b9"
+      },
+      "exit_code": 0,
+      "passed": true,
+      "errors": 0,
+      "warnings": 0,
+      "log": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_dma_protocol.log",
+        "bytes": 2684,
+        "sha256": "aa82457a8060164bf9d3923dab8bc4db5bcb5fc72c0e57012f5ef59d4453eb8e",
+        "pass_lines": [
+          "# PASS allocation, all-held drop, out-of-order/stale/duplicate release, empty FIFO",
+          "# PASS VS/header handshake collision and recovery",
+          "# PASS STOP under header backpressure and ordered cookie",
+          "# PASS VS/TLAST collision and STOP during completion packet",
+          "# PASS 32 frames with reproducible random backpressure and payload scoreboard",
+          "# PASS STOP/TLAST simultaneous handshake",
+          "# PASS overflow cancellation and token exhaustion",
+          "# ALL TESTS PASSED image_packets=2 completions=42 packets=139"
+        ],
+        "last_logged_totals": [
+          0,
+          0
+        ]
+      }
+    },
+    "dma_vendor_short": {
+      "script": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/run_dma_vendor.do",
+        "bytes": 1360,
+        "sha256": "6fb19bc7217b392e3091ebe7bd4df5e627427a5dd29083b4e9983e22a54efcbc"
+      },
+      "exit_code": 0,
+      "passed": true,
+      "errors": 0,
+      "warnings": 0,
+      "warning_codes": {},
+      "warnings_origin": "This rerun used existing optimized vendor FIFO models: final log reports 0 warnings. Initial uncached vendor elaboration emitted 66 warnings (WWCONF/inactive address branches); no warnings were suppressed or edited.",
+      "log": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_dma_vendor.log",
+        "bytes": 5363,
+        "sha256": "cb49e088506ebff71145136a8f83e44069269b80a5d55ee3904e451cb78de831",
+        "pass_lines": [
+          "# PASS actual top 1080p VS fall to first DE: 79392 pixel clocks",
+          "# DMA TIMING VENDOR TEST PASSED pixels=3840 image_packets=120 first=a55a last=7d3c gap=79392 write_phase=94653 packet_phase=79674"
+        ],
+        "last_logged_totals": [
+          0,
+          0
+        ]
+      },
+      "full_vendor_rerun": false,
+      "coverage": "3840 pixels/120 image packets; prior full 2073600 proof retained separately",
+      "cache_reuse_note": true
+    },
+    "command_guard": {
+      "script": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/run_command_guard.do",
+        "bytes": 881,
+        "sha256": "7a97330cf50d328d7a0785b7dae642d32dba19b8590bc3eb1aa8f559c8388d1b"
+      },
+      "exit_code": 0,
+      "passed": true,
+      "errors": 0,
+      "warnings": 0,
+      "outer_log": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_command_guard_outer.log",
+        "bytes": 1024,
+        "sha256": "b801159445ed548ecad07a5b25a5d299bb003919a917f282eb796b59420060ad"
+      },
+      "short_transcript_original": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/command_guard.log",
+        "bytes": 1462,
+        "sha256": "81d952407fe45afb294573e4a35d47f0b7fec5662c99f627e0b3776c8ee460a8"
+      },
+      "short_log": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_command_guard_short.log",
+        "bytes": 1462,
+        "sha256": "81d952407fe45afb294573e4a35d47f0b7fec5662c99f627e0b3776c8ee460a8",
+        "pass_lines": [
+          "# TEST PASSED command_guard IMAGE_PACKETS=2 cycles=138117 comparisons=138115 commands=31251",
+          "# TEST PASSED directed=2052 late_ACK=4007 random_groups=2000 drop_cycles=2009"
+        ],
+        "last_logged_totals": null
+      },
+      "full_transcript_original": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/command_guard_full.log",
+        "bytes": 1055,
+        "sha256": "b9c43fc871d512cff3eee6199456df7c3d16c4f5840efca35494a93180a17599"
+      },
+      "full_log": {
+        "path": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/delivery_command_guard_full.log",
+        "bytes": 1055,
+        "sha256": "b9c43fc871d512cff3eee6199456df7c3d16c4f5840efca35494a93180a17599",
+        "pass_lines": [
+          "# TEST PASSED command_guard IMAGE_PACKETS=64800 cycles=138117 comparisons=138115 commands=31251",
+          "# TEST PASSED directed=2052 late_ACK=4007 random_groups=2000 drop_cycles=2009"
+        ],
+        "last_logged_totals": [
+          0,
+          0
+        ]
+      },
+      "transcript_note": "DO switches transcript from -l outer to command_guard.log and then command_guard_full.log. The short file has PASS but no final totals because transcript changes; console showed short 0/0, full file has final 0/0. Named delivery copies hash-equal actual originals. Outer alone is compile-only proof."
+    }
+  },
+  "local_modelsim_ini": "C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/build_target/tests/dma_timing/modelsim.ini",
+  "written_scope": "Only DMA delivery local ini/cache/logs, named guard transcript copies and this case JSON; no RTL/IP/PDS/Desktop writes.",
+  "global_modelsim_ini_modified": false
+}

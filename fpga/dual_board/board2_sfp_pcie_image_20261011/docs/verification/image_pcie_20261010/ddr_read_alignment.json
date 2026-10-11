@@ -1,0 +1,93 @@
+{
+  "test_scope": "Actual PDS-listed DDR rw_fifo_ctrl and generated read/write FIFO plus vendor DRM model and sync_generator; local restored-stream entry wiring mirror. DDR controller AXI scheduling, image core, production top and HDMI/PCIe sinks are not instantiated.",
+  "simulator": "ModelSim SE-64 10.5",
+  "vendor_version": "PDS_2022.2-SP6.4 GTP_DRM9K and IPML FIFO v1.9/control v1.4",
+  "pass_flag": "sim:/ddr_read_alignment_tb/test_passed = 1",
+  "active_ip_path": "source/read_ddr_fifo",
+  "excluded_legacy_duplicate": "ipcore/read_ddr_fifo uses 256-to-32 and is not the PDS active 256-to-16 FIFO",
+  "read_fifo_parameters": {
+    "write_width": 256,
+    "write_depth": 256,
+    "read_width": 16,
+    "read_depth": 4096,
+    "OUTPUT_REG": 0
+  },
+  "pixel_clock_MHz": 148.57142858840817,
+  "ddr_write_clock_MHz": 200,
+  "entry_rgb565_expansion": "Zero-filled RGB888: {R[4:0],3b0,G[5:0],2b0,B[4:0],3b0}",
+  "entry_vs_reset_value": 0,
+  "phase_history_warmup": "Initial two reset-release clocks fill reference histories before steady-state sync checks; no active pixel or line check is skipped.",
+  "read_to_entry_phase": {
+    "R0": "FIFO accepts rd_en/de_o on rising edge. RGB565 response and ddr_stream VS/HS/DE become valid after R0.",
+    "R1": "Common image_stage register captures FIFO response and ddr_stream controls on the following rising edge.",
+    "R2": "A synchronous consumer samples the image_stage output. Test assertions run before NBA and therefore report read_to_entry=2.",
+    "fifo_response_to_entry_register_clocks": 1,
+    "read_enable_to_consumer_sampled_entry_clocks": 2
+  },
+  "checks": [
+    "Original rw_fifo_ctrl frame-reset assertion/release is exercised before feeding data",
+    "Every low-halfword-first RGB565 pixel from 256-bit DDR source checked, including first and last",
+    "No FIFO empty at any active read and no full at any DDR write",
+    "Restored VS/HS/DE phase histories match both control and entry register stages",
+    "Each line contains exactly 1920 pixels and starts every 2200 pixel clocks",
+    "Full test uses original 1125/5/36/1080/4 vertical timing and confirms 79392 clocks from VS falling to first DE",
+    "Final FIFO empty; exact source write-block count and frame read-pixel count"
+  ],
+  "results": {
+    "short": {
+      "passed": true,
+      "do": "run_ddr_read_alignment.do",
+      "log": "ddr_read_alignment.log",
+      "resolution": "1920x2",
+      "pixels_checked": 3840,
+      "complete_active_lines": 2,
+      "sync_phase_checks": 10932,
+      "ddr_256bit_blocks": 240,
+      "vs_falling_to_first_read_de_clocks": 4592,
+      "first_rgb565": "a55a",
+      "last_rgb565": "7d3c",
+      "errors": 0,
+      "warnings_in_log": 0
+    },
+    "full": {
+      "passed": true,
+      "do": "run_ddr_read_alignment_full.do",
+      "log": "ddr_read_alignment_full.log",
+      "resolution": "1920x1080",
+      "pixels_checked": 2073600,
+      "complete_active_lines": 1080,
+      "sync_phase_checks": 2466132,
+      "ddr_256bit_blocks": 129600,
+      "vs_falling_to_first_read_de_clocks": 79392,
+      "first_rgb565": "a55a",
+      "last_rgb565": "7d3c",
+      "errors": 0,
+      "warnings_in_log": 0
+    }
+  },
+  "known_first_elaboration_vendor_warnings": 24,
+  "warning_origin": "First elaboration emits 24 unmodified vendor sdpram inactive address-width branch bit-select warnings (12 each in read/write FIFO). Final incremental cached runs can report zero; no warnings suppressed or vendor code changed.",
+  "sources_sha256": {
+    "source/source/rw_fifo_ctrl.v": "967edecd8c368cf4c1e16bf1b0c028364ffbc4dbbd5f0fe6780aabc6d29d27f0",
+    "source/source/sync_generator.v": "7dc94cee98d6c4822292e3c05bcbc97a74cb599e0ddf1b30f8966e36928a7252",
+    "source/read_ddr_fifo/read_ddr_fifo.v": "f32bbaf81f6bcc0002f8930743d3ad9d12cdbbfc49d3b7eee379bde0442cda7f",
+    "source/read_ddr_fifo/rtl/ipml_fifo_ctrl_v1_4_read_ddr_fifo.v": "f0dbf5e0cef64852f4d3fdfb8dd8f855851a0ee2ca1f52eba227038d17836cb9",
+    "source/read_ddr_fifo/rtl/ipml_sdpram_v1_9_read_ddr_fifo.v": "d0154b2d9d72e1aacdee0d522eb1adc8873afd75edda36f38140ff0e2d017176",
+    "source/read_ddr_fifo/rtl/ipml_fifo_v1_9_read_ddr_fifo.v": "5f431ba0cb881f380ba8cc067a4c5b81c570eaf12218965f8c09a4a4c562484e",
+    "source/write_ddr_fifo/write_ddr_fifo.v": "d19036c39f7abbcc4b8e02819aef40513b0b5df73ed459d7aee333e9b229aa73",
+    "source/write_ddr_fifo/rtl/ipml_fifo_ctrl_v1_4_write_ddr_fifo.v": "1413da26cfb3dcdfc7e5d433f76142accdd1a11fb5e2c4c45bd9ef5feb55617a",
+    "source/write_ddr_fifo/rtl/ipml_sdpram_v1_9_write_ddr_fifo.v": "707112bebdfa94aab430c95ad64409c5f9f6cb036d740bb403e0312337ad5035",
+    "source/write_ddr_fifo/rtl/ipml_fifo_v1_9_write_ddr_fifo.v": "8cb2fcc58e7eb0e38cc66534dfc4f6f4e3520fac33e2486dd4b7bd13b3cc1a21"
+  },
+  "vendor_sha256": {
+    "GTP_GRS.v": "dae720bcc467ddb4ff99f2753368934e2649b87f6ac63b8a0d7219699bac1dec",
+    "GTP_DRM9K.v": "d46a34dc26c840e4f81bb6b9c4c7994b8d28c4d3f56993080c2a83d9f8881bbf",
+    "GTP_DRM18K.v": "d8ea932d33c088ab6a459c305a60ac28017c7b0594984d33b2d367c891df951a"
+  },
+  "test_sha256": {
+    "ddr_read_alignment_tb.sv": "a3d681f87c553e8e852cc7ee8bdfd52c2ddce152536f893686b21158cf6b733d",
+    "run_ddr_read_alignment.do": "8f7567a9d1bbc0217e7e9d439ad79d9f0e88e8c43694ec8e0c2ff4be21216da3",
+    "run_ddr_read_alignment_full.do": "09acd1828c82b655e9abecb1714a45860e19bcf61804e2f824e9549ac822cd8f"
+  },
+  "limits": "Functional vendor-model verification does not model physical routed setup/hold/recovery. Entry mirror confirms data/control phases but does not replace a relocated production-top or image-core regression."
+}

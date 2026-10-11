@@ -1,0 +1,134 @@
+# do run_tone.do
+# C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/tests/tone
+# C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop
+# C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/payload_board
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap work_tone work_tone 
+# Modifying modelsim.ini
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 21:57:48 on Oct 10,2026
+# vlog -sv -work work_tone C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/bilateral_filter_proc.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/Bilateral_Range_LUT.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/bilateral_transmission.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/calculate_A.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/clahe_cdf_store.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/clahe_clipper.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/clahe_histogram.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/clahe_luma.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/clahe_tiles.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/clahe_tiles_first.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/dark_channel.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/fifo_ram.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/frame_config_delay.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/gamma_table.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/haze_removal_cal.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/Joint_Similarity_LUT.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/matrix_generate_3x3.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/Matrix_Generate_3X3_8Bit.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/one_column_ram.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/pipelined_divide_u8.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/search_block_min.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/Similary_LUT.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/sky_protect.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/sort3.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/src_min.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/sync_fifo.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/time_alignment.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/tx_get.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/video_line_delay.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/VIP_RGB888_YCbCr444.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/common/ycbcr2rgb.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/img/atmosphere_temporal.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/img/bilateral_ycbcr.v C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/payload_board/source/src/img/dcp_rgb.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/img/highlight_luma.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/img/image_processing_dvio_top.v C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/payload_board/source/src/img/image_processing_top.v C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/payload_board/source/src/img/image_runtime_control.v C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/payload_board/source/src/img/rgb_enhancement_pipeline.v C:/Users/hero/Desktop/pds_prj/06_hdmi_loop/06_hdmi_loop/source/src/img/video_stream_delay.v C:/Users/hero/Documents/ChatGPT/haze_removal/pcie_image_integration_20261010/payload_board/source/src/img/legacy_tone_luma.v tone_luma_tb.sv tone_pipeline_tb.sv 
+# -- Compiling module bilateral_filter_proc
+# -- Compiling module Bilateral_Range_LUT
+# -- Compiling module bilateral_transmission
+# -- Compiling module calculate_A
+# -- Compiling module clahe_cdf_store
+# -- Compiling module clahe_clipper
+# -- Compiling module clahe_histogram
+# -- Compiling module clahe_luma
+# -- Compiling module clahe_tiles
+# -- Compiling module clahe_tiles_registered
+# -- Compiling module clahe_tiles_first
+# -- Compiling module dark_channel
+# -- Compiling module fifo_ram
+# -- Compiling module frame_config_delay
+# -- Compiling module gamma_lookuptable
+# -- Compiling module haze_removal_cal
+# -- Compiling module Joint_Similarity_LUT
+# -- Compiling module matrix_generate_3x3
+# -- Compiling module Matrix_Generate_3X3_8Bit
+# -- Compiling module one_column_ram
+# -- Compiling module pipelined_divide_u8
+# -- Compiling module search_block_min
+# -- Compiling module Similary_LUT
+# -- Compiling module sky_protect
+# -- Compiling module sort3
+# -- Compiling module src_min
+# -- Compiling module sync_fifo
+# -- Compiling module time_alignment
+# -- Compiling module tx_get
+# -- Compiling module video_line_delay
+# -- Compiling module VIP_RGB888_YCbCr444
+# -- Compiling module YCbCr2RGB
+# -- Compiling module atmosphere_temporal
+# -- Compiling module bilateral_ycbcr
+# -- Compiling module dcp_rgb
+# -- Compiling module highlight_luma
+# -- Compiling module image_processing_dvio_top
+# -- Compiling module image_processing_top
+# -- Compiling module image_runtime_control
+# -- Compiling module rgb_enhancement_pipeline
+# -- Compiling module video_stream_delay
+# -- Compiling module legacy_tone_luma
+# -- Compiling module tone_luma_tb
+# -- Compiling module tone_pipeline_tb
+# 
+# Top level modules:
+# 	clahe_tiles
+# 	image_processing_dvio_top
+# 	tone_luma_tb
+# 	tone_pipeline_tb
+# End time: 21:57:48 on Oct 10,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# vsim -c -voptargs="+acc" -onfinish stop work_tone.tone_luma_tb 
+# Start time: 21:57:48 on Oct 10,2026
+# ** Note: (vsim-8009) Loading existing optimized design _opt1
+# //  ModelSim SE-64 10.5 Feb 13 2016 
+# //
+# //  Copyright 1991-2016 Mentor Graphics Corporation
+# //  All Rights Reserved.
+# //
+# //  ModelSim SE-64 and its associated documentation contain trade
+# //  secrets and commercial or financial information that are the property of
+# //  Mentor Graphics Corporation and are privileged, confidential,
+# //  and exempt from disclosure under the Freedom of Information Act,
+# //  5 U.S.C. Section 552. Furthermore, this information
+# //  is prohibited from disclosure under the Trade Secrets Act,
+# //  18 U.S.C. Section 1905.
+# //
+# Loading sv_std.std
+# Loading work.tone_luma_tb(fast)
+# Loading work.legacy_tone_luma(fast)
+# Loading work.legacy_tone_luma(fast__1)
+# Loading work.legacy_tone_luma(fast__2)
+# PASS tone: 720899 cycles, exhaustive independent Y/threshold pairs, 8*256*256 dual curves
+# ** Note: $finish    : tone_luma_tb.sv(156)
+#    Time: 7209042 ns  Iteration: 0  Instance: /tone_luma_tb
+# Break in Module tone_luma_tb at tone_luma_tb.sv line 156
+# Stopped at tone_luma_tb.sv line 156
+# End time: 21:57:50 on Oct 10,2026, Elapsed time: 0:00:02
+# Errors: 0, Warnings: 0
+# vsim -c -voptargs="+acc" -onfinish stop work_tone.tone_pipeline_tb 
+# Start time: 21:57:50 on Oct 10,2026
+# ** Note: (vsim-3813) Design is being optimized due to module recompilation...
+# Loading sv_std.std
+# Loading work.tone_pipeline_tb(fast)
+# Loading work.rgb_enhancement_pipeline(fast)
+# Loading work.frame_config_delay(fast)
+# Loading work.frame_config_delay(fast__1)
+# Loading work.frame_config_delay(fast__2)
+# Loading work.frame_config_delay(fast__3)
+# Loading work.frame_config_delay(fast__4)
+# Loading work.frame_config_delay(fast__5)
+# Loading work.VIP_RGB888_YCbCr444(fast)
+# Loading work.video_stream_delay(fast)
+# Loading work.bilateral_ycbcr(fast)
+# Loading work.bilateral_filter_proc(fast)
+# Loading work.Matrix_Generate_3X3_8Bit(fast)
+# Loading work.sync_fifo(fast)
+# Loading work.frame_config_delay(fast__6)
+# Loading work.Bilateral_Range_LUT(fast)
+# Loading work.video_line_delay(fast)
+# Loading work.frame_config_delay(fast__7)
+# Loading work.video_stream_delay(fast__1)
+# Loading work.video_stream_delay(fast__2)
+# Loading work.video_stream_delay(fast__3)
+# Loading work.legacy_tone_luma(fast)
+# Loading work.video_stream_delay(fast__4)
+# Loading work.video_stream_delay(fast__5)
+# Loading work.video_stream_delay(fast__6)
+# Loading work.highlight_luma(fast)
+# Loading work.YCbCr2RGB(fast)
+# Loading work.video_stream_delay(fast__7)
+# Loading work.video_line_delay(fast__1)
+# Loading work.rgb_enhancement_pipeline(fast__1)
+# Loading work.bilateral_ycbcr(fast__1)
+# Loading work.legacy_tone_luma(fast__1)
+# Loading work.video_stream_delay(fast__8)
+# PASS tone pipeline: pixels=7168 changed=4567 static_latency=30 runtime_latency=144
+# ** Note: $finish    : tone_pipeline_tb.sv(263)
+#    Time: 237952 ns  Iteration: 0  Instance: /tone_pipeline_tb
+# Break in Module tone_pipeline_tb at tone_pipeline_tb.sv line 263
+# Stopped at tone_pipeline_tb.sv line 263
+# End time: 21:57:52 on Oct 10,2026, Elapsed time: 0:00:02
+# Errors: 0, Warnings: 0

@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "production_scope": "payload_target only; no build_target or Desktop edits by this test",
+  "production_top_sha256": "d35b0697b7730ee15a7a09fe58852ca98f34d7427befd19e21faf8b0fc890a5c",
+  "production_top_encoding": "UTF-8 with CRLF; original Chinese retained",
+  "architecture": "SFP RGB565 raw -> DDR storage -> restored FIFO video -> one common entry register -> unchanged IMG core -> one shared output register -> HDMI and PCIe DMA",
+  "latency": {
+    "ddr_fifo_response_clocks": 1,
+    "entry_clocks": 1,
+    "core_clocks_1080p": 4496,
+    "output_clocks": 1,
+    "ddr_read_to_shared_output_pipeline_stages_1080p": 4499,
+    "extra_clocks_from_original_restored_HDMI_register": 4497,
+    "test_width": 32,
+    "test_height": 16,
+    "test_h_blank": 64,
+    "test_core_clocks": 288
+  },
+  "coverage": {
+    "input_rgb_sync_checks": 106140,
+    "all_mode_fixed_vs_hs_de_checks": 105273,
+    "raw_ddr_write_and_undelayed_read_enable_checks": 110955,
+    "all_off_pixels_equal_original_restore": 4608,
+    "processing_on_pixels": 1536,
+    "processing_changed_pixels": 1536,
+    "hdmi_dma_same_stream_checks": 110955,
+    "complete_first_last_lines": 192,
+    "frame_boundary_config_changes": 2,
+    "restored_vsync_startup_and_reset_releases": 3
+  },
+  "configuration_scenarios": [
+    "all modules off",
+    "Gamma only",
+    "DCP plus Gamma",
+    "midframe PCIe reset, wait restored DDR VS before restarting",
+    "midframe fram_done withdrawal, wait newly restored DDR VS"
+  ],
+  "rgb_format_mapping": {
+    "HDMI": "RGB888 shared registered output",
+    "PCIe_DMA": "RGB565 = {r_out[7:3], g_out[7:2], b_out[7:3]} from same shared register",
+    "raw_restore": "original RGB565 expanded by zero-filling low RGB888 bits; all-off output is bit-equivalent to old restore"
+  },
+  "reset_fix": "image_stage_vs resets to LOW blanking to avoid a one-clock fake active-VS pulse and downstream overlapping frame configuration packets",
+  "test_boundaries": {
+    "compiled_real": "complete production hdmi_ddr_pcie.v, unchanged complete common/img arithmetic pipeline, actual sync_generator",
+    "isolated_peripherals": [
+      "PLL",
+      "SFP transport",
+      "DDR AXI/PHY",
+      "PCIe transport/control/DMA packet engine",
+      "reset IP"
+    ],
+    "forced_stimulus": "independent raw SFP stream, one-clock DDR read response, PCIe requested configuration bus/apply toggle and independent reset flags",
+    "separate_vendor_fifo_validation": "tests_ddr_read_alignment covers active source/read_ddr_fifo, rw_fifo_ctrl and real vendor GTP_DRM9K, including full 1920x1080 first/last pixels",
+    "limitations": "This integration test validates top wiring and video phase, not DDR AXI protocol, PCIe packet contents, CDC implementation or post-route timing; independent existing tests and final build cover those."
+  },
+  "warnings": 0,
+  "errors": 0,
+  "log": "post_ddr_integration.log",
+  "pass_line": "PASS post-DDR integration input=106140 sync=105273 rawwrites=110955 off=4608 processed=1536 changed=1536 DMA=110955 firstlast=192/192 configs=2 resets=3",
+  "files": {
+    "peripheral_witnesses.v": "4746c79bc3126741aec66b9b26699c042d323cd0a213783025967346bd3c9dc7",
+    "post_ddr_integration_tb.sv": "f7d606216673f020939e941300f4201802d1739a537e33a962f1fef767f22e55",
+    "prepare_stubs.py": "aa82b50607195c587bc20015a990b786c429bfcf442bbabd8a245fe38d335db7",
+    "run_post_ddr.do": "1b26029b467d87a7b868a3be8de38e3f2be2d610fcafdfee93acda9355ecf09d"
+  }
+}

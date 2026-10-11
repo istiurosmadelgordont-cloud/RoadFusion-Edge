@@ -8,6 +8,12 @@
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
 
+## 板卡二 PCIe 图像处理工程（2026-10-11）
+
+新增 [板卡二完整工程快照](fpga/dual_board/board2_sfp_pcie_image_20261011/README.md)，DDR 保存 SFP 原始 RGB565，读出后处理，HDMI 与 PCIe 共用输出；新增独立配置状态 DMA 页及帧边界五字参数提交。原板卡一、旧板卡二与现有 ARM 软件保留。
+
+[RC 控制与场景调参指南](fpga/dual_board/board2_sfp_pcie_image_20261011/docs/RC_PCIE_IMAGE_TUNING.md) 包含四缓冲、START/STOP/RELEASE、配置状态确认，以及日间、雾天、夜间、逆光、轻噪场景的起始参数。原始 IP、测试与本地验证记录随工程保存；未重新进行上板验收，保存位流与附带报告存在哈希差异，见工程说明。
+
 ## 当前板端版本（2026-10-10）
 
 [`board_v8`](board_v8/README.md) 已同步板端正在使用的 **YOLO 14 类 QAT INT8（960×544）+ MobileNet 灯态 FP16（128×128）**，包含四路检测、中文标签、可开关的小图形叠加、左/直/右方向选择，以及指定灯组的红停绿行和模拟报警。默认关闭车道线与 TTC。
