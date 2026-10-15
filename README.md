@@ -8,11 +8,13 @@
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
 
-## 板卡二 PCIe 图像处理工程（2026-10-11）
+## 板卡二PCIe图像处理工程（2026-10-15）
 
-新增 [板卡二完整工程快照](fpga/dual_board/board2_sfp_pcie_image_20261011/README.md)，DDR 保存 SFP 原始 RGB565，读出后处理，HDMI 与 PCIe 共用输出；新增独立配置状态 DMA 页及帧边界五字参数提交。原板卡一、旧板卡二与现有 ARM 软件保留。
+双板方案的 [板卡二工程](fpga/dual_board/board2_sfp_pcie/README.md) 已替换为 `sfp_ddr_image_pice_handshake` 当前整合版，工程以ZIP下载解压使用。DDR保存原始RGB565，读出后统一处理并送HDMI/PCIe；图像参数已合入 `pcie_dma_ctrl`，原SFP/PCIe IP生成文件保持不变。
 
-[RC 控制与场景调参指南](fpga/dual_board/board2_sfp_pcie_image_20261011/docs/RC_PCIE_IMAGE_TUNING.md) 包含四缓冲、START/STOP/RELEASE、配置状态确认，以及日间、雾天、夜间、逆光、轻噪场景的起始参数。原始 IP、测试与本地验证记录随工程保存；未重新进行上板验收，保存位流与附带报告存在哈希差异，见工程说明。
+[代码解说](fpga/dual_board/board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 与 [RC控制PCIe指南](fpga/dual_board/board2_sfp_pcie/docs/RC_PCIE_CONTROL.md) 覆盖模块连接、四缓冲、START/STOP/RELEASE、旧暗光/高光命令和五字参数提交。本版没有旧快照的0x220/0x224配置状态DMA接口。旧20261011目录仅保留迁移入口，历史版本由Git保留。
+
+控制、DMA与视频回归、PDS综合和器件映射已通过；尚未布局布线后时序签核或上板验收，不提供旧位流作为本版下载文件。板卡一、ARM应用与以太网上位机保持原版本。
 
 ## 当前板端版本（2026-10-10）
 
@@ -39,10 +41,10 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 新增[双板系统说明](fpga/dual_board/README.md)，包含可直接打开的两份 PDS 工程：
 
 - [板卡 1：四路采集与光口回传](fpga/dual_board/board1_capture/README.md)：当前接入 HDMI、板卡 2 的 SFP 视频、以太网 0、以太网 1，合成 1920×1080 四宫格。
-- [板卡 2：HDMI 光口发送与 PCIe 输出](fpga/dual_board/board2_sfp_pcie/README.md)：HDMI 送板卡 1，反向接收四宫格，经 DDR/增强/PCIe 四缓冲握手送鲁班猫 2。
+- [板卡 2：DDR后图像处理与PCIe输出](fpga/dual_board/board2_sfp_pcie/README.md)：HDMI 送板卡 1，反向接收四宫格，经 DDR/增强/PCIe 四缓冲握手送鲁班猫 2。
 - [最新版 Windows 以太网上位机](tools/udp_video_sender/README.md)：可配置本机 IP、目标 IP/MAC、输入/输出尺寸与帧率、VS 消隐及包间隔。
 
-两份新工程使用普通源码目录保存，无需解压；旧基线继续保留。当前接线、OV5640 保留状态、通道 1 VS 连接、HS2 驱动依赖与验证边界见系统说明。此次整合不等同于双板链路已完成时序签核及板级验收。
+板卡一按源码目录保存；板卡二按ZIP提供，下载解压后打开PDS。旧版本由Git历史保留。当前接线、OV5640 保留状态、通道 1 VS 连接、HS2 驱动依赖与验证边界见系统说明。此次整合不等同于双板链路已完成时序签核及板级验收。
 
 该快照位于私有仓库，仅作内部备份和调试；第三方材料仍受其原许可约束。详见
 [免责声明与权利通知](fpga/dual_board/DISCLAIMER.md)。
@@ -58,7 +60,7 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 | [`fpga/pcie_video`](fpga/pcie_video/) | 1080p RGB565 PCIe 彩条基线及 ARM 操作说明 | 用于先验证 BAR 命令、TLP/DMA 和四缓冲传输，不代表摄像头链路完成 |
 | [`fpga/ethernet_video`](fpga/ethernet_video/README.md) | 千兆以太网接收 960×540 RGB565、写 DDR 并显示，配套 Windows UDP 发送器 | 已有彩条显示现场观察；协议没有包序号、确认或重传 |
 
-早期 PDS 基线以 ZIP 或分卷形式保存；新增双板版本在 `fpga/dual_board` 中按源码目录保存。
+早期 PDS 基线以 ZIP 或分卷形式保存；双板版本位于 `fpga/dual_board`：板卡一为源码目录，板卡二为工程ZIP。
 恢复方式、SHA-256、工具版本、已知 RTL/CDC 问题见各目录 README 和验证记录。综合成功不等于板级数据完整性、
 缓存一致性和时序已经签核。
 
@@ -202,3 +204,4 @@ intermediate source frames when necessary to preserve the video's original speed
 
 模型文件位于 `models/`。第三方 RKNN SDK、Python 虚拟环境、量化图片和
 测试视频未纳入版本控制。
+

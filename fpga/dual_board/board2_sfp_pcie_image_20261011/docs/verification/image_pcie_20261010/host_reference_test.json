@@ -1,6 +1,0 @@
-{
-  "passed": true,
-  "return_code": 0,
-  "compiler": "Clang14 -std=c99 -Wall -Wextra -Werror -O2 -ffreestanding",
-  "execution": "local no-entry DLL, self-test with mock MMIO and ACK; no hardware accesses"
-}

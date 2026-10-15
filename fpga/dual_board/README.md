@@ -1,14 +1,14 @@
 # 双板四路采集、光口互传与 PCIe 输出
 
-## 新版板卡二（2026-10-11）
+## 当前板卡二（2026-10-15）
 
-新增 [board2_sfp_pcie_image_20261011](board2_sfp_pcie_image_20261011/README.md)，工程入口 [hdmi_ddr_pice.pds](board2_sfp_pcie_image_20261011/hdmi_ddr_pice.pds)。新版在 DDR 读侧进行 DCP、Y 降噪、Gamma、CLAHE、亮度曲线和高光保护，HDMI/PCIe 共用处理输出；RC 通过五字整包提交及独立 DMA 状态页控制。详见 [RC 控制与场景调参指南](board2_sfp_pcie_image_20261011/docs/RC_PCIE_IMAGE_TUNING.md)。
+[board2_sfp_pcie](board2_sfp_pcie/README.md) 已替换为 `sfp_ddr_image_pice_handshake`，工程入口为 [工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261015.zip)（解压后打开 `hdmi_ddr_pice.pds`）。图像处理在DDR读侧，HDMI/PCIe共用处理结果；参数控制已合入手写 `pcie_dma_ctrl`，原SFP/PCIe IP生成文件保持不变。
 
-旧 `board2_sfp_pcie` 保留用于回退。下文是 2026-09-27 双板接线与软件集成说明，其中旧板卡二 `video_enhance` 与 `0x140/150/160` 控制方式不适用于新版；以新版工程文档为准。此次不替换板卡一、ARM 驱动或以太网上位机，也不宣称已有 HS2 驱动支持新配置页。当前保存位流与本地附带构建记录的哈希不同，见新版工程 README。
+请先阅读 [代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 与 [RC控制PCIe指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。旧0x140/0x150/0x160命令继续有效，完整参数使用0x200~0x214，当前没有0x220/0x224配置状态DMA页。旧日期快照目录只保留迁移入口；板卡一、ARM驱动/应用、以太网上位机未替换。
 
-## 原双板整合记录（2026-09-27）
+## 双板接线与板卡一现有配置
 
-2026-09-27 本地工程整合。本目录直接保存可浏览的 PDS 工程、RTL、IP 和约束文件，无需解压 ZIP。两份工程按用户指定的本地目录复制，功能 RTL 和 IP 内容保持原样。本说明以当时顶层接线为准。
+板卡一保持2026-09-27上传版本，下面的四路映射和以太网设置继续沿用。板卡二采用2026-10-15更新版本，数据路径及RC接口以新指南为准。板卡一保留源码目录，板卡二以ZIP保存PDS、RTL、IP和约束，使用前先下载解压。
 
 本快照上传至私有仓库，仅作项目内部备份、调试和回退。第三方材料的权利与许可不因
 入库而改变；收到有效权利通知后将立即限制访问或删除。详见
@@ -19,7 +19,7 @@
 | 设备 | 工程 | 顶层 | 作用 |
 | --- | --- | --- | --- |
 | 板卡 1 | [board1_capture/3_ddr_test.pds](board1_capture/3_ddr_test.pds) | `test_ddr`，`source/ddr_test_top.v` | 四路缩放/接收、DDR 缓存、四宫格显示，光口发送合成视频 |
-| 板卡 2 | [board2_sfp_pcie/hdmi_ddr_pice.pds](board2_sfp_pcie/hdmi_ddr_pice.pds) | `hdmi_ddr_pcie`，`source/hdmi_ddr_pcie.v` | HDMI 经光口送给板卡 1；接收板卡 1 合成视频，经 DDR、增强、PCIe 送鲁班猫 2 |
+| 板卡 2 | [板卡二工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261015.zip) | `hdmi_ddr_pcie`，`source/hdmi_ddr_pcie.v` | HDMI 经光口送给板卡 1；接收板卡 1 合成视频，经DDR、完整图像处理共同送HDMI和PCIe/鲁班猫2 |
 | Windows PC | [以太网上位机](../../tools/udp_video_sender/README.md) | `app.py`，双击 `start.cmd` | 视频/图片/彩条转换为 RGB565，通过 UDP 送板卡 1 |
 
 两个 PDS 文件记录的工具版本均为 **PDS 2022.2-SP6.4**，器件 **PGL50H / FBG484 / -6**。使用相应版本打开各自 PDS 文件，执行 Compile、Synthesize、布局布线、时序检查和 Generate Bitstream，再分别下载到对应板卡。
@@ -88,19 +88,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\configure_network.ps1 -Loc
 
 ## 板卡 2 到鲁班猫 2
 
-板卡 2 光口接收信号 `post_frame_vsync/de/rgb` 写 DDR，输出经 `video_enhance` 后交给 `pcie_dma_ctrl`。当前控制器标记为 `PCIE_HS_20260919`，默认 1080p RGB565、64 字节图像 Payload、64,800 个图像包。
+板卡二接收SFP原始RGB565写DDR，恢复时序后经 `image_processing_top`，处理后的公共输出分别送HDMI和 `pcie_dma_ctrl`。后者同时管理图像参数与四缓冲DMA，默认1080p RGB565、64字节图像payload、64800个图像包。
 
-必须由 RC 管理四个 DMA 图像缓冲和独立状态区：配置地址 → START → 等待帧尾 token → 消费图像 → RELEASE(token)。四个槽都未归还时，FPGA 跳帧；停止使用 STOP(cookie) 并等待匹配应答。寄存器和内存布局见[RC 握手指南](board2_sfp_pcie/docs/RC_HANDSHAKE_GUIDE.md)，`rc/handshake_reference.h` 是适配参考，不是完整内核驱动。
+RC执行地址登记 → START → 等待完整帧尾token → 消费 → RELEASE(token)；四槽未归还则跳帧。STOP(cookie)等待独立停止状态区应答。完整寄存器、端序、图像五字配置和适配示例见 [RC控制指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。配置ACK仅在FPGA内部，不能把STOP cookie当作图像配置回读。
 
 仓库已有 [board_v8 PCIe 实时输入说明](../../board_v8/PCIE_INPUT.md)，应用把左上/右上/左下/右下解释为前/后/左/右。实际视频接线应与这个语义一致。**board_v8 依赖 HS2 ioctl 驱动；仓库原 `tools/pcie_hdmi_host_system/driver` 是较早版本，不能默认认为 ABI 匹配。** 本次整合没有替换鲁班猫内核驱动，也不宣称下载后即可完成整个识别链路。
 
-## 快照与验证范围
+## 版本与验证范围
 
-- 来源：用户指定的 `hdmi ethernet ov5640 sfp ddr hdmi/board_3_oneboard_design`、`sfp_ddr_pice_handshake`，以及 `Documents/ChatGPT/ethernet` 最新上位机。
-- 文件采用普通目录提交，可直接比较和修改；保留 RTL/IP 原始编码和换行。`SOURCE_MANIFEST.csv` 记录各工程文件 SHA-256。
-- 包含源码、IP 配置/实现、PDS、约束、板卡 2 的握手说明/参考代码/测试；排除编译缓存、日志、临时文件、历史 IP 备份和生成位流。PDS 中的构建输出路径可由重新编译生成。
-- 原始 README 保留为 `README.original.md`。板卡 2 的 `BUILD_STATUS.md` 是 2026-09-19 历史验证记录，不能当作本次修改后光口/PCIe 整体的验证结果。
-- 本次核对两个 PDS 的设计输入引用，板卡 1 共 139 个、板卡 2 共 174 个，均存在；运行上位机 23 项单元测试通过。
-- 本次未重新执行 PDS 全编译、时序签核或双板/鲁班猫实测。此前 FIFO 满写、帧复位、读写页切换与长期稳定性仍需针对当前位流验证，不能由归档操作推定已解决。
+- 板卡一与Windows以太网上位机保持仓库现有版本，本次没有修改其源码。
+- 板卡二来自 `sfp_ddr_image_pice_handshake`，原IP及算法按字节复制；新增代码解说、RC操作指南和来源/完整哈希清单。
+- 板卡二PDS设计输入214个均存在；当前整合版通过RTL回归及PDS Compile、综合和映射。验证结果见 [代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)，详细日志位于工程ZIP内的 `docs/verification/20261015`，合并验证记录为 `docs/PCIE_CONTROL_MERGE_VALIDATION.md`。
+- 尚未执行本版布局布线后时序签核或双板/鲁班猫板上验收。上传排除旧位流及构建缓存，恢复时从PDS重建。
+- 老版本由Git历史保留；20261011日期目录只有迁移说明，避免把旧的独立配置状态页协议用于当前版本。
 
-第三方 IP 和例程的版权/授权声明保留原样。
+第三方IP和例程的版权/授权声明保留原样。
