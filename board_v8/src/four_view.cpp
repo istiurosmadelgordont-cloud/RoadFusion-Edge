@@ -16,6 +16,7 @@
 #include "adas/signal_logic.hpp"
 #include "adas/warning_logic.hpp"
 #include "adas/text_renderer.hpp"
+#include "adas/lamp_annotation.hpp"
 #include "adas/ufld_lane_detector.hpp"
 #ifdef ADAS_HAVE_GLES
 #include "adas/gl_presenter.hpp"
@@ -49,7 +50,7 @@
 #include <gst/video/video.h>
 
 namespace {
-// 识别 FPS 只统计接收到的新推理结果；UI 重绘和追踪预测不计入。
+// Accepted new results only: redraws and tracker predictions never count.
 class RecognitionRate {
  public:
   using Clock = std::chrono::steady_clock;
@@ -206,13 +207,19 @@ class SyncCapture {
     software_.release();
     path_ = path;
     hardware_ = hardware;
-    cv::VideoCapture probe(path);
-    if (!probe.isOpened()) return false;
-    fps_ = probe.get(cv::CAP_PROP_FPS);
-    frames_ = static_cast<int>(probe.get(cv::CAP_PROP_FRAME_COUNT));
-    width_ = static_cast<int>(probe.get(cv::CAP_PROP_FRAME_WIDTH));
-    height_ = static_cast<int>(probe.get(cv::CAP_PROP_FRAME_HEIGHT));
-    probe.release();
+    // Replay assets provide verified container metadata; the board's legacy
+    // OpenCV probe may fail even when MPP can decode the same MP4 correctly.
+    std::ifstream metadata((path + ".info").c_str());
+    if (!(metadata >> width_ >> height_ >> fps_ >> frames_)) {
+      cv::VideoCapture probe(path);
+      if (!probe.isOpened()) return false;
+      fps_ = probe.get(cv::CAP_PROP_FPS);
+      frames_ = static_cast<int>(probe.get(cv::CAP_PROP_FRAME_COUNT));
+      width_ = static_cast<int>(probe.get(cv::CAP_PROP_FRAME_WIDTH));
+      height_ = static_cast<int>(probe.get(cv::CAP_PROP_FRAME_HEIGHT));
+      probe.release();
+    }
+    if (!std::isfinite(fps_) || fps_ <= 0.0 || frames_ <= 0) return false;
     if (width_ < 2 || height_ < 2 || width_ > 8192 || height_ > 4320 ||
         (hardware_ && ((width_ & 1) != 0 || (height_ & 1) != 0))) {
       release();
@@ -715,8 +722,10 @@ cv::Scalar target_risk_color(const adas::RiskResult& risk) {
 void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections,
                 const adas::RiskResult* risk = nullptr, int attention_track = -1,
                 bool danger_attention = false) {
+  adas::ui::LampAnnotationLayout lamp_layout(frame.size(),detections);
   for (const auto& d : detections) {
-    if (d.class_id == 21 && d.name == "交通灯") continue;
+    // UI preference: hide unclassified lamp housings; retain all observations for logic.
+    if (d.class_id == 21) continue;
     const bool risk_target = risk && risk->target && risk->reliable && risk->track_id >= 0 &&
                              d.track_id == risk->track_id;
     const bool attention = attention_track >= 0 && d.track_id == attention_track;
@@ -727,6 +736,7 @@ void draw_boxes(cv::Mat& frame, const std::vector<adas::Detection>& detections,
     cv::rectangle(frame, d.box, color, risk_target || attention ? 3 : 1);
     const bool mo_light=d.class_id==21 || d.name.find(" MO ")!=std::string::npos;
     if (!attention && !mo_light) continue;  // Target risk cards carry rear labels.
+    if(mo_light) {adas::ui::draw_compact_lamp_caption(frame,d,lamp_layout);continue;}
     std::ostringstream label;
     label << d.name;
     if (d.track_id >= 0) label << " #" << d.track_id;
@@ -1262,31 +1272,31 @@ void draw_sidebar(cv::Mat& canvas, double fps, double yolo_fps, double ufld_fps,
           health_ready && (!side_fresh || (lanes_enabled && !lane_fresh)) ? red : muted, 0.46);
 }
 
-// 四路左上角的小叠加区（206×62）只显示状态和模拟方向，减少遮挡。
-// 未绑定主灯组时显示“本视角灯态/未选主灯组”，不当作车辆通行授权。
-void draw_signal_demo_view(cv::Mat& frame,const adas::SignalDemo& demo,bool main_view=true,bool direction_preview=false) {
-  const cv::Scalar red(80,80,245),green(120,230,75),muted(190,190,190);
-  const cv::Scalar color=demo.alarm() || demo.action()==adas::IntersectionAction::STOP?red:
+void draw_signal_demo_view(cv::Mat& frame,const adas::SignalDemo& demo,bool main_view,bool direction_preview,const std::vector<adas::Detection>& detections) {
+  const cv::Scalar red(80,80,245),green(120,230,75),muted(190,190,190),amber(70,210,245);
+  const bool pending_green=demo.action()==adas::IntersectionAction::STOP && demo.raw()==adas::SignalState::GREEN;
+  const cv::Scalar color=pending_green?amber:demo.alarm() || demo.action()==adas::IntersectionAction::STOP?red:
       demo.action()==adas::IntersectionAction::GO?green:muted;
-  const cv::Rect band(8,8,206,62);
+  const cv::Rect band=adas::ui::compact_signal_hud(frame.size(),detections);
   cv::Mat shade=frame(band).clone();shade.setTo(cv::Scalar(23,25,29));
-  cv::addWeighted(frame(band),.18,shade,.82,0,frame(band));
+  cv::addWeighted(frame(band),.30,shade,.70,0,frame(band));
   cv::rectangle(frame,band,color,demo.alarm()?3:1,cv::LINE_AA);
-  const cv::Point origin(25,49);
-  const cv::Point tip=demo.direction()==adas::ManeuverDirection::LEFT?cv::Point(12,27):
-      demo.direction()==adas::ManeuverDirection::RIGHT?cv::Point(38,27):cv::Point(25,16);
+  const cv::Point offset(band.x,band.y);
+  const cv::Point origin=offset+cv::Point(16,33);
+  const cv::Point tip=demo.direction()==adas::ManeuverDirection::LEFT?offset+cv::Point(5,19):
+      demo.direction()==adas::ManeuverDirection::RIGHT?offset+cv::Point(27,19):offset+cv::Point(16,7);
   if(demo.action()==adas::IntersectionAction::GO && demo.moving())
     cv::arrowedLine(frame,origin,tip,green,4,cv::LINE_AA,0,.48);
   else {
-    cv::circle(frame,{25,32},12,color,2,cv::LINE_AA);
-    cv::line(frame,{17,32},{33,32},color,3,cv::LINE_AA);
+    cv::circle(frame,offset+cv::Point(16,21),9,color,2,cv::LINE_AA);
+    cv::line(frame,offset+cv::Point(10,21),offset+cv::Point(22,21),color,2,cv::LINE_AA);
   }
-  const std::string state=demo.alarm()?"闯红灯报警":
+  const std::string state=pending_green?"绿灯确认中":demo.alarm()?"闯红灯报警":
       demo.action()==adas::IntersectionAction::STOP?(main_view?"红灯停车":"红灯亮"):
       demo.action()==adas::IntersectionAction::GO?(main_view?std::string("通行 / ")+demo.direction_text():direction_preview?std::string("绿灯亮 / ")+demo.direction_text():"绿灯亮"):"等待确认";
-  caption(frame,state,48,30,color,.66);
+  caption(frame,state,band.x+31,band.y+17,color,.57);
   caption(frame,std::string(main_view?(demo.moving()?"模拟行驶":"模拟停止"):direction_preview?std::string(demo.direction_text())+" / 未选主灯组":"本视角灯态")+
-      (demo.held()?" / 暂存":""),48,52,cv::Scalar(235,235,235),.48);
+      (demo.held()?" / 暂存":""),band.x+31,band.y+35,cv::Scalar(235,235,235),.45);
 }
 
 void draw_signal_demo_controls(cv::Mat& canvas,const adas::SignalDemo& demo,bool visible) {
@@ -1317,7 +1327,18 @@ void draw_bottom_left(cv::Mat& canvas, int scene_index, int scene_count,
   caption(canvas, live ? "实时采集" : "同步回放", 24, 1003, cv::Scalar(235, 199, 100), 0.62);
   std::ostringstream scene;
   if (live) scene << "PCIe 1920 x 1080";
-  else scene << "场景 " << scene_index + 1 << '/' << scene_count << "   " << scene_name.substr(0, 16);
+  else {
+    std::string display_name=scene_name.substr(0,16);
+    if(scene_name.find("recommended_wait_a")!=std::string::npos)display_name="推荐A：外滩/直行/左转/圆灯";
+    if(scene_name.find("recommended_wait_b")!=std::string::npos)display_name="推荐B：陆家嘴/徐家汇/夜景";
+    if(scene_name.find("recommended_wait_c")!=std::string::npos)display_name="推荐C：深圳圆灯/直行箭头";
+    if(scene_name.find("recommended_control_d")!=std::string::npos)display_name="推荐D：短箭头/国外对照";
+    if(scene_name.find("near_china_a")!=std::string::npos)display_name="精选A：陆家嘴/外滩/夜景/箭头";
+    if(scene_name.find("near_china_a_driving")!=std::string::npos)display_name="驾驶视角：陆家嘴/外滩/夜景/外滩";
+    if(scene_name.find("near_control_b")!=std::string::npos)display_name="精选B：箭头/陆家嘴/国外/外滩";
+    if(scene_name.find("near_left_straight")!=std::string::npos)display_name="精选B：近拍左转与直行分相位";
+    scene << "场景 " << scene_index+1 << '/' << scene_count << "   " << display_name;
+  }
   caption(canvas, scene.str(), 150, 1003, cv::Scalar(215, 202, 180), 0.55);
   caption(canvas, lanes_enabled ? "C 前视标定   R 后视标定   Q 退出" : "V 环视放大   Q 退出", 578, 1003, cv::Scalar(183, 163, 137), 0.51);
   if (!live) {
@@ -1357,6 +1378,10 @@ int run_four_view(int argc, char** argv) {
   cv::setNumThreads(1);
   std::vector<std::string> scene_paths;
   const char* bundled_scenes[] = {
+      "four_view_sample/recommended_wait_a_20261012",
+      "four_view_sample/recommended_wait_b_20261012",
+      "four_view_sample/recommended_wait_c_20261012",
+      "four_view_sample/recommended_control_d_20261012",
       "four_view_sample/signal_ru_20261010",
       "four_view_sample/signal_sg_20261010",
       "four_view_sample/signal_close_20261010",
@@ -1374,6 +1399,22 @@ int run_four_view(int argc, char** argv) {
     if (live || !scene_complete(candidate) ||
         std::find(scene_paths.begin(), scene_paths.end(), candidate) != scene_paths.end()) continue;
     scene_paths.push_back(candidate);
+  }
+  // A curated light-replay list keeps rejected/remote-light scenes off the UI.
+  // Explicit --scene still permits an engineer to open a legacy road scene.
+  if (!live) {
+    std::ifstream curated("config/recommended_light_scenes.txt");
+    std::vector<std::string> approved;
+    std::string candidate;
+    while (curated >> candidate) {
+      if (scene_complete(candidate) && std::find(approved.begin(),approved.end(),candidate)==approved.end())
+        approved.push_back(candidate);
+    }
+    if (!approved.empty()) {
+      if (scene_complete(options.scene) && std::find(approved.begin(),approved.end(),options.scene)==approved.end())
+        approved.insert(approved.begin(),options.scene);
+      scene_paths.swap(approved);
+    }
   }
   if (live) scene_paths.push_back("PCIe live");
   if (scene_paths.empty()) {
@@ -1446,15 +1487,13 @@ int run_four_view(int argc, char** argv) {
   if (options.demo_force_move) signal_demo.set_motion(1);
   int demo_saved_signature = -1;
   bool signal_overlay_visible=options.signal_overlay_visible;
-  // 主视角绑定 ROI 才启用停车/起步及强制行驶报警；其他视角只观察灯态。
-  // 未绑定主灯组的主视角仍可选择左/直/右，方向筛选不等于车道归属识别。
   adas::SignalDemo unbound_main_demo;
   std::array<adas::SignalDemo,3> extra_demos;
   const auto configure_extra_demos=[&]() {
     unbound_main_demo.enable_full_view();
     unbound_main_demo.set_direction_filter(true);
     unbound_main_demo.set_direction(signal_demo.direction());
-    for(auto& demo:extra_demos)demo.enable_full_view();
+    for(auto& demo:extra_demos){demo.enable_full_view();demo.set_direction_filter(true);demo.set_direction(signal_demo.direction());}
   };
   configure_extra_demos();
   const auto accept_demo_signal = [&](double seconds) {
@@ -1613,9 +1652,10 @@ int run_four_view(int argc, char** argv) {
     intersection_result = adas::IntersectionResult();
     warning_summary = adas::WarningSummary();
     current_lights.clear();
+    const int preserved_motion=signal_demo.motion_mode();
     signal_demo.reset();
+    signal_demo.set_motion(preserved_motion);
     configure_extra_demos();
-    if (options.demo_force_move) signal_demo.set_motion(1);
     demo_saved_signature=-1;
     task_launched = {};
     lane_captured_at = {};
@@ -1810,7 +1850,7 @@ int run_four_view(int argc, char** argv) {
           if (signal_demo.enabled()) accept_demo_signal(detection_seconds[0]);
           else { unbound_main_demo.observe(detection_seconds[0],current_lights,640,360);
             intersection_result = intersection_logic.update(current_lights, vehicle_state); }
-
+  
         }
       } else {
         const bool fpga_composite = !options.legacy_mosaic;
@@ -1832,8 +1872,6 @@ int run_four_view(int argc, char** argv) {
               InferenceResult result;
               result.captured_at = captured_at;
               result.source_seconds = source_seconds;
-              // 当前默认整幅四宫格只调用一次 YOLO；内部再按灯组裁剪调用 MO。
-              // YOLO 框从输入图坐标拆回四路，不对每路重复运行 YOLO。
               std::vector<adas::Detection> combined =
                   detector.detect(inference_image, &result.npu_ms);
               if (fpga_composite && (inference_image.cols != kFpgaCompositeW ||
@@ -2028,6 +2066,9 @@ int run_four_view(int argc, char** argv) {
     if (signal_demo.alarm()) {
       warning_summary.priority=110;warning_summary.primary=adas::WarningCode::INTERSECTION;
       warning_summary.text="模拟闯红灯报警：请立即停车";
+    } else if(signal_demo.enabled() && signal_demo.action()==adas::IntersectionAction::STOP &&
+              signal_demo.raw()==adas::SignalState::GREEN && warning_summary.primary==adas::WarningCode::INTERSECTION) {
+      warning_summary.text="绿灯确认中，请等待";
     }
     const auto view_levels = view_alert_levels(front_risk, rear_risk, lane,
         lane_semantic, left_blind, right_blind, side_fresh, vehicle_state);
@@ -2041,7 +2082,7 @@ int run_four_view(int argc, char** argv) {
           std::string(route) + " SIGNAL | " + adas::intersection_action_caption(intersection_result.action) :
           "ROUTE UNKNOWN | SIGNAL NOT APPLICABLE", 12, 92, cv::Scalar(210, 220, 220), .42);
     }
-    if(signal_overlay_visible)draw_signal_demo_view(frames[0],signal_demo.enabled()?signal_demo:unbound_main_demo,signal_demo.enabled(),!signal_demo.enabled());
+    if(signal_overlay_visible)draw_signal_demo_view(frames[0],signal_demo.enabled()?signal_demo:unbound_main_demo,signal_demo.enabled(),!signal_demo.enabled(),detections[0]);
     if (options.lanes_enabled) draw_lane_geometry(frames[1], rear_lane);
     draw_boxes(frames[1], detections[1], &rear_risk);
     const bool left_intent = vehicle_state.turn_valid &&
@@ -2056,7 +2097,7 @@ int run_four_view(int argc, char** argv) {
     draw_boxes(frames[3], detections[3], nullptr, side_fresh && right_blind.occupied ? right_blind.track_id : -1,
                right_blind.occupied && right_intent);
     if(signal_overlay_visible)
-      for(int view=1;view<4;++view)draw_signal_demo_view(frames[view],extra_demos[view-1],false);
+      for(int view=1;view<4;++view)draw_signal_demo_view(frames[view],extra_demos[view-1],false,false,detections[view]);
     if (options.lanes_enabled) draw_maneuver_hud(frames[0], lane_change_result, lane_semantic,
         lane_change_result.direction == adas::ManeuverDirection::LEFT ? left_blind.occupied : right_blind.occupied,
         side_fresh, vehicle_state.demo);
@@ -2143,6 +2184,7 @@ int run_four_view(int argc, char** argv) {
       avm_changed = false;
     }
     const cv::Rect avm_button(800, 980, 220, 40);
+    cv::rectangle(canvas, avm_button, cv::Scalar(24,15,7), cv::FILLED);
     cv::rectangle(canvas, avm_button, cv::Scalar(65,100,130), 1);
     caption(canvas, avm_visible ? "V 四路视频" : "V 2D环视 / AVM", 814,1007,cv::Scalar(240,220,170),.55);
     if (avm_visible) {
@@ -2218,7 +2260,15 @@ int run_four_view(int argc, char** argv) {
           if(kDemoMotion[i].contains(click))signal_demo.set_motion(i);
         }
       }
-      if (key == 'v' || avm_button.contains(cv::Point(click_x,click_y))) avm_visible = !avm_visible;
+      if (key == 'v' || avm_button.contains(cv::Point(click_x,click_y))) {
+        avm_visible = !avm_visible;
+        if (!avm_visible) {
+          // Remove the enlarged AVM from margins and camera-card headers.
+          cv::rectangle(canvas,cv::Rect(10,85,1365,870),cv::Scalar(24,15,7),cv::FILLED);
+          draw_camera_cards(canvas);
+        }
+        avm_changed = true;
+      }
       if (!live && key == 'm') {
         options.separate = !options.separate;
         signal_demo.reset();
@@ -2360,7 +2410,11 @@ int run_four_view(int argc, char** argv) {
                        streams, next_fps, next_frames, next_single_composite)) {
           scene_index = target_scene;
           options.scene = scene_paths[scene_index];
+          const auto preserved_direction=signal_demo.direction();
+          const int preserved_motion=signal_demo.motion_mode();
           signal_demo.load(options.scene + "/signal_demo.txt");
+          signal_demo.set_direction(preserved_direction);
+          signal_demo.set_motion(preserved_motion);
           configure_extra_demos();
           demo_saved_signature=-1;
           if (avm_running) { avm_future.wait(); avm_running = false; }

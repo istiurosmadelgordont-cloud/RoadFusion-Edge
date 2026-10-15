@@ -2,6 +2,7 @@
 #include "adas/adas_logic_v2.hpp"
 #include "adas/signal_logic.hpp"
 #include "adas/text_renderer.hpp"
+#include "adas/lamp_annotation.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -126,9 +127,19 @@ bool is_risk_target(const Detection& detection, const RiskResult& risk) {
 bool is_current_signal(const Detection& detection, const SignalResult& signal) {
   if (signal.state == SignalState::NONE || detection.class_id < 7 ||
       detection.class_id > 14 || signal.box.area() <= 0) return false;
-  const cv::Rect overlap = cv::Rect(detection.box) & signal.box;
-  const float united = detection.box.area() + signal.box.area() - overlap.area();
-  return united > 1.0f && overlap.area() / united > 0.35f;
+  const cv::Rect2f selected(signal.box);
+  const cv::Rect2f overlap = detection.box & selected;
+  const float united = detection.box.area() + selected.area() - overlap.area();
+  if(united>1.f && overlap.area()/united>.35f)return true;
+  const bool matching_colour=(signal.state==SignalState::RED && detection.class_id<=10) ||
+      (signal.state==SignalState::GREEN && detection.class_id>=11);
+  // Display-only prediction and integer signal boxes can differ by 2-3 pixels.
+  // The selected-light highlight must reuse the existing nearby MO caption.
+  const float dx=std::abs(detection.box.x+detection.box.width*.5f-selected.x-selected.width*.5f);
+  const float dy=std::abs(detection.box.y+detection.box.height*.5f-selected.y-selected.height*.5f);
+  const float xlimit=std::max(3.f,.5f*std::min(detection.box.width,selected.width));
+  const float ylimit=std::max(3.f,.5f*std::min(detection.box.height,selected.height));
+  return matching_colour && dx<=xlimit && dy<=ylimit;
 }
 
 enum class RiskTier { UNCONFIRMED, NORMAL, CAUTION, WARNING, DANGER };
@@ -492,11 +503,12 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
                        right_color, right_danger ? 7 : 4);
   }
   const Detection* selected_target = nullptr;
-  std::vector<cv::Rect> lamp_labels;
+  ui::LampAnnotationLayout lamp_layout(frame.size(),detections);
   bool mo_signal_label = false;
   for (const Detection& detection : detections) {
     // Confirmed lamp children carry the label; keep the housing only for logic.
-    if (detection.class_id == 21 && detection.name == "交通灯") continue;
+    // UI preference: hide unclassified lamp housings; retain all observations for logic.
+    if (detection.class_id == 21) continue;
     const bool selected = is_risk_target(detection, risk);
     const bool current_signal = is_current_signal(detection, signal);
     const bool confirmed_target = selected && risk.reliable;
@@ -511,22 +523,12 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
       const cv::Scalar lamp_color = detection.class_id == 21 ? cv::Scalar(40,210,245) :
           detection.class_id <= 10 ? cv::Scalar(45,65,245) : cv::Scalar(80,235,95);
       cv::rectangle(frame,detection.box,lamp_color,1,cv::LINE_AA);
-      std::ostringstream caption;
-      caption<<detection.name;
-      if(detection.class_id==21) caption<<' '<<int(std::round(detection.score*100))<<'%';
-      const cv::Size text_size=ui::measure_text(caption.str(),18);
-      int x=std::max(0,std::min(int(detection.box.x),frame.cols-text_size.width-8));
-      int y=std::max(text_size.height+6,int(detection.box.y)-4);
-      for(int attempt=0;attempt<12;++attempt) {
-        const cv::Rect proposed(x,y-text_size.height-6,text_size.width+8,text_size.height+9);
-        bool collision=false;
-        for(const auto& previous:lamp_labels) if((proposed&previous).area()>0) {collision=true;break;}
-        if(!collision) {lamp_labels.push_back(proposed);break;}
-        y-=text_size.height+13;
-        if(y<text_size.height+6) y=std::min(frame.rows-4,int(detection.box.y+detection.box.height)+text_size.height+10+attempt*(text_size.height+13));
-      }
-      label(frame,caption.str(),{x,y},lamp_color,.64,1);
-      if(current_signal && detection.name.find(" MO ")!=std::string::npos) mo_signal_label=true;
+      ui::draw_compact_lamp_caption(frame,detection,lamp_layout);
+      // MO captions already express the colour; the selected outline and HUD
+      // identify the bound light without another overlapping state caption.
+      const bool same_signal_colour=(signal.state==SignalState::RED && detection.class_id>=7 && detection.class_id<=10) ||
+          (signal.state==SignalState::GREEN && detection.class_id>=11 && detection.class_id<=14);
+      if((current_signal || same_signal_colour) && detection.name.find(" MO ")!=std::string::npos) mo_signal_label=true;
     }
   }
   if (selected_target) draw_risk_card(frame, *selected_target, risk, "FCW");
@@ -536,11 +538,11 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
         cv::Scalar(35, 225, 245);
     cv::rectangle(frame, signal.box, cv::Scalar(235, 235, 235), signal.stable ? 5 : 3, cv::LINE_AA);
     cv::rectangle(frame, signal.box, color, 2, cv::LINE_AA);
-    const char* state = signal.state == SignalState::RED ? "RED" :
-        signal.state == SignalState::GREEN ? "GREEN" :
-        signal.state == SignalState::YELLOW ? "YELLOW" : "UNKNOWN";
+    const char* state = signal.state == SignalState::RED ? "红灯" :
+        signal.state == SignalState::GREEN ? "绿灯" :
+        signal.state == SignalState::YELLOW ? "黄灯" : "未确认";
     if(!mo_signal_label)
-      label(frame, std::string(signal.stable ? "CURRENT " : "CHECK ") + state,
+      label(frame, std::string(signal.stable ? "当前" : "待确认") + state,
             {signal.box.x, signal.box.y - 4}, color, 0.43, 1);
   }
   if (lane.valid) {
@@ -566,9 +568,8 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
           3, cv::LINE_AA, 0, .35);
     }
   }
-  std::ostringstream perf;
-  perf << "FPS " << std::fixed << std::setprecision(1) << fps << "  NPU " << npu_ms << "ms";
-  label(frame, perf.str(), cv::Point(std::max(0, frame.cols - 195), 18), cv::Scalar(140, 150, 155), 0.38, 1);
+  // Performance is shown in the dedicated four-view sidebar.
+  (void)fps; (void)npu_ms;
 
   // Drawn last so the indicator sits above every other annotation.
   draw_decision_panel(frame, drive);

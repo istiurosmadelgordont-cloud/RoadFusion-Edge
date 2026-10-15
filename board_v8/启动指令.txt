@@ -22,3 +22,4 @@ export DISPLAY=:0
 export XAUTHORITY=/home/cat/.Xauthority
 
 sh scripts/run_pcie.sh
+

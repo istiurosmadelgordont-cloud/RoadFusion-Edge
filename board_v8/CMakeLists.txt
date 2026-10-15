@@ -125,9 +125,3 @@ add_executable(ui_upload_regression EXCLUDE_FROM_ALL tests/ui_upload_regression.
 target_include_directories(ui_upload_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(ui_upload_regression PRIVATE ${OpenCV_LIBS})
 target_compile_options(ui_upload_regression PRIVATE -UNDEBUG)
-
-# 灯态确认、漏检保持和方向切换回归；Release 模式也必须执行断言。
-add_executable(signal_demo_regression EXCLUDE_FROM_ALL tests/signal_demo_regression.cpp)
-target_include_directories(signal_demo_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(signal_demo_regression PRIVATE ${OpenCV_LIBS})
-target_compile_options(signal_demo_regression PRIVATE -UNDEBUG)

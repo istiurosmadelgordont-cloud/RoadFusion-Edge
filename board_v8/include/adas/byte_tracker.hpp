@@ -24,6 +24,8 @@ class ByteTracker {
     int class_id = -1;
     std::string name;
     cv::Rect2f box;
+    // Rendering only. Association and observations keep the unsmoothed measurement.
+    cv::Rect2f display_box;
     cv::Vec4f velocity{0, 0, 0, 0};
     float score = 0.0f;
     int missed = 0;
@@ -33,6 +35,8 @@ class ByteTracker {
 
   static cv::Rect2f project(const Track& track,
                             std::chrono::steady_clock::time_point when);
+  static cv::Rect2f project_display(const Track& track,
+                                  std::chrono::steady_clock::time_point when);
   static float iou(const cv::Rect2f& a, const cv::Rect2f& b);
   void associate(const std::vector<Detection>& detections,
                  const std::vector<int>& indices, float threshold,

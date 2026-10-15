@@ -316,6 +316,7 @@ int GlPresenter::poll_input(int* click_x, int* click_y) {
       if (key == XK_c || key == XK_C) return 'c';
       if (key == XK_r || key == XK_R) return 'r';
       if (key == XK_h || key == XK_H) return 'h';
+      if (key == XK_v || key == XK_V) return 'v';
       if (key == XK_1) return '1';
       if (key == XK_2) return '2';
       if (key == XK_3) return '3';
