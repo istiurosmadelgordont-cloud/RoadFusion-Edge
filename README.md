@@ -43,6 +43,7 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 - [板卡 1：四路采集与光口回传](fpga/dual_board/board1_capture/README.md)：当前接入 HDMI、板卡 2 的 SFP 视频、以太网 0、以太网 1，合成 1920×1080 四宫格。
 - [板卡 2：DDR后图像处理与PCIe输出](fpga/dual_board/board2_sfp_pcie/README.md)：HDMI 送板卡 1，反向接收四宫格，经 DDR/增强/PCIe 四缓冲握手送鲁班猫 2。
 - [最新版 Windows 以太网上位机](tools/udp_video_sender/README.md)：可配置本机 IP、目标 IP/MAC、输入/输出尺寸与帧率、VS 消隐及包间隔。
+- [鲁班猫 PCIe 采集与图像参数控制](tools/pcie_v2/README.md)：驱动 7.0（四槽视频 + STOP 安全 + 单向参数提交）+ Qt 上位机，对应板卡二 20261015 位流；五字整包提交，无 0x220/0x224 配置状态 DMA。
 
 板卡一按源码目录保存；板卡二按ZIP提供，下载解压后打开PDS。旧版本由Git历史保留。当前接线、OV5640 保留状态、通道 1 VS 连接、HS2 驱动依赖与验证边界见系统说明。此次整合不等同于双板链路已完成时序签核及板级验收。
 
