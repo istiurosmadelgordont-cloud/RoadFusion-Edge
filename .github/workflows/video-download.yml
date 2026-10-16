@@ -1,0 +1,30 @@
+name: Restore silk-road video download
+
+on:
+  push:
+    branches:
+      - video-download/silk-road-20261017
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore-and-attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore and verify complete ZIP
+        run: python3 restore_video.py
+      - name: Attach ZIP to a dedicated video release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VIDEO_RELEASE_TAG: silk-road-video-20261017-8421cc96
+        run: |
+          if gh release view "$VIDEO_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$VIDEO_RELEASE_TAG" video-compatible.zip --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$VIDEO_RELEASE_TAG" video-compatible.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "一笔未完成的交易 · 视频下载" --notes-file RELEASE_NOTES.md --prerelease --latest=false
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$VIDEO_RELEASE_TAG" --jq '{url: .html_url, assets: [.assets[] | {name, size, browser_download_url}]}'

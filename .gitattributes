@@ -1,7 +1,2 @@
-*.onnx binary
-*.pt binary
-*.rknn binary
-*.jpg binary
-*.png binary
-*.sh text eol=lf
-
+parts/** -text
+*.mp4 -text
