@@ -1,10 +1,10 @@
 # RC端控制PCIe与图像处理指南
 
-> 工程按ZIP提供：[下载完整工程](../sfp_ddr_image_pice_handshake_20261015.zip)。本文源码路径相对解压后的工程根目录；压缩包内同时包含可跳转到源码的版本。
+> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
 
-适用版本：2026-10-15，`sfp_ddr_image_pice_handshake`，默认1920×1080 RGB565。工程中RC命令、五字参数与快照控制均在 pcie_dma_ctrl.v（`source/source/pcie_dma_ctrl.v`） 内，图像处理位于DDR读出后，HDMI和PCIe共用处理结果。
+适用版本：2026-10-17，`sfp_ddr_image_pice_handshake`，默认1920×1080 RGB565。工程中RC命令、五字参数与快照控制均在 pcie_dma_ctrl.v（`source/source/pcie_dma_ctrl.v`） 内，图像处理位于DDR读出后，HDMI和PCIe共用处理结果。
 
-本文以当前RTL和 handshake_reference.h（`rc/handshake_reference.h`）、image_control_reference.h（`rc/image_control_reference.h`） 为准。这两个C99头通过回调接入已有RC驱动，不包含PCIe枚举、DMA分配、BAR映射或现成用户态ioctl。
+本文以当前RTL和 handshake_reference.h（`rc/handshake_reference.h`）、image_control_reference.h（`rc/image_control_reference.h`） 为准。新增 image_ack_reference.h（`rc/image_ack_reference.h`） 提供两阶段回传参考；这些C99头通过回调接入已有RC驱动，不包含PCIe枚举、DMA分配、BAR映射或现成用户态ioctl。
 
 ## 1. 先区分本版和旧快照
 
@@ -15,10 +15,10 @@
 | 完整图像参数 | `0x200~0x210` 五字暂存，`0x214` 写非零提交 |
 | 图像DMA完成 | 每个图像缓冲尾部64字节token |
 | 停止完成 | `0x180` 登记的独立64字节STOP状态区 |
-| 图像配置状态DMA | 没有；旧快照的 `0x220/0x224` 不适用于本版 |
+| 图像参数确认DMA | 可选 `0x218` 登记128字节，分 RECEIVED/APPLIED；旧 `0x220/0x224` 不使用 |
 | BAR读回/MSI | 当前控制器未实现；不要用 `readl(BAR1)` 查询或flush |
 
-图像配置ACK是FPGA内部跨域握手，不会写入STOP状态区。收到STOP cookie只说明DMA按停止协议排空，不能据此确认某次图像配置已在像素域生效。
+像素域ACK继续用于内部跨域握手；启用新增 `0x218` 后，FPGA另向独立图像确认区回传 RECEIVED/APPLIED，见 [两阶段接口](IMAGE_PARAMETER_ACK.md)。图像确认不会写入STOP状态区。收到STOP cookie只说明DMA按停止协议排空，不能据此确认某次图像配置已在像素域生效。
 
 ## 2. RC驱动需要提供的基础能力
 
@@ -60,7 +60,8 @@ Linux coherent适配通常需要 `READ_ONCE`、`le32_to_cpu`、`dma_rmb/dma_wmb`
 | `0x208` | word2 | Y降噪及原暗光/高光阈值暂存 |
 | `0x20C` | word3 | CLAHE参数暂存 |
 | `0x210` | word4 | CLAHE/高光保护参数暂存 |
-| `0x214` | 非零，通常写1 | 提交五字整包快照；写0无操作 |
+| `0x214` | 非零；回传模式用唯一请求编号 | 提交五字快照，写0不提交；回传模式先收齐全部5字 |
+| `0x218` | 独立128字节图像确认区DMA地址 | 新增；原地址配置后、STOP自检完成后、START前登记；STOP后须重新登记 |
 
 未定义寄存器没有有效控制行为，非法命令也没有错误BAR读回。
 
@@ -96,7 +97,7 @@ Linux coherent适配通常需要 `READ_ONCE`、`le32_to_cpu`、`dma_rmb/dma_wmb`
 3. 清零四个尾标记与STOP区，执行必要DMA写屏障。
 4. 同一驱动锁内依次发 `0x1A0=1`、四次 `0x110=addr[0..3]`、`0x180=stop_addr`。
 5. 可在空闲态发一次STOP(cookie)，等待完整cookie回写，验证地址配置、EP→RC写通路和端序。
-6. 下发所需图像参数；首次调试建议原图旁路。
+6. 若启用图像确认，先登记 `0x218`；再下发完整五字参数，以唯一非零cookie提交。首次调试建议原图旁路。
 7. 写 `0x190=1`，等待下一个完整视频帧，轮询帧尾标记。
 
 配置失败后在空闲态清配置并重新登记全部地址，不要猜测登记到了第几个槽。图像参数可以在DMA未START时设置；没有输入视频时会保持待处理，直到恢复帧边界。
@@ -166,7 +167,7 @@ bar_write32(ctx, 0x160, 0);
 
 其余位写0。分辨率、行消隐、CAPABLE、CLAHE_DONOR_MODE、BILATERAL_GUIDE_ENABLE和Gamma表属于编译结构，不能通过这些BAR字改变。
 
-提交顺序必须在同一锁/控制线程下完成：
+提交顺序必须在同一锁/控制线程下完成。下面固定写1是旧兼容模式；需要两次回复时以唯一非零cookie替代1，完整流程见第14节：
 
 ```c
 bar_write32(ctx, 0x200, word[0]);
@@ -179,11 +180,11 @@ bar_write32(ctx, 0x214, 1);       /* 整包提交，不是主算法使能位 */
 
 单独改word0不会立即生效，最后必须提交。提交会复制整包，后续编辑不会改变在途包。源域等待像素域帧边界ACK，期间最多再留一份最新待处理快照，中间连续提交可以被合并。
 
-旧暗光/高光命令也基于当前暂存整包提交，所以不能让其他线程在五字写入中间插入旧命令。正常单次调参后至少观察3个完整视频帧，让CLAHE重新建立统计；等待固定帧数是观察策略，不是软件可读的配置ACK。
+旧暗光/高光命令也基于当前暂存整包提交，所以不能让其他线程在五字写入中间插入旧命令。正常单次调参后至少观察3个完整视频帧，让CLAHE重新建立统计；等待固定帧数只是画质观察策略；软件确认应使用新128字节确认区里的匹配cookie。
 
 ## 10. 可直接填入的参数起点
 
-以下均是逻辑十六进制值，为联调起点，未作本版板上画质验收。每行写完五字，再写 `0x214=1`。
+以下均是逻辑十六进制值，为联调起点，未作本版板上画质验收。每行写完五字，再提交；旧兼容模式写 `0x214=1`，两阶段回传模式写本次唯一非零cookie。
 
 | 场景 | word0 | word1 | word2 | word3 | word4 |
 |---|---|---|---|---|---|
@@ -252,6 +253,19 @@ STOP超时不能当成停止完成，也不能只等固定毫秒数就释放映�
 | STOP不返回 | 状态地址登记、cookie端序、TX反压、链路状态 |
 | 无法读取BAR状态 | 本版没有BAR读完成器，使用规定的DMA标记和FPGA调试信号 |
 
-FPGA端可观察 `running/stop_pending/buffer_state/buffer_token/dropped_frames/invalid_releases`；图像控制看 `image_shadow_config/image_queued_valid/image_cfg_data/image_cfg_apply/image_cfg_busy`，像素域看 `image_cfg_active/image_cfg_pending/image_cfg_ack/image_ready`。源码保留调试标记，但PDS没有自动插入旧FLA核；新增抓取核需计入133/134的RAM预算。
+FPGA端可观察 `running/stop_pending/buffer_state/buffer_token/dropped_frames/invalid_releases`；图像控制看 `image_shadow_config/image_queued_valid/image_cfg_data/image_cfg_apply/image_cfg_busy`，像素域看 `image_cfg_active/image_cfg_pending/image_cfg_ack/image_ready`。当前PDS引用 `debug/image_pcie_debug.fic`，Core0端口为133/161位、Core1为172/213位、各256点；新回传寄存器已标记但没有扩展现有FIC布局。见 [FIC说明](IMAGE_PCIE_FIC.md)。
 
-当前已完成RTL回归和PDS综合/映射，未完成布局布线后时序签核、真实RC驱动联调和板上画质验证。详细证据见 合并验证记录（`docs/PCIE_CONTROL_MERGE_VALIDATION.md`）。
+2026-10-17版本通过7项RTL仿真和2项C99测试；本次未运行新的PDS综合/映射、位流生成或下载，未完成本版ARM回传联调和板上画质验证。历史PDS结果仅对应旧版本。详细证据见 合并验证记录（`docs/PCIE_CONTROL_MERGE_VALIDATION.md`）。
+
+## 14. 参数已接收与已生效，两次独立回复
+
+完整适配契约以 [IMAGE_PARAMETER_ACK.md](IMAGE_PARAMETER_ACK.md) 为准。ARM另分配独立128字节DMA区并写 `0x218`；先清区、执行DMA写屏障，顺序写全5字，再向 `0x214` 写本次唯一非零cookie。
+
+| 地址 | 必须完整匹配的内容 | UI可报告状态 |
+|---|---|---|
+| 图像确认区 `+0x00` | 16个LE32全部等于本次cookie | 参数已接收 |
+| 图像确认区 `+0x40` | 16个LE32全部等于本次cookie，且已确认RECEIVED | 参数已生效 |
+
+RECEIVED只在完整五字被接收并接受COMMIT后产生，APPLIED只在对应像素帧ACK返回后产生。串行提交，上一请求APPLIED后再发下一次；超时保留DMA映射，STOP确认排空后再恢复。原STOP一旦被接受会禁用图像确认区，STOP ACK后重新写0x218才能继续回传。旧暗光/高光命令不产生完整五字确认，应改为五字快照控制同一开关/阈值。
+
+仓库 `tools/pcie_v2` 的现有7.0驱动是单向提交参考；本次不修改该驱动或Qt程序。接入新协议时，BAR1映射必须覆盖到0x21B（至少0x21C字节），增加128字节DMA分配、cookie及两阶段轮询，并扩展相应UAPI能力/状态返回。不要把现有SUBMIT_IMAGE成功返回当作RECEIVED或APPLIED；无回传能力时继续显示“仅提交”。新接口不是旧0x220/0x224状态页。

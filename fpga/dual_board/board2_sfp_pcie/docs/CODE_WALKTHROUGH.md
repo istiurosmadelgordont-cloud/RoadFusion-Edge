@@ -1,8 +1,8 @@
 # 板卡二代码解说：SFP、DDR、图像处理与PCIe DMA
 
-> 工程按ZIP提供：[下载完整工程](../sfp_ddr_image_pice_handshake_20261015.zip)。本文源码路径相对解压后的工程根目录；压缩包内同时包含可跳转到源码的版本。
+> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
 
-本文对应2026-10-15的 `sfp_ddr_image_pice_handshake`，工程入口为 hdmi_ddr_pice.pds（`hdmi_ddr_pice.pds`），器件PGL50H / FBG484 / -6，工具PDS 2022.2-SP6.4。
+本文对应2026-10-17的 `sfp_ddr_image_pice_handshake`，工程入口为 hdmi_ddr_pice.pds（`hdmi_ddr_pice.pds`），器件PGL50H / FBG484 / -6，工具PDS 2022.2-SP6.4。
 
 当前版本的图像参数接收、暂存和提交逻辑已经合入手写 pcie_dma_ctrl.v（`source/source/pcie_dma_ctrl.v`）。顶层只有一个PCIe应用控制器，不再有独立 `pcie_image_control` 模块；SFP、PCIe的IP核及IP生成文件保持来源工程原样。
 
@@ -187,7 +187,7 @@ VS上升时选择FREE槽、分配token；VS下降后允许采集。没有空闲�
 
 | 状态 | 行为 |
 |---|---|
-| `TX_WAIT` | 决定发图像包、帧尾或STOP应答 |
+| `TX_WAIT` | 优先STOP，再发图像参数RECEIVED/APPLIED，最后按原路径发图像包或帧尾 |
 | `TX_FETCH_REQUEST/WAIT/CAPTURE` | 按FIFO读延迟取四个128位字 |
 | `TX_HEADER` | 呈现MWr32头，等待VALID/READY握手 |
 | `TX_DATA` | 发送四拍128位payload，最后一拍TLAST |
@@ -202,12 +202,22 @@ VS上升时选择FREE槽、分配token；VS下降后允许采集。没有空闲�
 
 `ipcore` 以及 `source/read_ddr_fifo/source/write_ddr_fifo` 中的IP生成文件，与其IDF、约束和厂商模型成套使用。本版没有改动它们，也没有把图像控制塞进IP生成的包装文件。
 
-本次只把图像控制逻辑并入手写DMA控制器，原 `[H7]` 之后的TX状态机和FIFO例化保持不变。PDS取消了旧FIC的自动FLA插核引用，因为旧抓取核会把RAM需求推到158.5/134；源码调试标记仍保留。
+本版在手写DMA控制器中新增PK_IMAGE_ACK包类型，与原64字节MWr共用TX状态机。回传包不推进图像地址或计数；STOP排空并禁用回传区。FIFO例化、PCIe/SFP生成IP、原帧token与STOP区格式保持不变。PDS当前引用debug/image_pcie_debug.fic；行缓存沿用2048+152分银行的DRM优化，见 [DRM与入口调试](DRM_REDUCTION_AND_PCIE_IMAGE_DEBUG.md)。
 
 ## 12. 验证和阅读时的边界
 
-当前合并版已通过控制CDC、旧四缓冲回归、32帧DMA传输期间调参、完整DDR后视频整合测试，以及PDS Compile、综合和器件映射。映射资源为LUT 16198/42800、FF 20071/64200、APM 51.5/84、DRM 133/134。
+当前2026-10-17回传版通过7项RTL仿真（含完整1080p、DDR后整机、新回传随机背压）及2项C99参考接口测试。历史合并/DRM/插核版本的PDS记录仍在验证目录，但本次新增回传没有重新运行PDS综合/映射，不能把旧资源或时序统计当成当前结果。
 
 这些记录不等同于布局布线后时序签核或板上画质验收。当前源码没有对应本次重建的新bitstream，仓库这一版不提供旧生成位流作为下载文件。恢复后从本目录PDS重新构建、检查约束和时序，再下载联调。
 
 建议依次确认：SFP恢复流 → DDR原图 → 全关旁路 → HDMI与PCIe一致性 → 单独暗光/高光 → DCP/Gamma/CLAHE组合 → RC长期持有、乱序归还和STOP。各问题对应的信号与软件检查见 [RC指南](RC_PCIE_CONTROL.md)。
+
+## 13. ARM参数回传如何接入原控制器
+
+`CMD_IMAGE_ACK_ADDR=0x218`只在原图像/STOP地址已配置、DMA停止且TX空闲时登记128字节确认区；地址检查覆盖整个范围、32位溢出以及与四块图像/STOP区的重叠。
+
+`image_rx_word_mask[4:0]`记录五字接收，WORD0开始新包。收齐并接受带唯一cookie的COMMIT后，更新`image_received_cookie`，排队发送RECEIVED。cookie随`image_queued_config`进入在途快照；只有对应像素帧ACK返回，才更新`image_applied_cookie`并发送APPLIED。像素复位不能伪造生效确认。
+
+两种回包都复用原64字节MWr头和四拍128位数据发送，payload重复16次endian32(cookie)，目的地址分别为确认区基址和基址+64。回传TLP一旦呈现，就算遇到VS、背压或STOP也须完整发送；原STOP仍优先并在此前TLP排空后回写自己的cookie。每个ARM图像请求串行等待两个回复，避免中间待处理快照被合并。
+
+参数收到确认与参数生效确认的详细定义、ARM适配、超时/STOP重绑定、参考函数及验证日志见 [两阶段协议](IMAGE_PARAMETER_ACK.md)。现有`tools/pcie_v2`需按该契约扩展；本次没有替换其驱动、Qt或视频ABI。

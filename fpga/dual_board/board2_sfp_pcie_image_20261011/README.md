@@ -5,3 +5,5 @@
 请使用新版 [代码解说](../board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 与 [RC控制PCIe指南](../board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。当前图像控制已合入 `pcie_dma_ctrl`，没有旧版0x220/0x224配置状态DMA协议，旧暗光/高光命令继续有效。
 
 本目录仅保留迁移入口；旧源码、文档和生成位流可从Git历史中的2026-10-11提交恢复，不与当前版本混用。
+
+2026-10-17：当前入口已更新为0x218图像参数两阶段回传版；请使用新工程包及[适配指南](../board2_sfp_pcie/docs/IMAGE_PARAMETER_ACK.md)。

@@ -1,14 +1,14 @@
 # 双板四路采集、光口互传与 PCIe 输出
 
-## 当前板卡二（2026-10-15）
+## 当前板卡二（2026-10-17）
 
-[board2_sfp_pcie](board2_sfp_pcie/README.md) 已替换为 `sfp_ddr_image_pice_handshake`，工程入口为 [工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261015.zip)（解压后打开 `hdmi_ddr_pice.pds`）。图像处理在DDR读侧，HDMI/PCIe共用处理结果；参数控制已合入手写 `pcie_dma_ctrl`，原SFP/PCIe IP生成文件保持不变。
+[board2_sfp_pcie](board2_sfp_pcie/README.md) 已替换为最新`sfp_ddr_image_pice_handshake`，入口为[完整工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261017_image_ack.zip)，解压后打开`hdmi_ddr_pice.pds`。完整DDR后图像处理、DRM优化、当前FIC和参数RECEIVED/APPLIED两阶段回传均包含在内。
 
-请先阅读 [代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 与 [RC控制PCIe指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。旧0x140/0x150/0x160命令继续有效，完整参数使用0x200~0x214，当前没有0x220/0x224配置状态DMA页。旧日期快照目录只保留迁移入口；板卡一、ARM驱动/应用、以太网上位机未替换。
+请先读[代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)、[RC指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)及[两阶段回传接口](board2_sfp_pcie/docs/IMAGE_PARAMETER_ACK.md)。新增0x218登记128字节独立确认区，0x214提交唯一cookie；原四缓冲、STOP及PCIe/SFP生成IP保持原协议/源码。旧0x220/0x224接口不使用。ARM现有7.0单向驱动须另行适配，新工程不替换仓库的ARM、板卡一和以太网代码。
 
 ## 双板接线与板卡一现有配置
 
-板卡一保持2026-09-27上传版本，下面的四路映射和以太网设置继续沿用。板卡二采用2026-10-15更新版本，数据路径及RC接口以新指南为准。板卡一保留源码目录，板卡二以ZIP保存PDS、RTL、IP和约束，使用前先下载解压。
+板卡一保持2026-09-27上传版本，下面的四路映射和以太网设置继续沿用。板卡二采用2026-10-17更新版本，数据路径及RC接口以新指南为准。板卡一保留源码目录，板卡二以ZIP保存PDS、RTL、IP和约束，使用前先下载解压。
 
 本快照上传至私有仓库，仅作项目内部备份、调试和回退。第三方材料的权利与许可不因
 入库而改变；收到有效权利通知后将立即限制访问或删除。详见
@@ -19,7 +19,7 @@
 | 设备 | 工程 | 顶层 | 作用 |
 | --- | --- | --- | --- |
 | 板卡 1 | [board1_capture/3_ddr_test.pds](board1_capture/3_ddr_test.pds) | `test_ddr`，`source/ddr_test_top.v` | 四路缩放/接收、DDR 缓存、四宫格显示，光口发送合成视频 |
-| 板卡 2 | [板卡二工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261015.zip) | `hdmi_ddr_pcie`，`source/hdmi_ddr_pcie.v` | HDMI 经光口送给板卡 1；接收板卡 1 合成视频，经DDR、完整图像处理共同送HDMI和PCIe/鲁班猫2 |
+| 板卡 2 | [板卡二工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261017_image_ack.zip) | `hdmi_ddr_pcie`，`source/hdmi_ddr_pcie.v` | HDMI 经光口送给板卡 1；接收板卡 1 合成视频，经DDR、完整图像处理共同送HDMI和PCIe/鲁班猫2 |
 | Windows PC | [以太网上位机](../../tools/udp_video_sender/README.md) | `app.py`，双击 `start.cmd` | 视频/图片/彩条转换为 RGB565，通过 UDP 送板卡 1 |
 
 两个 PDS 文件记录的工具版本均为 **PDS 2022.2-SP6.4**，器件 **PGL50H / FBG484 / -6**。使用相应版本打开各自 PDS 文件，执行 Compile、Synthesize、布局布线、时序检查和 Generate Bitstream，再分别下载到对应板卡。
@@ -90,7 +90,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\configure_network.ps1 -Loc
 
 板卡二接收SFP原始RGB565写DDR，恢复时序后经 `image_processing_top`，处理后的公共输出分别送HDMI和 `pcie_dma_ctrl`。后者同时管理图像参数与四缓冲DMA，默认1080p RGB565、64字节图像payload、64800个图像包。
 
-RC执行地址登记 → START → 等待完整帧尾token → 消费 → RELEASE(token)；四槽未归还则跳帧。STOP(cookie)等待独立停止状态区应答。完整寄存器、端序、图像五字配置和适配示例见 [RC控制指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。配置ACK仅在FPGA内部，不能把STOP cookie当作图像配置回读。
+RC执行地址登记 → START → 等待完整帧尾token → 消费 → RELEASE(token)；四槽未归还则跳帧。STOP(cookie)等待独立停止状态区应答。完整寄存器、端序、图像五字配置和适配示例见 [RC控制指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。启用新0x218接口后，参数已接收和已生效分别返回到独立128字节图像确认区；STOP cookie仍只代表原DMA排空。
 
 仓库已有 [board_v8 PCIe 实时输入说明](../../board_v8/PCIE_INPUT.md)，应用把左上/右上/左下/右下解释为前/后/左/右。实际视频接线应与这个语义一致。**board_v8 依赖 HS2 ioctl 驱动；仓库原 `tools/pcie_hdmi_host_system/driver` 是较早版本，不能默认认为 ABI 匹配。** 本次整合没有替换鲁班猫内核驱动，也不宣称下载后即可完成整个识别链路。
 
@@ -98,7 +98,7 @@ RC执行地址登记 → START → 等待完整帧尾token → 消费 → RELEAS
 
 - 板卡一与Windows以太网上位机保持仓库现有版本，本次没有修改其源码。
 - 板卡二来自 `sfp_ddr_image_pice_handshake`，原IP及算法按字节复制；新增代码解说、RC操作指南和来源/完整哈希清单。
-- 板卡二PDS设计输入214个均存在；当前整合版通过RTL回归及PDS Compile、综合和映射。验证结果见 [代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)，详细日志位于工程ZIP内的 `docs/verification/20261015`，合并验证记录为 `docs/PCIE_CONTROL_MERGE_VALIDATION.md`。
+- 板卡二PDS设计输入214个均存在；20261017版通过7项RTL仿真和2项C99测试，本次未重新运行PDS综合/映射或位流生成。验证结果见 [代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)，当前详细日志位于工程ZIP内的 `docs/verification/20261017/image_ack`，合并验证记录为 `docs/PCIE_CONTROL_MERGE_VALIDATION.md`。
 - 尚未执行本版布局布线后时序签核或双板/鲁班猫板上验收。上传排除旧位流及构建缓存，恢复时从PDS重建。
 - 老版本由Git历史保留；20261011日期目录只有迁移说明，避免把旧的独立配置状态页协议用于当前版本。
 

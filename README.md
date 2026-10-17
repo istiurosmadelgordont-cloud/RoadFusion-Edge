@@ -8,13 +8,13 @@
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
 
-## 板卡二PCIe图像处理工程（2026-10-15）
+## 板卡二PCIe图像处理工程（2026-10-17）
 
-双板方案的 [板卡二工程](fpga/dual_board/board2_sfp_pcie/README.md) 已替换为 `sfp_ddr_image_pice_handshake` 当前整合版，工程以ZIP下载解压使用。DDR保存原始RGB565，读出后统一处理并送HDMI/PCIe；图像参数已合入 `pcie_dma_ctrl`，原SFP/PCIe IP生成文件保持不变。
+[板卡二完整工程](fpga/dual_board/board2_sfp_pcie/README.md) 已更新为20261017两阶段回传版，以ZIP下载解压使用。SFP接收写DDR，恢复视频后统一处理并送HDMI/PCIe；图像控制及回传整合在手写`pcie_dma_ctrl`，原PCIe/SFP生成IP及四缓冲协议保留。
 
-[代码解说](fpga/dual_board/board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 与 [RC控制PCIe指南](fpga/dual_board/board2_sfp_pcie/docs/RC_PCIE_CONTROL.md) 覆盖模块连接、四缓冲、START/STOP/RELEASE、旧暗光/高光命令和五字参数提交。本版没有旧快照的0x220/0x224配置状态DMA接口。旧20261011目录仅保留迁移入口，历史版本由Git保留。
+新增可选`0x218`独立128字节DMA区，分别回复“参数已接收”和“参数已生效”，两次都携带提交cookie。见 [ARM适配契约](fpga/dual_board/board2_sfp_pcie/docs/IMAGE_PARAMETER_ACK.md)、[代码解说](fpga/dual_board/board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 和 [RC指南](fpga/dual_board/board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。DRM优化与当前FIC也已纳入工程包；旧0x220/0x224状态页不使用。
 
-控制、DMA与视频回归、PDS综合和器件映射已通过；尚未布局布线后时序签核或上板验收，不提供旧位流作为本版下载文件。板卡一、ARM应用与以太网上位机保持原版本。
+7项RTL仿真与2项C99测试通过；新增版本未做PDS重建、时序签核或ARM回传上板验收，不含新位流。仓库现有`tools/pcie_v2`和其他ARM应用保持原文件，启用两阶段回复仍需按新契约适配；板卡一及以太网上位机未改。
 
 ## 当前板端版本：模拟板端测试一（2026-10-15）
 
