@@ -16,7 +16,19 @@
 
 7项RTL仿真与2项C99测试通过；新增版本未做PDS重建、时序签核或ARM回传上板验收，不含新位流。仓库现有`tools/pcie_v2`和其他ARM应用保持原文件，启用两阶段回复仍需按新契约适配；板卡一及以太网上位机未改。
 
-## 当前板端版本：模拟板端测试一（2026-10-15）
+## 当前板端版本：board_v9（2026-10-17）
+
+[`board_v9`](board_v9/README.md) 在 board_v8 的「模拟板端测试一」基础上，把 PCIe 实时输入接到 [`tools/pcie_v2`](tools/pcie_v2/README.md) 的 read 路径（`/dev/fpga_frame_<BDF>`），回放与实时共用同一套车道、选灯和按钮逻辑：
+
+- **用途车道选灯**：左转车道只看左箭头、直行车道优先直行箭头（无箭头时才用圆灯）、右转车道只看右箭头；不再依赖 `signal_demo.txt` 的场景 ROI 人工绑定
+- **方向按钮单击切换**：第一次单击开始模拟行驶，再点同一按钮停车；行驶中点另一方向即切换方向
+- **报警分两类**：确认红灯时任意方向行驶报「闯红灯」；确认绿灯但方向与用途车道不符报「违规操作」，红灯优先
+- 新增 `lane_signal_simulator.hpp`、`momentary_input.hpp`、`tests/input_mode_regression.cpp`；`four_view.cpp` 大改
+- `driver/` 随附与 `tools/pcie_v2` 同源的驱动（4 个文件逐字节一致），驱动已加载时无需重编
+
+仍使用 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128），四路整图单次 YOLO，车道线与 TTC 默认关闭。说明见 [PCIe 输入说明](board_v9/PCIE_INPUT.md) 与 [启动指令](board_v9/启动指令.txt)。板端验证记录见 [验证记录](board_v9/docs/VALIDATION_SIMULATED_TEST_1_20261015.json) 与 [模拟板端测试一](board_v9/docs/SIMULATED_BOARD_TEST_1.md)：板端完成 CMake 配置与 `adas_four_view` 构建，`perception_regression`、`overlay_regression`、`avm_regression`、`preview_resize_regression`、`ufld_decode_regression`、`ui_upload_regression` 六项全部通过。**未实现自动车道/控制灯组归属判断**，夜间素材仍有拒识、漏判与灯形误分类。
+
+## 上一版：模拟板端测试一（board_v8，2026-10-15）
 
 [`board_v8`](board_v8/README.md) 已同步当前 RK3568 正在使用的 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128）版本，包含四路整图单次 YOLO、中文紧凑标签、图形叠加开关、ByteTrack、指定灯组的方向判断和模拟报警。车道线与 TTC 默认关闭。
 
@@ -65,7 +77,8 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 恢复方式、SHA-256、工具版本、已知 RTL/CDC 问题见各目录 README 和验证记录。综合成功不等于板级数据完整性、
 缓存一致性和时序已经签核。
 
-`board_v7` 保留同步视频演示；[`board_v8`](board_v8/PCIE_INPUT.md) 增加 PCIe 实时合成帧输入。
+`board_v7` 保留同步视频演示；[`board_v8`](board_v8/PCIE_INPUT.md) 增加 PCIe 实时合成帧输入；
+[`board_v9`](board_v9/PCIE_INPUT.md) 改用 pcie_v2 的 read 路径，并接入用途车道选灯与方向按钮切换。
 双板工程提供四路采集/拼接、SFP 互传和 PCIe 输出源码；完整联合链路仍需对应位流、
 HS2 驱动及鲁班猫板级验收，不能将旧版历史验证记录视为本次链路验证结果。
 

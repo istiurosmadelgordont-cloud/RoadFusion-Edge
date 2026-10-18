@@ -48,6 +48,17 @@ board_v8/output/
 board_v8/four_view_sample/
 board_v8/*.log
 board_v8/snapshot*.png
+board_v9/build/
+board_v9/output/
+board_v9/four_view_sample/
+board_v9/*.log
+board_v9/snapshot*.png
+board_v9/models/
+board_v9/driver/*.ko
+board_v9/driver/*.o
+board_v9/driver/*.mod
+board_v9/driver/*.order
+board_v9/driver/.tmp_versions/
 
 # Local board snapshots, runtime bundles and generated validation reports
 runtime_v7/

@@ -1,0 +1,24 @@
+当前版本：board_v9，pcie_v2 read；用途车道选灯，同一方向按钮单击开始、再点停车。
+
+将整个更新后的 board_v9 同步到鲁班猫，在实际项目根目录执行：
+
+cmake -S . -B build
+cmake --build build --target adas_four_view -- -j2
+sh scripts/run_pcie.sh
+
+同一版 pcie_v2 驱动已经加载时，无需因为这次上位机更新而重编驱动。
+首次安装：make -C driver；sudo insmod driver/my_pciedriver.ko
+权限：sudo chown "$(id -un):$(id -gn)" /dev/fpga_frame_*
+模型继续放 models/ 或 ../models/，YOLO 与 mo_fp16_baseline.rknn 在同一目录。
+
+第一排单击用途车道：左转只看左箭头、直行优先直行箭头、没有箭头再用圆灯、右转只看右箭头。
+第二排单击左转/直行/右转开始行驶，再点同一个按钮停车；点击另一个按钮切换方向继续行驶。
+第三排只显示车辆行驶/停止状态。没有自动或强制行驶开关。
+红灯确认后任何方向行驶都报闯红灯；绿灯时，方向与用途车道不符报违规操作。再点当前方向按钮停车解除报警。
+1/2/3 切换方向行驶/停车；4/5/6 选用途车道；H 叠加开关；V 环视放大；Q/Esc 退出。
+
+不依赖 signal_demo.txt，也不需要为输入视频手动切换灯组配置。
+默认直行车道，不额外限制 PCIe 显示帧率。
+初始右转车道示例：sh scripts/run_pcie.sh --demo-lane right
+原视频回放：sh scripts/run_four_view.sh
+更多说明见 PCIE_INPUT.md。
