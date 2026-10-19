@@ -1,6 +1,6 @@
-# 图像参数两阶段回传接口（2026-10-17）
+> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
 
-> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
+# 图像参数两阶段回传接口（2026-10-17）
 
 本版在手写 `source/source/pcie_dma_ctrl.v` 内加入可选回传。ARM 发送一次完整图像配置，FPGA 分两次回复：**参数已接收**、**参数已生效**。两次回复携带相同的 32 位请求编号 `cookie`。不增加 BAR 读回、MSI 或新的底层驱动模块。
 
@@ -27,7 +27,7 @@ ARM 为当前 PCIe 设备分配独立的 **128 字节 DMA coherent 内存**，�
 | `0x210` | WORD4 | 同原接口 |
 | `0x214` | 本次唯一非零 cookie | 原 COMMIT 地址；新用法以请求编号替代固定值 1，提交语义不变 |
 
-所有命令仍为有序的 **1 DW MWr32、32 位对齐、First BE=0xF / Last BE=0**。本工程图像命令的 IP 用户接口要求命令头 `tkeep=0111`、下一数据拍 `tkeep=0001` 且 TLAST=1；逻辑命令值沿用 `endian32()`，不要自行改变旧 DMA 的字节映射。每笔参数必须独立写，不能合并成一个 5 DW TLP。
+所有命令仍为有序的 **1 DW MWr32、32 位对齐、First BE=0xF / Last BE=0**。Logos PCIe IP 的 3DW 命令头在 128 位用户接口中高 32 位为占位，命令头 `tkeep=1111`（UG022004 第44页图2-11）。图像命令沿用通用包头校验，同时兼容 `0111` 的仿真输入；下一数据拍仍要求 `tkeep=0001` 且 TLAST=1；逻辑命令值沿用 `endian32()`，不要自行改变旧 DMA 的字节映射。每笔参数必须独立写，不能合并成一个 5 DW TLP。
 
 只发旧接口、不登记 `0x218` 时，不产生任何图像确认 DMA 包。旧的 `0x140/0x150/0x160` 和局部 WORD 更新仍保留原有行为，但**不产生本协议的完整配置确认**；要显示两阶段反馈，请把暗光、高光开关及阈值放入完整五字快照，通过 `0x200..0x214` 提交。参数位定义见 `PCIE_IMAGE_INTEGRATION.md`。
 
@@ -73,7 +73,7 @@ flags = rf_image_poll_ack(&ack_state, &frame_state);
 
 ## 5. 源码观察点与验证
 
-新增保持型寄存器：`image_return_addr_valid`、`image_rx_word_mask[4:0]`、`image_received_cookie`、`image_applied_cookie`。cookie 寄存器表示内部确认状态，ARM 只有收到目标 DMA 区完整回写才算观察到回复。这些新增寄存器已标记 PAP_MARK_DEBUG，但本次没有增加 FIC 端口或改动现有 FIC 探针布局。
+新增保持型寄存器：`image_return_addr_valid`、`image_rx_word_mask[4:0]`、`image_received_cookie`、`image_applied_cookie`。cookie 寄存器表示内部确认状态，ARM 只有收到目标 DMA 区完整回写才算观察到回复。这些寄存器现已加入桌面工程FIC的Core1/TP0，同时加入两种回包发送完成事件；TP1补充image_packet_cookie。当前端口244/245位，标识`IMAGE_ACK_RX_APPLIED_TX_20261017`，具体位段和触发设置见[探针说明](IMAGE_PCIE_FIC.md)。此FIC更新仅在桌面工程，未再次上传GitHub。
 
 `tests/image_pcie/image_ack_tb.sv` 在外部 TX AXIS 上逐包核对两种回复，覆盖地址重叠/溢出、未启用兼容、缺字/错误 TKEEP、帧生效、视频复位、队列合并、背压、VS、STOP 排空和图像 DMA 中插入回复，并对16次串行请求施加随机Payload背压，确认每次两笔回复没有丢失或重复。`tests/image_ack_reference_test.c` 覆盖 ARM 两阶段轮询、半写标记、旧 cookie、序号耗尽与 STOP。
 

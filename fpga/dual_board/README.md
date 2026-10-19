@@ -1,14 +1,16 @@
 # 双板四路采集、光口互传与 PCIe 输出
 
-## 当前板卡二（2026-10-17）
+> 2026-10-19：板卡二已替换为Logos PCIe包头兼容修正版，含最新FIC和两阶段回传；见[更新说明](board2_sfp_pcie/docs/PCIE_HEADER_KEEP_FIX.md)。以下较早版本记录保留为历史说明。
 
-[board2_sfp_pcie](board2_sfp_pcie/README.md) 已替换为最新`sfp_ddr_image_pice_handshake`，入口为[完整工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261017_image_ack.zip)，解压后打开`hdmi_ddr_pice.pds`。完整DDR后图像处理、DRM优化、当前FIC和参数RECEIVED/APPLIED两阶段回传均包含在内。
+## 当前板卡二（2026-10-19）
+
+[board2_sfp_pcie](board2_sfp_pcie/README.md) 已替换为最新`sfp_ddr_image_pice_handshake`，入口为[完整工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)，解压后打开`hdmi_ddr_pice.pds`。完整DDR后图像处理、DRM优化、当前FIC和参数RECEIVED/APPLIED两阶段回传均包含在内。
 
 请先读[代码解说](board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)、[RC指南](board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)及[两阶段回传接口](board2_sfp_pcie/docs/IMAGE_PARAMETER_ACK.md)。新增0x218登记128字节独立确认区，0x214提交唯一cookie；原四缓冲、STOP及PCIe/SFP生成IP保持原协议/源码。旧0x220/0x224接口不使用。ARM现有7.0单向驱动须另行适配，新工程不替换仓库的ARM、板卡一和以太网代码。
 
 ## 双板接线与板卡一现有配置
 
-板卡一保持2026-09-27上传版本，下面的四路映射和以太网设置继续沿用。板卡二采用2026-10-17更新版本，数据路径及RC接口以新指南为准。板卡一保留源码目录，板卡二以ZIP保存PDS、RTL、IP和约束，使用前先下载解压。
+板卡一保持2026-09-27上传版本，下面的四路映射和以太网设置继续沿用。板卡二采用2026-10-19更新版本，数据路径及RC接口以新指南为准。板卡一保留源码目录，板卡二以ZIP保存PDS、RTL、IP和约束，使用前先下载解压。
 
 本快照上传至私有仓库，仅作项目内部备份、调试和回退。第三方材料的权利与许可不因
 入库而改变；收到有效权利通知后将立即限制访问或删除。详见
@@ -19,7 +21,7 @@
 | 设备 | 工程 | 顶层 | 作用 |
 | --- | --- | --- | --- |
 | 板卡 1 | [board1_capture/3_ddr_test.pds](board1_capture/3_ddr_test.pds) | `test_ddr`，`source/ddr_test_top.v` | 四路缩放/接收、DDR 缓存、四宫格显示，光口发送合成视频 |
-| 板卡 2 | [板卡二工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261017_image_ack.zip) | `hdmi_ddr_pcie`，`source/hdmi_ddr_pcie.v` | HDMI 经光口送给板卡 1；接收板卡 1 合成视频，经DDR、完整图像处理共同送HDMI和PCIe/鲁班猫2 |
+| 板卡 2 | [板卡二工程ZIP](board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip) | `hdmi_ddr_pcie`，`source/hdmi_ddr_pcie.v` | HDMI 经光口送给板卡 1；接收板卡 1 合成视频，经DDR、完整图像处理共同送HDMI和PCIe/鲁班猫2 |
 | Windows PC | [以太网上位机](../../tools/udp_video_sender/README.md) | `app.py`，双击 `start.cmd` | 视频/图片/彩条转换为 RGB565，通过 UDP 送板卡 1 |
 
 两个 PDS 文件记录的工具版本均为 **PDS 2022.2-SP6.4**，器件 **PGL50H / FBG484 / -6**。使用相应版本打开各自 PDS 文件，执行 Compile、Synthesize、布局布线、时序检查和 Generate Bitstream，再分别下载到对应板卡。

@@ -1,24 +1,45 @@
 {
-  "revision": "IMAGE_ACK_20261017",
-  "source_project": "C:\\Users\\hero\\Desktop\\pds_prj\\sfp_ddr_image_pice_handshake",
-  "source_copy_files": 548,
-  "PDS_inputs": 215,
-  "all_PDS_inputs_exist": true,
-  "includes_current_debug_FIC": true,
-  "IP_bytes_match_source": true,
-  "original_DMA_protocol_preserved": true,
-  "new_interface": "0x218, optional 128-byte RECEIVED/APPLIED cookie mailbox",
-  "RTL_benches_passed": 7,
-  "C99_tests_passed": 2,
-  "new_PDS_build": false,
-  "new_bitstream": false,
+  "release": "20261019_HEADER_KEEP_FIX",
+  "source": "C:\\Users\\hero\\Desktop\\pds_prj\\sfp_ddr_image_pice_handshake",
+  "PDS_inputs_present": 215,
+  "header_fix_RTL_sha256": "f0411b2aba80385ba66849006127d2a46f3b399165bcb78a76b336514c68ccf3",
+  "FIC": "IMAGE_ACK_RX_APPLIED_TX_20261017",
+  "core_ports": [
+    [
+      133,
+      161
+    ],
+    [
+      244,
+      245
+    ]
+  ],
+  "RTL_regressions_passed": 9,
+  "IP_bytes_match_desktop": true,
+  "includes_bitstream": false,
+  "PDS_build_run_by_publication": false,
   "hardware_programmed": false,
-  "ARM_driver_modified": false,
-  "archive": "sfp_ddr_image_pice_handshake_20261017_image_ack.zip",
-  "archive_sha256": "58ae167c029de5131836a5b3f86e1d23c5d705867c4b68dfec28a8ebcb98a3c4",
-  "archive_bytes": 7385937,
-  "archive_files": 553,
-  "zip_crc_passed": true,
-  "zip_bytes_match_project": true,
-  "distribution_format": "ZIP"
+  "distribution": "Two ZIP files; extract both into the same parent directory",
+  "archive": "sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip",
+  "archive_sha256": "0935c2de0a6e64f28807682bdd105ecd5ad2da54077891e818214c6c3b9e7541",
+  "archive_bytes": 2425732,
+  "archive_files": 578,
+  "archives": [
+    {
+      "path": "fpga/dual_board/board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip",
+      "bytes": 2425732,
+      "files": 560,
+      "sha256": "0935c2de0a6e64f28807682bdd105ecd5ad2da54077891e818214c6c3b9e7541",
+      "git_blob_sha": "46cb11e13fcc9e71173393e8698d6a521046a86a"
+    },
+    {
+      "path": "fpga/dual_board/board2_sfp_pcie/sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip",
+      "bytes": 4978960,
+      "files": 18,
+      "sha256": "936e6ac916b3577ae133193c182d82168232538d7632fb15f8ecd2bb3664211e",
+      "git_blob_sha": "e9c007f84848f7e4d3bc3ec537a108518b72bc62"
+    }
+  ],
+  "zip_crc_verified": true,
+  "zip_union_bytes_match_snapshot": true
 }

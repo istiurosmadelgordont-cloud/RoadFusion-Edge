@@ -1,6 +1,9 @@
+> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
+
+> 2026-10-19 最新源码快照：已修复 Logos PCIe IP 的3DW包头 `tkeep=1111` 被图像命令过滤的问题。图像写入仍要求单DW数据拍 `tkeep=0001`，视频DMA原有解析条件不变。参数接收、生效和回传通过9项离线回归；此发布未运行PDS位流构建或硬件下载，不附带位流。需要自行重建匹配位流。当前FIC为 `IMAGE_ACK_RX_APPLIED_TX_20261017`，Core0端口133/161位，Core1端口244/245位，均256点。下方较早记录保留为历史说明。
+
 # 板卡二代码解说：SFP、DDR、图像处理与PCIe DMA
 
-> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
 
 本文对应2026-10-17的 `sfp_ddr_image_pice_handshake`，工程入口为 hdmi_ddr_pice.pds（`hdmi_ddr_pice.pds`），器件PGL50H / FBG484 / -6，工具PDS 2022.2-SP6.4。
 

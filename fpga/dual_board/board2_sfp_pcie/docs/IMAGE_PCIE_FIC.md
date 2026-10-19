@@ -1,23 +1,45 @@
+> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
+
+> 2026-10-19发布：本FIC已包含在此次工程ZIP中；下面“仅桌面、未上传”的描述是2026-10-17更新时的历史状态。包头修正没有改变本FIC探针布局。
+
 # 图像参数接收与生效探针
 
-> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
-
-2026-10-17，FIC标识：`IMAGE_CONFIG_RX_ACTIVE_20261017`。
+2026-10-17，FIC标识：`IMAGE_ACK_RX_APPLIED_TX_20261017`。
 
 工程当前引用 **`debug/image_pcie_debug.fic`**，引用路径不变。
 `synthesize/hdmi_ddr_pcie_syn.fic` 同步为相同内容，避免从旧路径打开时混用旧探针。
-本次只补充FIC连接和手写DMA模块中的调试属性，没有改DMA功能、寄存器、端序、握手方式、SFP/PCIe生成IP或上位机接口。
-**按要求，本次没有启动编译、布局布线或生成bit文件。**
+本次保留已有参数/视频探针，在PCIe核加入两阶段回传状态及发送完成事件。手写DMA模块只增加观察信号和调试属性，不改功能状态机、端序、握手或生成IP。仅修改桌面工程，不上传GitHub。
+**本次未启动PDS综合、布局布线或bit生成；只运行了发送事件的RTL仿真核对。**
 
 ## FIC分组
 
 | 核 | 采样时钟 | Trigger Port 0 | Trigger Port 1 | 深度 |
 | --- | --- | --- | --- | ---: |
 | Core 0 | `nt_pix_clk_out`（像素时钟） | 原图像入口/FIFO写入观察，133位 | 生效参数160位、图像模块输入VS 1位 | 256 |
-| Core 1 | `pclk_div2`（PCIe用户时钟） | 原FIFO读出/发送观察，172位 | 接收参数、地址、数据和接收状态，213位 | 256 |
+| Core 1 | `pclk_div2`（PCIe用户时钟） | 原172位 + 回传状态/发送事件72位，共244位 | 原213位 + 本次回包cookie32位，共245位 | 256 |
 
 每核两个Trigger Port，Data Same As Trigger；保留原有两组图像/FIFO探针。
-逐位接线见 probe_manifest.json（`docs/verification/20261017/config_probes/probe_manifest.json`）。
+逐位接线见 probe_manifest.json（`docs/verification/20261017/ack_probes/probe_manifest.json`，位于工程ZIP内）。
+
+## 两阶段回传的新增探针
+
+所有新增信号均在Core 1 / `pclk_div2`，层次前缀为`u_pcie_dam_ctrl/`。
+
+| 端口 | 位段 | 信号 | 判读 |
+| --- | --- | --- | --- |
+| TP0 | `[203:172]` | `image_received_cookie[31:0]` | 完整五字接收并接受COMMIT后的请求编号；内部RECEIVED状态 |
+| TP0 | `[235:204]` | `image_applied_cookie[31:0]` | 对应像素帧ACK返回后的请求编号；内部APPLIED状态 |
+| TP0 | `[240:236]` | `image_rx_word_mask[4:0]` | WORD0开始新包，收到各WORD置对应位；COMMIT后清零。收齐前为11111，之后清零是正常现象 |
+| TP0 | `[241]` | `image_return_addr_valid` | 0x218回传地址已启用；有效STOP后清零 |
+| TP0 | `[242]` | `dbg_image_received_sent_event` | RECEIVED回包最后一拍在PCIe TX AXIS握手的单拍事件 |
+| TP0 | `[243]` | `dbg_image_applied_sent_event` | APPLIED回包最后一拍在PCIe TX AXIS握手的单拍事件 |
+| TP1 | `[244:213]` | `image_packet_cookie[31:0]` | 当前/最近一次回包快照编号；应在上述发送事件为1的采样点解释 |
+
+`image_received_cookie`变化不等于ARM已经收到；`image_applied_cookie`变化也不等于APPLIED回包已经发完。两个sent_event证明该回包已被PCIe核用户TX接口完整接受，仍不能代替ARM目标DMA区16个DW全部匹配的检查。
+
+推荐先触发`image_received_cookie`等于本次cookie，检查完整参数确实接收；再分别触发两个sent_event=1，查看同一采样点`image_packet_cookie`是否为本次编号。**这几项状态/事件在TU0，当前激活Trigger Condition要包含TU0，例如直接设为TU0；Function为==，未关心位填X。** TP1原接收条件仍属于TU1，比较值需要按新245位宽重新生成，旧213位整口掩码不能直接复用。不要同时要求sent_event=1与rx_handshake=1，两者是独立时刻。
+
+原有所有triggerChannel索引保持不变，新信号在各端口末尾追加；Core 1的全核busInserter编号已按新宽度重算。图像确认区的登记、唯一cookie、两次回传和STOP重绑定规则见 [ARM两阶段接口](IMAGE_PARAMETER_ACK.md)。
 
 ## 判断是否收到
 
@@ -79,8 +101,9 @@ shadow和active使用相同位布局；active会把无效参数钳位并清除�
 ## 加载与验证边界
 
 关闭旧的Inserter/Debugger会话，重新打开本工程引用的 `debug/image_pcie_debug.fic`。
-新版本应有两个核、每核两个Trigger Port，并能看到shadow和active完整160位总线；旧窗口不会因磁盘文件更新自动刷新。
+新版本应有两个核、每核两个Trigger Port；Core 1宽度为244/245位，并能看到新增cookie/mask/valid/发送事件。旧窗口不会因磁盘文件更新自动刷新。
 新增总线的RTL调试标记需要重新综合。使用这版RTL和FIC重新生成、下载匹配位流后，再用本FIC抓取新增信号；旧位流不能只换FIC就看到新探针。
 
-同一RTL和同一FIC接线已在2026-10-16完成过Compile、综合、插核和Device Map：DRM **131.5/134**、LUT 24153/42800、FF 30872/64200、APM 51.5/84。
-本次只复用该记录并静态核对文件/逐位接线，不重新运行编译；该资源结果没有包括后续用户自行修改，不等同于板上抓波或时序签核。
+原385位PCIe核配置的历史映射为DRM 131.5/134，仅供旧版本参考；本次PCIe核总宽增加104位到489位，没有重新综合/插核/映射，新增布局的资源和时序须由后续PDS构建确认。当前只做逐位FIC静态核对及发送事件仿真。
+
+本次静态核对与仿真证据见验证摘要（`docs/verification/20261017/ack_probes/validation_summary.json`，位于工程ZIP内）：逐位通道/总线映射通过，24次RECEIVED与22次APPLIED发送事件均与外部TX包记分板一致；原有背压、VS、STOP和配置恢复用例通过。

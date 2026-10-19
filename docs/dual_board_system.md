@@ -1,5 +1,7 @@
 # 双板系统当前入口
 
+> 2026-10-19：板卡二已替换为Logos PCIe包头兼容修正版，含最新FIC和两阶段回传；见[更新说明](../fpga/dual_board/board2_sfp_pcie/docs/PCIE_HEADER_KEEP_FIX.md)。以下较早版本记录保留为历史说明。
+
 双板接线、板卡一四路映射、以太网上位机和启动顺序统一见 [双板系统说明](../fpga/dual_board/README.md)。
 
 2026-10-17已用 `sfp_ddr_image_pice_handshake` 替换 [板卡二](../fpga/dual_board/board2_sfp_pcie/README.md)：DDR后统一图像处理，HDMI/PCIe共源，图像控制合入 `pcie_dma_ctrl`。

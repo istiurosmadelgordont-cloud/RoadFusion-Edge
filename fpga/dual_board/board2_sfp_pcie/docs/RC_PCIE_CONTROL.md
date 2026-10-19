@@ -1,6 +1,9 @@
+> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
+
+> 2026-10-19 最新源码快照：已修复 Logos PCIe IP 的3DW包头 `tkeep=1111` 被图像命令过滤的问题。图像写入仍要求单DW数据拍 `tkeep=0001`，视频DMA原有解析条件不变。参数接收、生效和回传通过9项离线回归；此发布未运行PDS位流构建或硬件下载，不附带位流。需要自行重建匹配位流。当前FIC为 `IMAGE_ACK_RX_APPLIED_TX_20261017`，Core0端口133/161位，Core1端口244/245位，均256点。下方较早记录保留为历史说明。
+
 # RC端控制PCIe与图像处理指南
 
-> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
 
 适用版本：2026-10-17，`sfp_ddr_image_pice_handshake`，默认1920×1080 RGB565。工程中RC命令、五字参数与快照控制均在 pcie_dma_ctrl.v（`source/source/pcie_dma_ctrl.v`） 内，图像处理位于DDR读出后，HDMI和PCIe共用处理结果。
 
@@ -253,7 +256,7 @@ STOP超时不能当成停止完成，也不能只等固定毫秒数就释放映�
 | STOP不返回 | 状态地址登记、cookie端序、TX反压、链路状态 |
 | 无法读取BAR状态 | 本版没有BAR读完成器，使用规定的DMA标记和FPGA调试信号 |
 
-FPGA端可观察 `running/stop_pending/buffer_state/buffer_token/dropped_frames/invalid_releases`；图像控制看 `image_shadow_config/image_queued_valid/image_cfg_data/image_cfg_apply/image_cfg_busy`，像素域看 `image_cfg_active/image_cfg_pending/image_cfg_ack/image_ready`。当前PDS引用 `debug/image_pcie_debug.fic`，Core0端口为133/161位、Core1为172/213位、各256点；新回传寄存器已标记但没有扩展现有FIC布局。见 [FIC说明](IMAGE_PCIE_FIC.md)。
+FPGA端可观察 `running/stop_pending/buffer_state/buffer_token/dropped_frames/invalid_releases`；图像控制看 `image_shadow_config/image_queued_valid/image_cfg_data/image_cfg_apply/image_cfg_busy`，像素域看 `image_cfg_active/image_cfg_pending/image_cfg_ack/image_ready`。当前PDS引用 `debug/image_pcie_debug.fic`，Core0端口为133/161位、Core1为244/245位、各256点；现有FIC已包含接收/生效cookie、掩码、回传地址使能及发送事件。见 [FIC说明](IMAGE_PCIE_FIC.md)。
 
 2026-10-17版本通过7项RTL仿真和2项C99测试；本次未运行新的PDS综合/映射、位流生成或下载，未完成本版ARM回传联调和板上画质验证。历史PDS结果仅对应旧版本。详细证据见 合并验证记录（`docs/PCIE_CONTROL_MERGE_VALIDATION.md`）。
 

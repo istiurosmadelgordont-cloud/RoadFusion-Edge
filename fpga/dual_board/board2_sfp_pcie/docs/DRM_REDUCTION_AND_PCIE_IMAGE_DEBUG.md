@@ -1,8 +1,8 @@
+> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
+
 > 2026-10-17：FIC已扩展为每核两个Trigger Port，接收/生效参数均可观察。当前配置与加载步骤见 [参数探针说明](IMAGE_PCIE_FIC.md)。下方126/134及133/172位记录对应之前未接入参数总线的FIC。
 
-> 工程以ZIP提供：[下载20261017两阶段回传版](../sfp_ddr_image_pice_handshake_20261017_image_ack.zip)。源码路径相对解压后的工程根目录。
-
-> 已生成并加入工程的配置：image_pcie_debug.fic（`debug/image_pcie_debug.fic`）。两组256点，插核后DRM为126/134；见 [FIC使用说明](IMAGE_PCIE_FIC.md)。下方121.5/134为未插核的行缓存优化结果。
+> 已生成并加入工程的配置：image_pcie_debug.fic（`debug/image_pcie_debug.fic`，位于工程ZIP内）。两组256点，插核后DRM为126/134；见 [FIC使用说明](IMAGE_PCIE_FIC.md)。下方121.5/134为未插核的行缓存优化结果。
 
 # DRM优化与PCIe图像入口调试
 

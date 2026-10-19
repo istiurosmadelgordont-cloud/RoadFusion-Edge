@@ -8,13 +8,11 @@
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
 
-## 板卡二PCIe图像处理工程（2026-10-17）
+## 板卡二PCIe图像处理工程（2026-10-19）
 
-[板卡二完整工程](fpga/dual_board/board2_sfp_pcie/README.md) 已更新为20261017两阶段回传版，以ZIP下载解压使用。SFP接收写DDR，恢复视频后统一处理并送HDMI/PCIe；图像控制及回传整合在手写`pcie_dma_ctrl`，原PCIe/SFP生成IP及四缓冲协议保留。
+[板卡二源码与仿真库](fpga/dual_board/board2_sfp_pcie/README.md) 已更新为3DW包头修正版，包含DDR后统一图像处理、PCIe五字控制、RECEIVED/APPLIED两阶段回传和最新FIC探针。修复Logos IP包头tkeep=1111被图像命令过滤的问题；视频DMA和PCIe/SFP生成IP保持原有协议/源码。
 
-新增可选`0x218`独立128字节DMA区，分别回复“参数已接收”和“参数已生效”，两次都携带提交cookie。见 [ARM适配契约](fpga/dual_board/board2_sfp_pcie/docs/IMAGE_PARAMETER_ACK.md)、[代码解说](fpga/dual_board/board2_sfp_pcie/docs/CODE_WALKTHROUGH.md) 和 [RC指南](fpga/dual_board/board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。DRM优化与当前FIC也已纳入工程包；旧0x220/0x224状态页不使用。
-
-7项RTL仿真与2项C99测试通过；新增版本未做PDS重建、时序签核或ARM回传上板验收，不含新位流。仓库现有`tools/pcie_v2`和其他ARM应用保持原文件，启用两阶段回复仍需按新契约适配；板卡一及以太网上位机未改。
+见[修正说明](fpga/dual_board/board2_sfp_pcie/docs/PCIE_HEADER_KEEP_FIX.md)、[代码解说](fpga/dual_board/board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)及[RC指南](fpga/dual_board/board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。9项离线仿真通过；本次发布未构建/下载位流，不附带bit，需自行重建匹配位流。ARM提供的pcie_v3无需因本修正改变命令；仓库ARM程序、板卡一和以太网程序保持当前内容。
 
 ## 当前板端版本：board_v9（2026-10-17）
 
