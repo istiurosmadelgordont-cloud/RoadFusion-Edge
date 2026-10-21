@@ -1,4 +1,5 @@
 #include "adas/ufld_lane_detector.hpp"
+#include "adas/npu_run_guard.hpp"
 #include "adas/model_file.hpp"
 
 #include <algorithm>
@@ -188,6 +189,7 @@ LaneResult UfldLaneDetector::detect(const cv::Mat& bgr, double* inference_ms) {
   input.fmt = RKNN_TENSOR_NHWC;
   input.size = static_cast<uint32_t>(image.total() * image.elemSize());
   input.buf = image.data;
+  NpuRunGuard npu_guard(npu_run_mutex());
   if (rknn_inputs_set(context_, 1, &input) != RKNN_SUCC) return LaneResult();
   const auto started = std::chrono::steady_clock::now();
   if (rknn_run(context_, nullptr) != RKNN_SUCC) return LaneResult();
@@ -208,6 +210,7 @@ LaneResult UfldLaneDetector::detect(const cv::Mat& bgr, double* inference_ms) {
     *inference_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();
   }
+  npu_guard.unlock();
   LaneResult result = v2_ ? decode_v2(outputs, bgr.cols, bgr.rows)
                           : decode_v1(outputs, bgr.cols, bgr.rows);
   rknn_outputs_release(context_, io_num_.n_output, outputs.data());

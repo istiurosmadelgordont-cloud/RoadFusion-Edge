@@ -8,13 +8,21 @@
 内置 NPU 运行 INT8 量化目标检测模型。ARM 将决策结果反馈给 FPGA，最终
 输出图像叠加、LED 指示和车辆控制信号。
 
+## 最新板端源码：测试二与检测框闪烁修复（2026-10-21 上传）
+
+[`board_v9`](board_v9/README.md) 已同步 2026-10-20 板端验证通过的版本：保留四宫格、测试一红绿灯匹配及方向/行驶/停止按钮，增加测试二虚线变道、实线直行、强制实线变道报警，以及本车道显示与虚实线区分。盲区联动暂缓。
+
+修复开启车道后 YOLO 红绿灯框闪烁：一次 YOLO＋MO 观测连续占用 NPU，获准执行后再读取最新 PCIe 帧，父灯组与子灯使用统一且有上限的显示续接。灯态决策仍只使用真实观测，未延长原证据时限。
+
+运行方式、模型区别及验证范围见 [board_v9 说明](board_v9/README.md) 和 [验证记录](board_v9/docs/VALIDATION_20261020.md)。UFLDv2 1600×320 QAT 续训、真实 INT8 PC 测试脚本及局限见 [QAT 记录](training/UFLDV2_QAT.md)。本次上传源码、配置与摘要；模型、原视频、训练集和本地测试视频独立保存。
+
 ## 板卡二PCIe图像处理工程（2026-10-19）
 
 [板卡二源码与仿真库](fpga/dual_board/board2_sfp_pcie/README.md) 已更新为3DW包头修正版，包含DDR后统一图像处理、PCIe五字控制、RECEIVED/APPLIED两阶段回传和最新FIC探针。修复Logos IP包头tkeep=1111被图像命令过滤的问题；视频DMA和PCIe/SFP生成IP保持原有协议/源码。
 
 见[修正说明](fpga/dual_board/board2_sfp_pcie/docs/PCIE_HEADER_KEEP_FIX.md)、[代码解说](fpga/dual_board/board2_sfp_pcie/docs/CODE_WALKTHROUGH.md)及[RC指南](fpga/dual_board/board2_sfp_pcie/docs/RC_PCIE_CONTROL.md)。9项离线仿真通过；本次发布未构建/下载位流，不附带bit，需自行重建匹配位流。ARM提供的pcie_v3无需因本修正改变命令；仓库ARM程序、板卡一和以太网程序保持当前内容。
 
-## 当前板端版本：board_v9（2026-10-17）
+## board_v9 初始接入记录（2026-10-17）
 
 [`board_v9`](board_v9/README.md) 在 board_v8 的「模拟板端测试一」基础上，把 PCIe 实时输入接到 [`tools/pcie_v2`](tools/pcie_v2/README.md) 的 read 路径（`/dev/fpga_frame_<BDF>`），回放与实时共用同一套车道、选灯和按钮逻辑：
 
@@ -31,6 +39,10 @@
 [`board_v8`](board_v8/README.md) 已同步当前 RK3568 正在使用的 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128）版本，包含四路整图单次 YOLO、中文紧凑标签、图形叠加开关、ByteTrack、指定灯组的方向判断和模拟报警。车道线与 TTC 默认关闭。
 
 “模拟板端测试一”采用视频回放和控件模拟方向/行驶状态，YOLO 与 MO 实际在 NPU 推理。保留当前 11 组菜单素材的配置和哈希清单，夜间拒识与误分类限制如实记录。源码、构建脚本与配置随本次提交；模型、视频和本地七路原视频独立保存。见 [版本说明与验证](board_v8/docs/SIMULATED_BOARD_TEST_1.md)。
+
+Windows PC 鸟瞰预览：双击根目录的 [启动PC鸟瞰.cmd](启动PC鸟瞰.cmd)，
+可切换八组 NVIDIA 七视角拼接视频。操作和环境说明见
+[PC_AVM_START.md](board_v8/PC_AVM_START.md)。该入口是 PC 视频预览，板端启动流程另见 board_v8 文档。
 
 ## 数据流
 

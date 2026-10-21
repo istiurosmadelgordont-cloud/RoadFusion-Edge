@@ -37,6 +37,18 @@ fi
 # Affinity is set inside the application before RKNN creates helper threads.
 # Only the independent PCIe worker moves to CPU 0,1.
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+# 保持此前实测的 NPU 工作频率；重启后驱动默认最低 200MHz 会降低检测吞吐。
+# 只在支持 800MHz、上限允许且当前最低频率更低时恢复，不改变 governor/最高频率。
+adas_npu_freq=/sys/class/devfreq/fde40000.npu
+if [ -r "$adas_npu_freq/min_freq" ] && [ -r "$adas_npu_freq/max_freq" ] && \
+   [ -r "$adas_npu_freq/available_frequencies" ] && \
+   grep -qw 800000000 "$adas_npu_freq/available_frequencies" && \
+   [ "$(cat "$adas_npu_freq/max_freq")" -ge 800000000 ] && \
+   [ "$(cat "$adas_npu_freq/min_freq")" -lt 800000000 ]; then
+  if ! printf 800000000 | sudo -n tee "$adas_npu_freq/min_freq" >/dev/null 2>&1; then
+    echo "NPU minimum frequency unchanged: cannot restore 800MHz." >&2
+  fi
+fi
 exec ./build/adas_four_view --pcie "$PCIE_DEVICE" --model "$MODEL" \
   --ufld-model "$UFLD_MODEL" --scene "$SCENE_DIR" --cpu-threads 1 \
-  --detect-every 1 --no-lanes --no-ttc --display-fps 0 "$@"
+  --detect-every 1 --npu-workers 2 --no-lanes --no-ttc --display-fps 0 "$@"

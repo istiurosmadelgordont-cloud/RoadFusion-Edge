@@ -12,6 +12,13 @@
       "file": "mo_fp16_baseline.rknn",
       "sha256": "2f3504e695c801ffe6255d674e2729011eecbc89ebcc74340c3e4cf534e9950d",
       "bytes": 4652921
+    },
+    {
+      "file": "ufldv2_culane_res18_1600x320_int8.rknn",
+      "sha256": "897d1337128a6f8068f74f6b9cf3d3770374645ea2123d1d96807afb595dbf7d",
+      "bytes": 207196348,
+      "role": "lane geometry",
+      "quantization": "original INT8 deployment; continued QAT candidate not selected"
     }
   ],
   "yolo_native_names": [
@@ -41,6 +48,7 @@
     "绿色直行箭头",
     "拒识"
   ],
-  "version_label": "模拟板端测试一",
-  "snapshot_date": "2026-10-15"
+  "version_label": "测试一、测试二与检测框闪烁修复",
+  "snapshot_date": "2026-10-20",
+  "upload_date": "2026-10-21"
 }

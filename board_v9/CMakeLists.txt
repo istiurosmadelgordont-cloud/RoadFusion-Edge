@@ -1,11 +1,35 @@
 cmake_minimum_required(VERSION 3.10)
 project(rk3568_adas LANGUAGES CXX)
+find_package(OpenCV REQUIRED)
+
+add_executable(npu_executor_regression EXCLUDE_FROM_ALL tests/npu_executor_regression.cpp)
+target_include_directories(npu_executor_regression PRIVATE include)
+target_compile_options(npu_executor_regression PRIVATE -UNDEBUG)
+target_link_libraries(npu_executor_regression PRIVATE pthread)
+
+add_executable(lane_visual_regression EXCLUDE_FROM_ALL tests/lane_visual_regression.cpp)
+target_include_directories(lane_visual_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(lane_visual_regression PRIVATE -UNDEBUG)
+target_link_libraries(lane_visual_regression PRIVATE opencv_core)
+
+add_executable(lane_paint_regression EXCLUDE_FROM_ALL tests/lane_paint_regression.cpp)
+target_include_directories(lane_paint_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(lane_paint_regression PRIVATE -UNDEBUG)
+target_link_libraries(lane_paint_regression PRIVATE ${OpenCV_LIBS})
+
+add_executable(light_verification_frames_regression EXCLUDE_FROM_ALL tests/light_verification_frames_regression.cpp)
+target_include_directories(light_verification_frames_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(light_verification_frames_regression PRIVATE -UNDEBUG)
+target_link_libraries(light_verification_frames_regression PRIVATE ${OpenCV_LIBS} pthread)
+
+add_executable(lane_timeline_replay EXCLUDE_FROM_ALL tests/lane_timeline_replay.cpp)
+target_include_directories(lane_timeline_replay PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(lane_timeline_replay PRIVATE ${OpenCV_LIBS})
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type")
 
-find_package(OpenCV REQUIRED)
 find_package(Freetype REQUIRED)
 find_library(RKNNRT_LIBRARY NAMES rknnrt PATHS /usr/lib /usr/local/lib)
 if(NOT RKNNRT_LIBRARY)
@@ -115,6 +139,7 @@ add_executable(preview_resize_regression EXCLUDE_FROM_ALL tests/preview_resize_r
 target_include_directories(preview_resize_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(preview_resize_regression PRIVATE ${OpenCV_LIBS})
 target_compile_options(preview_resize_regression PRIVATE -O3)
+target_link_libraries(preview_resize_regression PRIVATE pthread)
 
 add_executable(avm_regression EXCLUDE_FROM_ALL tests/avm_regression.cpp)
 target_include_directories(avm_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
@@ -122,6 +147,15 @@ target_link_libraries(avm_regression PRIVATE ${OpenCV_LIBS})
 target_compile_options(avm_regression PRIVATE -UNDEBUG)
 
 add_executable(ui_upload_regression EXCLUDE_FROM_ALL tests/ui_upload_regression.cpp)
+
+add_executable(lane_kalman_regression EXCLUDE_FROM_ALL tests/lane_kalman_regression.cpp)
+target_include_directories(lane_kalman_regression PRIVATE include)
+target_compile_options(lane_kalman_regression PRIVATE -UNDEBUG)
+
+add_executable(lane_outer_style_regression EXCLUDE_FROM_ALL tests/lane_outer_style_regression.cpp)
+target_include_directories(lane_outer_style_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(lane_outer_style_regression PRIVATE ${OpenCV_LIBS})
+target_compile_options(lane_outer_style_regression PRIVATE -UNDEBUG)
 target_include_directories(ui_upload_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(ui_upload_regression PRIVATE ${OpenCV_LIBS})
 target_compile_options(ui_upload_regression PRIVATE -UNDEBUG)
@@ -137,3 +171,6 @@ target_compile_definitions(input_mode_regression PRIVATE ADAS_HAVE_GLES=1)
 target_compile_options(input_mode_regression PRIVATE -UNDEBUG -ffunction-sections -fdata-sections)
 set_property(TARGET input_mode_regression APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--gc-sections")
 target_link_libraries(input_mode_regression PRIVATE ${OpenCV_LIBS} ${FREETYPE_LIBRARIES} pthread)
+foreach(GST_LIB gstapp-1.0 gstvideo-1.0 gstreamer-1.0 gobject-2.0 glib-2.0)
+  target_link_libraries(input_mode_regression PRIVATE ${GST_${GST_LIB}_LIBRARY})
+endforeach()

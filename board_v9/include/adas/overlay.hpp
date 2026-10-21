@@ -7,6 +7,9 @@
 namespace adas {
 
 struct LaneSemantic;
+// 返回绘图副本：选中灯的描边与 MO 框复用同一预测坐标，不修改灯态状态机。
+SignalResult tracked_signal_for_display(const SignalResult& signal,
+                                        const std::vector<Detection>& detections);
 cv::Scalar risk_overlay_color(const RiskResult& risk);
 cv::Scalar normal_object_color(int class_id);
 void draw_risk_halo(cv::Mat& frame, const cv::Rect2f& box,

@@ -1,4 +1,5 @@
 #include "adas/lamp_classifier.hpp"
+#include "adas/npu_run_guard.hpp"
 #include "adas/model_file.hpp"
 #include <opencv2/imgproc.hpp>
 #include <algorithm>
@@ -39,6 +40,7 @@ bool LampClassifier::predict(const cv::Mat& crop, int& category, float& confiden
   cv::cvtColor(canvas,canvas,cv::COLOR_BGR2RGB);
   rknn_input input{}; input.type=RKNN_TENSOR_UINT8; input.fmt=RKNN_TENSOR_NHWC;
   input.size=128*128*3; input.buf=canvas.data; input.pass_through=0;
+  NpuRunGuard npu_guard(npu_run_mutex());
   if (rknn_inputs_set(context_,1,&input)!=RKNN_SUCC || rknn_run(context_,nullptr)!=RKNN_SUCC) return false;
   rknn_output output{}; output.want_float=1;
   if (rknn_outputs_get(context_,1,&output,nullptr)!=RKNN_SUCC) return false;
@@ -46,6 +48,7 @@ bool LampClassifier::predict(const cv::Mat& crop, int& category, float& confiden
     rknn_outputs_release(context_,1,&output); return false;
   }
   const float* logits=static_cast<const float*>(output.buf);
+  npu_guard.unlock();
   float peak=*std::max_element(logits,logits+9), total=0.f, probabilities[9];
   for(int i=0;i<9;++i) { probabilities[i]=std::exp(logits[i]-peak); total+=probabilities[i]; }
   category=int(std::max_element(probabilities,probabilities+9)-probabilities);

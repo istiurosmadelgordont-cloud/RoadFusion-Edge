@@ -105,6 +105,7 @@ class LaneSignalSimulator {
       }
     }
     selected_.box = cv::Rect(best->box); selected_.score = best->score;
+    selected_.track_id = best->track_id;  // 只让高亮框跟随同一小灯，不参与授权投票。
     // 换色立即撤销原授权/报警，再对新颜色连续确认。
     if (raw_ != next || gap > .8) {
       confirmed_ = SignalState::UNKNOWN; count_ = 0; since_ = time;

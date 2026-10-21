@@ -1,4 +1,5 @@
 #include "adas/rknn_detector.hpp"
+#include "adas/npu_run_guard.hpp"
 #include "adas/model_file.hpp"
 #include "adas/lamp_classifier.hpp"
 
@@ -179,6 +180,7 @@ std::vector<Detection> RknnDetector::detect(const cv::Mat& bgr, double* inferenc
   input.size = static_cast<uint32_t>(input_image.total() * input_image.elemSize());
   input.buf = input_image.data;
   input.pass_through = 0;
+  NpuRunGuard npu_guard(npu_run_mutex());
   if (rknn_inputs_set(context_, 1, &input) != RKNN_SUCC) return {};
 
   const auto start = std::chrono::steady_clock::now();
@@ -197,6 +199,11 @@ std::vector<Detection> RknnDetector::detect(const cv::Mat& bgr, double* inferenc
     }
   }
   const auto stop = std::chrono::steady_clock::now();
+  // Complete one YOLO + MO observation before another context uses the NPU.
+  // Releasing here let a 200ms UFLD job enter before the lamp crops, consuming
+  // the 500ms result deadline and dropping an otherwise valid observation.
+  // A single-stage detector still releases before its CPU-only postprocess.
+  if (!two_stage_) npu_guard.unlock();
   if (inference_ms) *inference_ms = std::chrono::duration<double, std::milli>(stop - start).count();
   std::vector<Detection> result = postprocess(outputs, meta);
   rknn_outputs_release(context_, io_num_.n_output, outputs.data());
@@ -214,7 +221,10 @@ std::vector<Detection> RknnDetector::detect(const cv::Mat& bgr, double* inferenc
       if (native==7) {
         // 每次 YOLO 结果最多处理 8 个灯组，限制 MO 裁剪调用总量。
         // 超出预算的框标为“待识别”，不伪装成已确认的灯态。
-        const bool classified=classified_housings++<8;
+        // classify() 从 housing 复制 Detection，子灯因此保留来源。
+        // 此编号经四视图裁剪保留，进入跟踪器后再绑定持久的灯组 ID。
+        detection.source_housing_index=classified_housings++;
+        const bool classified=detection.source_housing_index<8;
         auto lamps=classified ? lamp_classifier_->classify(bgr,detection) : std::vector<Detection>{};
         detection.name=lamps.empty() ? (classified ? "交通灯（MO未确认）" : "交通灯（待识别）") : "交通灯";
         mapped.push_back(detection);

@@ -9,7 +9,8 @@ struct PerceptionPeriods {
   int rear_lane_ms = 450;
 };
 
-inline PerceptionPeriods lane_priority_periods(bool high_precision) {
+inline PerceptionPeriods lane_priority_periods(bool high_precision,
+                                               bool concurrent_workers=false) {
   PerceptionPeriods periods;
   if (high_precision) {
     // Full-width UFLDv2 occupies the shared NPU for roughly 200 ms. Service
@@ -24,6 +25,10 @@ inline PerceptionPeriods lane_priority_periods(bool high_precision) {
     periods.front_lane_ms = 240;
     periods.rear_lane_ms = 1000;
   }
+  // With two preparation workers, faster object preprocessing can repeatedly
+  // re-enter before a waiting lane task. Equal service deadlines keep lane
+  // observations fresh while both contexts still share the NPU continuously.
+  if(concurrent_workers)periods.object_ms=periods.front_lane_ms;
   return periods;
 }
 

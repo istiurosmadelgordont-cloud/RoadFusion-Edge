@@ -96,6 +96,14 @@ class PcieCapture {
     return error_;
   }
 
+  // Read-only snapshot for a queued inference job at execution time. It does
+  // not consume the UI sequence and never touches the device or DMA protocol.
+  bool latest_frame(cv::Mat& frame, std::chrono::steady_clock::time_point& stamp) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(latest_.empty() || failed_ || stop_ || quit_)return false;
+    frame=latest_; stamp=stamp_; return true;
+  }
+
   void close() {
     stop_ = true;
     ready_.notify_all();

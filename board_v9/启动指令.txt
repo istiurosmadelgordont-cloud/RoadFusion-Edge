@@ -1,10 +1,14 @@
-当前版本：board_v9，pcie_v2 read；用途车道选灯，同一方向按钮单击开始、再点停车。
+当前版本：board_v9，测试一、测试二与检测框闪烁修复（2026-10-21 上传）。详细说明见 CURRENT.md。
 
 将整个更新后的 board_v9 同步到鲁班猫，在实际项目根目录执行：
 
 cmake -S . -B build
 cmake --build build --target adas_four_view -- -j2
 sh scripts/run_pcie.sh
+
+启动并开启测试二车道检测：sh scripts/run_pcie.sh --enable-lanes
+L 键或顶部按钮切换车道；右侧五个按钮模拟左右变道、保持直行及强制请求。
+虚线允许对应方向箭头，实线保持直行，强制实线请求红色报警，未知不放行；盲区联动暂缓。
 
 同一版 pcie_v2 驱动已经加载时，无需因为这次上位机更新而重编驱动。
 首次安装：make -C driver；sudo insmod driver/my_pciedriver.ko

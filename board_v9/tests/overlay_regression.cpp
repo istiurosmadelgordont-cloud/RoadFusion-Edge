@@ -19,6 +19,25 @@ cv::Mat render(const adas::LaneResult& lane, const adas::RiskResult& risk,
 }  // namespace
 
 int main() {
+  {
+    // 高亮只能跟随已选 ID，不能继续画在旧位置或跳到占据旧位置的邻灯。
+    adas::SignalResult signal;
+    signal.state=adas::SignalState::RED; signal.stable=true;
+    signal.box={100,40,8,8}; signal.track_id=41; signal.score=.99f;
+    adas::Detection tracked,neighbor;
+    tracked.class_id=7; tracked.track_id=41; tracked.box={160,45,10,10};
+    neighbor=tracked; neighbor.track_id=42; neighbor.box=cv::Rect2f(signal.box);
+    const auto displayed=adas::tracked_signal_for_display(signal,{neighbor,tracked});
+    assert(displayed.box==cv::Rect(tracked.box));
+    assert(signal.box.x==100 && signal.state==displayed.state && displayed.stable);
+    assert(adas::tracked_signal_for_display(signal,{neighbor}).box.area()==0);
+    tracked.class_id=11; // 新颜色不能借用旧红灯状态继续描边。
+    const auto changed=adas::tracked_signal_for_display(signal,{tracked});
+    assert(changed.box.area()==0 && changed.state==signal.state && changed.score==signal.score);
+    signal.track_id=-1;
+    assert(adas::tracked_signal_for_display(signal,{}).box==signal.box);
+    std::cout<<"PASS: selected lamp outline follows ID without changing signal evidence\n";
+  }
   adas::Detection car;
   car.class_id = 2;
   car.track_id = 23;
@@ -90,6 +109,17 @@ int main() {
   frame = render(display, adas::RiskResult(), {});
   const cv::Vec3b sparse_partial = frame.at<cv::Vec3b>(300, 320);
   assert(sparse_partial[1] < sparse_partial[0] + 5);
+  frame = render(display, adas::RiskResult(), {}, &semantics);
+  assert(frame.at<cv::Vec3b>(350,180)==cv::Vec3b(40,40,40));
+  assert(frame.at<cv::Vec3b>(350,460)==cv::Vec3b(40,40,40));
+  display.partial=false;display.identity_uncertain=true;
+  frame = render(display, adas::RiskResult(), {}, &semantics);
+  assert(frame.at<cv::Vec3b>(350,180)==cv::Vec3b(40,40,40));
+  display.identity_uncertain=false;
+  semantics.left=semantics.right=adas::LaneMarking::UNKNOWN;
+  frame = render(display, adas::RiskResult(), {}, &semantics);
+  assert(frame.at<cv::Vec3b>(350,180)==cv::Vec3b(40,40,40));
+  std::cout<<"PASS: weak/uncertain/unknown lane boundaries never fall back to grey-white strokes\n";
 
   // Adjacent candidates require a supported outer slot and a reliable ego pair.
   adas::LaneResult multi;
@@ -106,10 +136,19 @@ int main() {
   multi_semantics.lane_valid = true;
   multi_semantics.left = adas::LaneMarking::DASHED;
   multi_semantics.right = adas::LaneMarking::DASHED;
+  multi_semantics.boundaries[0] = adas::LaneMarking::DASHED;
+  multi_semantics.boundaries[3] = adas::LaneMarking::DASHED;
   frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
   assert(frame.at<cv::Vec3b>(300, 110)[2] > 45);
   assert(frame.at<cv::Vec3b>(300, 560)[0] >
          frame.at<cv::Vec3b>(300, 560)[2] + 8);
+  multi_semantics.boundaries[3] = adas::LaneMarking::UNKNOWN;
+  frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
+  const auto unknown_edge=frame.at<cv::Vec3b>(300,560);
+  // UNKNOWN keeps the subdued purple area, without a bright grey dot/stroke.
+  assert(unknown_edge[0]>unknown_edge[2]+8);
+  assert(std::max(unknown_edge[0],std::max(unknown_edge[1],unknown_edge[2]))<120);
+  multi_semantics.boundaries[3] = adas::LaneMarking::DASHED;
   multi.identity_uncertain = true;
   frame = render(multi, adas::RiskResult(), {}, &multi_semantics);
   assert(frame.at<cv::Vec3b>(300, 110) == cv::Vec3b(40, 40, 40));

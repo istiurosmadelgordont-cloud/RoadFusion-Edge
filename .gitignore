@@ -44,6 +44,8 @@ board_v7/output/
 board_v7/four_view_sample/
 board_v7/*.log
 board_v8/build/
+board_v8/build_test2_pc/
+training/ufldv2_qat_*/
 board_v8/output/
 board_v8/four_view_sample/
 board_v8/*.log
@@ -89,3 +91,14 @@ Thumbs.db
 # Two-stage local model artifacts and experiment environments
 board_v8/models/
 two_stage_qat_20261010/
+
+# Local deployment snapshots, scratch scripts and generated model probes
+.tmp/
+v9_*_2026*/
+direction_fix_20261012/
+light_stability_20261013/
+recommended_board_test_20261012/
+check*.onnx
+*.f32
+*.npz
+board_v9/include/adas/*_before.hpp

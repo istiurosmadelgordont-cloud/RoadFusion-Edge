@@ -18,6 +18,9 @@ struct Detection {
   // Image-plane centre motion, pixels/second; never a world-space trajectory.
   bool motion_valid = false;
   cv::Point2f image_velocity;
+  // 仅在同一轮检测内有效：YOLO 灯组与其 MO 小灯共用此编号。
+  // 跨帧关联必须使用跟踪 ID，不能把本编号当作持久身份。
+  int source_housing_index = -1;
 };
 
 struct LaneResult {
@@ -51,6 +54,8 @@ struct SignalResult {
   bool stable = false;
   cv::Rect box;
   float score = 0.0f;
+  // 只供绘图跟随目标；灯态确认仍使用原始观测和原有时间规则。
+  int track_id = -1;
 };
 
 // What the vehicle should do, as opposed to what the light shows. Driving logic

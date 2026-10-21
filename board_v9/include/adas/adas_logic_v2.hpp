@@ -205,8 +205,7 @@ class LaneSemanticTracker {
     result.boundaries[2] = result.right;
     for (int side = 0; side < 2; ++side) {
       const int slot = side == 0 ? 0 : 3;
-      if (lane.lane_polygons[side == 0 ? 0 : 2].empty() ||
-          observed.boundaries[slot] == LaneMarking::UNKNOWN) {
+      if (observed.boundaries[slot] == LaneMarking::UNKNOWN) {
         result.boundaries[slot] = LaneMarking::UNKNOWN;
         outer_candidate_[side] = LaneMarking::UNKNOWN;
         outer_streak_[side] = 0;
@@ -251,14 +250,14 @@ class LaneSemanticTracker {
  private:
   static LaneMarking stabilize(LaneMarking value, LaneMarking& candidate,
                                int& streak, LaneMarking current) {
-    if (value == LaneMarking::UNKNOWN) return current;
+    if (value == LaneMarking::UNKNOWN) {candidate=LaneMarking::UNKNOWN;streak=0;return LaneMarking::UNKNOWN;}
     if (value != candidate) {
       candidate = value;
       streak = 1;
     } else {
       ++streak;
     }
-    return streak >= 2 ? value : current;
+    return streak >= 2 ? value : LaneMarking::UNKNOWN;
   }
 
   LaneSemantic last_;
@@ -283,6 +282,8 @@ struct LaneChangeResult {
   ManeuverDirection direction = ManeuverDirection::NONE;
   const char* reason = "未请求变道";
   bool permitted = false;
+  bool forced = false;
+  bool solid_alarm = false;
 };
 
 inline const char* lane_change_state_caption(LaneChangeState state) {
@@ -301,9 +302,17 @@ inline const char* lane_change_state_caption(LaneChangeState state) {
 
 class LaneChangeFsm {
  public:
+  // 测试二先演示车道线规则；不把未接入的盲区检查描述为已通过。
+  LaneChangeResult update_rules(const VehicleState& vehicle, const LaneSemantic& lane,
+                                std::chrono::steady_clock::time_point now) {
+    return update(vehicle,lane,false,false,true,false,now,true);
+  }
+
   void request(ManeuverDirection direction,
-               std::chrono::steady_clock::time_point now) {
+               std::chrono::steady_clock::time_point now, bool forced = false) {
     direction_ = direction;
+    forced_ = forced;
+    solid_alarm_ = false;
     state_ = direction == ManeuverDirection::LEFT ||
                      direction == ManeuverDirection::RIGHT
                  ? LaneChangeState::REQUEST : LaneChangeState::IDLE;
@@ -315,11 +324,11 @@ class LaneChangeFsm {
                           const LaneSemantic& lane,
                           bool left_blind, bool right_blind,
                           bool side_fresh, bool near_regulation,
-                          std::chrono::steady_clock::time_point now) {
+                          std::chrono::steady_clock::time_point now, bool rules_only = false) {
     if (state_ == LaneChangeState::IDLE || direction_ == ManeuverDirection::NONE)
       return make("未请求变道", false);
     if (state_ == LaneChangeState::ABORT)
-      return make("变道已中止，请重新请求", false);
+      return make(solid_alarm_ ? "强制实线变道报警，保持直行" : "变道已中止，请重新请求", false);
     if (state_ == LaneChangeState::DONE) {
       if (now - state_since_ < std::chrono::seconds(1))
         return make("变道完成", true);
@@ -346,13 +355,26 @@ class LaneChangeFsm {
       state_ = LaneChangeState::BLOCKED;
       return make("需开启目标方向转向灯", false);
     }
+    const LaneMarking boundary = direction_ == ManeuverDirection::LEFT ? lane.left : lane.right;
+    if (forced_ && lane.lane_valid && boundary == LaneMarking::SOLID) {
+      solid_alarm_ = true;
+      state_ = LaneChangeState::ABORT;
+      clear_since_ = std::chrono::steady_clock::time_point();
+      return make("强制实线变道报警，保持直行", false);
+    }
     if (near_regulation) {
       state_ = LaneChangeState::BLOCKED;
+      clear_since_ = std::chrono::steady_clock::time_point();
       return make("路口/斑马线附近禁止确认变道", false);
     }
     if (!rule_allowed) {
       state_ = LaneChangeState::CHECK_RULE;
-      return make("边界非虚线或语义未知", false);
+      clear_since_ = std::chrono::steady_clock::time_point();
+      return make(lane.lane_valid && boundary == LaneMarking::SOLID ? "实线保持直行" : "线型未确认，保持直行", false);
+    }
+    if (rules_only) {
+      state_ = LaneChangeState::ALLOW_CHANGE;
+      return make("虚线允许变道（按键模拟）", true);
     }
     if (!side_fresh) {
       state_ = LaneChangeState::CHECK_SAFE;
@@ -395,11 +417,14 @@ class LaneChangeFsm {
     result.direction = direction_;
     result.reason = reason;
     result.permitted = permitted;
+    result.forced = forced_;
+    result.solid_alarm = solid_alarm_;
     return result;
   }
 
   LaneChangeState state_ = LaneChangeState::IDLE;
   ManeuverDirection direction_ = ManeuverDirection::NONE;
+  bool forced_ = false, solid_alarm_ = false;
   std::chrono::steady_clock::time_point since_{}, state_since_{}, clear_since_{};
 };
 
@@ -516,6 +541,7 @@ class WarningManager {
     WarningSummary result;
     add(result, fcw, WarningCode::FCW, 100, "前向碰撞预警 FCW");
     add(result, rcw, WarningCode::RCW, 90, "后车快速接近 RCW");
+    add(result, lane_change.solid_alarm, WarningCode::LANE_CHANGE, 95, lane_change.reason);
     add(result, lane_change.state == LaneChangeState::ABORT,
         WarningCode::LANE_CHANGE, 88, lane_change.reason);
     const bool occupied_request =

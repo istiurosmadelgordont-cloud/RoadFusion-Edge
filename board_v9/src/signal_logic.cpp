@@ -35,6 +35,7 @@ SignalResult SignalLogic::update(const std::vector<Detection>& detections, int w
     best_relevance = relevance;
     result.box = detection.box;
     result.score = detection.score;
+    result.track_id = detection.track_id;
     result.state = (detection.class_id == 7 || detection.class_id == 10)
                        ? SignalState::RED : SignalState::GREEN;
   }

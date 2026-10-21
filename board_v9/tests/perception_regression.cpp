@@ -16,6 +16,84 @@ int main() {
   const auto base = std::chrono::steady_clock::now();
   const auto at = [&](int ms) { return base + std::chrono::milliseconds(ms); };
   {
+    // 小灯位移超过自身宽度时，仍应跟随同一个灯组，而非每次新建轨迹。
+    ByteTracker tracker;
+    Detection housing, bulb;
+    housing.class_id=21; housing.name="交通灯"; housing.score=.95f;
+    housing.box={100,20,40,100}; housing.source_housing_index=0;
+    bulb.class_id=7; bulb.name="红色圆灯 MO 99%"; bulb.score=.99f;
+    bulb.box={114,40,8,8}; bulb.source_housing_index=0;
+    tracker.update({bulb,housing},at(0),at(0)); // 输入顺序故意先子后父。
+    const int bulb_id=tracker.identify_measurements({bulb})[0].track_id;
+    assert(bulb_id>=0);
+    for(int step=1;step<=2;++step) {
+      housing.box.x+=10; bulb.box.x+=10;
+      // 每轮来源编号可变，不能直接作为跨帧身份。
+      housing.source_housing_index=bulb.source_housing_index=step+10;
+      tracker.update({bulb,housing},at(step*100),at(step*100));
+      const auto identified=tracker.identify_measurements({bulb});
+      assert(identified.size()==1 && identified[0].track_id==bulb_id);
+      assert(identified[0].box==bulb.box && identified[0].score==bulb.score);
+    }
+    auto predicted=tracker.predict(at(350));
+    bool followed=false;
+    for(const auto& d:predicted) if(d.track_id==bulb_id) {
+      assert(std::abs(d.box.x-149.f)<.1f); // 150ms 内移动 15px，不再被限制为 4px。
+      followed=true;
+    }
+    assert(followed);
+    // 漏掉一轮 MO 时只暂存描边；不能在 observations() 中伪造新灯态。
+    housing.box.x=130;
+    tracker.update({housing},at(300),at(300));
+    for(const auto& d:tracker.observations()) assert(d.class_id==21);
+    followed=false;
+    for(const auto& d:tracker.predict(at(350))) if(d.track_id==bulb_id) {
+      assert(std::abs(d.box.x-149.f)<.1f && d.name.find("暂存")!=std::string::npos);
+      followed=true;
+    }
+    assert(followed);
+    assert(tracker.identify_measurements({bulb})[0].track_id<0);
+    assert(tracker.predict(at(1350)).empty());
+
+    // 同一灯组放大后，小灯位置和尺寸也应随之变化。
+    tracker.reset(); housing.box={100,20,40,100}; bulb.box={114,40,8,8};
+    housing.source_housing_index=bulb.source_housing_index=0;
+    tracker.update({housing,bulb},at(0),at(0));
+    housing.box={110,20,44,110}; bulb.box={125.4f,42,8.8f,8.8f};
+    tracker.update({housing,bulb},at(100),at(100));
+    const auto raw=tracker.identify_measurements({bulb})[0];
+    bool scaled=false;
+    for(const auto& d:tracker.predict(at(200))) if(d.track_id==raw.track_id) {
+      assert(d.box.x>raw.box.x+10.f && d.box.width>raw.box.width+.7f);
+      scaled=true;
+    }
+    assert(scaled && raw.box==bulb.box);
+
+    // 重叠灯组依靠明确来源建立父子关联；输入重排不能交换子灯身份。
+    tracker.reset();
+    Detection other_housing=housing, other_bulb=bulb;
+    housing.box={100,20,60,100}; housing.source_housing_index=0;
+    other_housing.box={130,20,60,100}; other_housing.source_housing_index=1;
+    bulb.box={144,40,8,8}; bulb.source_housing_index=0;
+    other_bulb.box={164,40,8,8}; other_bulb.source_housing_index=1;
+    tracker.update({housing,other_housing,bulb,other_bulb},at(0),at(0));
+    const auto originals=tracker.identify_measurements({bulb,other_bulb});
+    housing.box.x+=10; other_housing.box.x+=10; bulb.box.x+=10; other_bulb.box.x+=10;
+    housing.source_housing_index=bulb.source_housing_index=1;
+    other_housing.source_housing_index=other_bulb.source_housing_index=0;
+    tracker.update({other_bulb,other_housing,bulb,housing},at(100),at(100));
+    const auto matched=tracker.identify_measurements({bulb,other_bulb});
+    assert(matched[0].track_id==originals[0].track_id);
+    assert(matched[1].track_id==originals[1].track_id && matched[0].track_id!=matched[1].track_id);
+    // 换色只更新真实观测，不残留旧色轨迹。
+    bulb.class_id=11;
+    tracker.update({housing,other_housing,bulb,other_bulb},at(200),at(200));
+    assert(tracker.identify_measurements({bulb})[0].track_id==originals[0].track_id);
+    for(const auto& d:tracker.predict(at(220)))
+      if(d.track_id==originals[0].track_id) assert(d.class_id==11);
+    std::cout<<"PASS: lamp parent binding, translation/scale, missed evidence and changing source order\n";
+  }
+  {
     ByteTracker lamp_tracker;
     Detection red_bulb;
     red_bulb.class_id=7;red_bulb.name="red_circle";red_bulb.score=.95f;
@@ -47,6 +125,54 @@ int main() {
     assert(vehicle_tracker.predict(at(200)).size()==1);
     vehicle_tracker.update({},at(300),at(300));
     assert(vehicle_tracker.predict(at(300)).empty());
+    // A delayed shared-NPU result must remain visible until the next result,
+    // without turning held tracks into observations or extending lamp validity.
+    ByteTracker delayed;
+    delayed.update({car},at(0),at(450));
+    assert(delayed.predict(at(700)).size()==1);
+    assert(delayed.predict(at(950)).size()==1);
+    assert(delayed.predict(at(1001)).empty()); // absolute source-age limit
+    delayed.update({car},at(500),at(950));
+    assert(delayed.predict(at(1150)).size()==1); // matched tracks refresh receipt time too
+    delayed.update({},at(700),at(1150));
+    assert(delayed.observations().empty() && delayed.predict(at(1150)).size()==1);
+    delayed.update({},at(800),at(1250));
+    assert(delayed.predict(at(1250)).empty()); // two genuine misses still remove vehicles
+    ByteTracker receipt_bound;
+    receipt_bound.update({car},at(0),at(100));
+    assert(receipt_bound.predict(at(751)).empty()); // receipt-age limit
+    // The parent housing must bridge the same delayed shared-NPU interval as
+    // its bulb. Expiring the parent 650ms after capture hides a fresh result
+    // that only arrived 250ms ago, although no detector miss occurred.
+    ByteTracker delayed_lamps;
+    Detection housing;
+    housing.class_id=21;housing.name="交通灯";housing.score=.95f;
+    housing.box={90,20,50,90};housing.source_housing_index=4;
+    Detection bulb=red_bulb;
+    bulb.box={105,40,10,10};bulb.source_housing_index=4;
+    delayed_lamps.update({housing,bulb},at(0),at(450));
+    auto during_gap=delayed_lamps.predict(at(700));
+    assert(during_gap.size()==2);
+    bool held_bulb=false;
+    for(const auto& d:during_gap)if(d.class_id==7) {
+      held_bulb=true;assert(d.name.find("暂存")!=std::string::npos);
+    }
+    assert(held_bulb && delayed_lamps.predict(at(950)).size()==2);
+    assert(delayed_lamps.predict(at(1001)).empty());
+    assert(delayed_lamps.identify_measurements({bulb})[0].box==bulb.box);
+    // New measured colour replaces the held one immediately, without turning
+    // a carried-over parent/child into another measured lamp.
+    bulb.class_id=11;
+    delayed_lamps.update({housing,bulb},at(500),at(950));
+    for(const auto& d:delayed_lamps.predict(at(1100)))assert(d.class_id!=7);
+    delayed_lamps.update({},at(1000),at(1200));
+    assert(delayed_lamps.observations().empty());
+    delayed_lamps.update({},at(1100),at(1300));
+    assert(delayed_lamps.predict(at(1300)).empty());
+    delayed_lamps.reset();
+    delayed_lamps.update({housing,bulb},at(0),at(50));
+    assert(delayed_lamps.predict(at(701)).empty()); // bounded receipt gap
+    std::cout<<"PASS: delayed lamp parent/child display; source/receipt expiry and fresh-colour replacement\n";
     std::cout<<"PASS: one lamp track across red/green transitions; adjacent lamps and cars remain distinct\n";
   }
   std::array<std::chrono::steady_clock::time_point, 3> launched{{at(0),at(0),at(0)}};
@@ -59,6 +185,20 @@ int main() {
   const PerceptionPeriods precision = lane_priority_periods(true);
   launched = {{at(0), at(0), at(0)}};
   assert(next_perception_task(launched, true, precision) == 0);
+  const auto concurrent=lane_priority_periods(true,true);
+  launched={{at(900),at(800),at(0)}};
+  assert(next_perception_task(launched,false,precision)==0);
+  assert(next_perception_task(launched,false,concurrent)==1);
+  launched[1]=at(1000);
+  assert(next_perception_task(launched,false,concurrent)==0);
+  launched={{at(0),at(0),at(0)}};
+  int balanced_counts[2]={0,0},balanced_time=1;
+  for(int iteration=0;iteration<60;++iteration){
+    int task=next_perception_task(launched,false,concurrent);
+    if(balanced_counts[task])assert(balanced_time-std::chrono::duration_cast<std::chrono::milliseconds>(launched[task]-at(0)).count()<=400);
+    launched[task]=at(balanced_time);++balanced_counts[task];balanced_time+=task==0?130:250;
+  }
+  assert(balanced_counts[0]==30 && balanced_counts[1]==30);
   // Model a shared NPU with 100 ms YOLO, 220 ms UFLD and 30 ms dispatch cost.
   // Neither task may be starved, including when rear inference is enabled.
   for (bool rear : {false, true}) {

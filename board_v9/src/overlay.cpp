@@ -98,21 +98,24 @@ void draw_decision_panel(cv::Mat& frame, const DriveResult& drive) {
 void draw_lane_boundary(cv::Mat& frame, const std::vector<cv::Point>& curve,
                         LaneMarking marking, const cv::Scalar& color,
                         int thickness) {
-  if (curve.size() < 2) return;
+  if (curve.size() < 2 || marking == LaneMarking::UNKNOWN) return;
   if (marking == LaneMarking::SOLID) {
     cv::polylines(frame, curve, false, color, thickness, cv::LINE_AA);
     return;
   }
-  if (marking == LaneMarking::DASHED) {
-    for (size_t i = 1; i < curve.size(); ++i) {
-      if ((i / 3) % 2 == 0)
-        cv::line(frame, curve[i - 1], curve[i], color, thickness, cv::LINE_AA);
+  // Arc-length styles match the PC preview and remain independent of anchors.
+  float travelled=0;int next=0;cv::Point previous=curve.front();bool have_previous=false;
+  for(size_t i=1;i<curve.size();++i){
+    const float length=cv::norm(curve[i]-curve[i-1]);if(length<=0)continue;
+    while(next<=travelled+length){
+      const float t=(next-travelled)/length;
+      const cv::Point p(cvRound(curve[i-1].x+(curve[i].x-curve[i-1].x)*t),
+                        cvRound(curve[i-1].y+(curve[i].y-curve[i-1].y)*t));
+      if(marking==LaneMarking::DASHED){if(have_previous && next%26<15 && next%26>0)cv::line(frame,previous,p,color,thickness,cv::LINE_AA);}
+      previous=p;have_previous=true;++next;
     }
-    return;
+    travelled+=length;
   }
-  for (size_t i = 0; i < curve.size(); i += 3)
-    cv::circle(frame, curve[i], std::max(2, thickness / 2), color, cv::FILLED,
-               cv::LINE_AA);
 }
 
 bool is_risk_target(const Detection& detection, const RiskResult& risk) {
@@ -127,6 +130,7 @@ bool is_risk_target(const Detection& detection, const RiskResult& risk) {
 bool is_current_signal(const Detection& detection, const SignalResult& signal) {
   if (signal.state == SignalState::NONE || detection.class_id < 7 ||
       detection.class_id > 14 || signal.box.area() <= 0) return false;
+  if (signal.track_id >= 0) return detection.track_id == signal.track_id;
   const cv::Rect2f selected(signal.box);
   const cv::Rect2f overlap = detection.box & selected;
   const float united = detection.box.area() + selected.area() - overlap.area();
@@ -225,8 +229,8 @@ void draw_adjacent_lanes(cv::Mat& frame, const LaneResult& lane,
                                        : cv::Scalar(230, 130, 160);
     blend_vertical_polygon(frame, area, tint, confirmed ? .27 : .20,
                            outer.front().y, outer.back().y);
-    // Unknown paint stays dotted; even a solid divider does not remove the
-    // observed lane, and no outer line alone grants lane-change permission.
+    // Unknown paint adds no boundary stroke. The observed lane tint can stay
+    // visible; its presence alone never grants lane-change permission.
     const LaneMarking marking = semantics && semantics->lane_valid ?
         semantics->boundaries[slot] : LaneMarking::UNKNOWN;
     draw_lane_boundary(frame, outer, marking, tint, 2);
@@ -237,6 +241,8 @@ void draw_visual_corridor(cv::Mat& frame, const LaneResult& lane,
                           const LaneSemantic* semantics, bool fcw_warning) {
   if (!lane.valid || lane.left.size() < 8 || lane.right.size() < 8) return;
   const bool visual_partial = !visually_trustworthy_lane(lane);
+  // 弱/身份不明的几何隐藏，避免在绿色与灰白色降级显示之间反复切换。
+  if (visual_partial) return;
   const size_t count = std::min(lane.left.size(), lane.right.size());
   const size_t near_count = std::max<size_t>(5, count * 3 / 4);
   std::vector<cv::Point> left_band, right_band, center;
@@ -258,8 +264,7 @@ void draw_visual_corridor(cv::Mat& frame, const LaneResult& lane,
     const bool approaching = semantics && semantics->trend != CrossingSide::NONE &&
         std::isfinite(semantics->tlc_s) && semantics->tlc_s > 0.0f &&
         semantics->tlc_s < 2.5f;
-    const cv::Scalar band_color = visual_partial ? cv::Scalar(170, 155, 125) :
-        fcw_warning ? cv::Scalar(35, 45, 245) : cv::Scalar(55, 205, 65);
+    const cv::Scalar band_color = fcw_warning ? cv::Scalar(35, 45, 245) : cv::Scalar(55, 205, 65);
     if (!lane.polygon.empty())
       blend_vertical_polygon(frame, lane.polygon, band_color,
                              visual_partial ? .08 : .14,
@@ -460,19 +465,35 @@ void draw_target_card(cv::Mat& frame, const std::vector<Detection>& detections,
   }
 }
 
+SignalResult tracked_signal_for_display(const SignalResult& signal,
+                                        const std::vector<Detection>& detections) {
+  SignalResult displayed = signal;
+  if (signal.track_id < 0) return displayed;  // 无跟踪器的单图 demo 仍按原方式绘制。
+  displayed.box = cv::Rect();
+  for (const auto& detection : detections) {
+    if (detection.track_id != signal.track_id || detection.class_id < 7 ||
+        detection.class_id > 14) continue;
+    const bool conflicting = (signal.state == SignalState::RED && detection.class_id >= 11) ||
+                             (signal.state == SignalState::GREEN && detection.class_id <= 10);
+    if (!conflicting) displayed.box = cv::Rect(detection.box);
+    break;
+  }
+  // 已选目标本帧不显示时，不再在旧坐标画一个悬空的高亮框，也不改选邻灯。
+  return displayed;
+}
+
 void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
-                  const LaneResult& lane, const SignalResult& signal,
+                  const LaneResult& lane, const SignalResult& observed_signal,
                   const RiskResult& risk, const DriveResult& drive,
                   double fps, double npu_ms,
                   const LaneSemantic* semantics) {
+  const SignalResult signal = tracked_signal_for_display(observed_signal, detections);
   if (frame.empty()) return;
   draw_adjacent_lanes(frame, lane, semantics);
   draw_visual_corridor(frame, lane, semantics, risk.reliable &&
       (risk.warning || (std::isfinite(risk.ttc_s) && risk.ttc_s > 0.0f && risk.ttc_s < 1.5f)));
-  if (lane.valid) {
-    const bool uncertain = !visually_trustworthy_lane(lane);
-    const cv::Scalar normal = uncertain ? cv::Scalar(130, 145, 145)
-                                        : cv::Scalar(55, 255, 70);
+  if (lane.valid && visually_trustworthy_lane(lane)) {
+    const cv::Scalar normal(55, 255, 70);
     const cv::Scalar caution(35, 225, 245), urgent(30, 145, 245);
     const cv::Scalar danger(35, 45, 245);
     const bool left_danger = lane.departure &&
@@ -485,11 +506,11 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
     cv::Scalar right_color = right_danger ? danger : normal;
     CrossingSide approach_side = CrossingSide::NONE;
     cv::Scalar approach_color = caution;
-    if (!uncertain && semantics && semantics->tlc_s > 0.0f &&
+    if (semantics && semantics->tlc_s > 0.0f &&
         semantics->tlc_s < 2.5f) {
       approach_side = semantics->trend;
       approach_color = semantics->tlc_s < 1.5f ? urgent : caution;
-    } else if (!uncertain && std::abs(lane.offset_ratio) >= 0.10f) {
+    } else if (std::abs(lane.offset_ratio) >= 0.10f) {
       approach_side = lane.offset_ratio < 0.0f ? CrossingSide::LEFT
                                                : CrossingSide::RIGHT;
     }
