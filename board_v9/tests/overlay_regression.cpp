@@ -1,5 +1,6 @@
 #include "adas/adas_logic_v2.hpp"
 #include "adas/overlay.hpp"
+#include "adas/lane_paint_display.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -118,8 +119,100 @@ int main() {
   display.identity_uncertain=false;
   semantics.left=semantics.right=adas::LaneMarking::UNKNOWN;
   frame = render(display, adas::RiskResult(), {}, &semantics);
-  assert(frame.at<cv::Vec3b>(350,180)==cv::Vec3b(40,40,40));
-  std::cout<<"PASS: weak/uncertain/unknown lane boundaries never fall back to grey-white strokes\n";
+  const auto reference=frame.at<cv::Vec3b>(350,180);
+  assert(reference[1]>reference[0]+50 && reference[1]>reference[2]+50);
+  assert(semantics.left==adas::LaneMarking::UNKNOWN && !semantics.left_change_allowed);
+  std::cout<<"PASS: weak/uncertain lanes hidden; unknown paint keeps green ego references, never white\n";
+
+  {
+    // Real paint transitions include an unclassified frame and the first
+    // confirmation of the new type. Geometry must survive both while the
+    // rule engine still rejects UNKNOWN and unconfirmed dashed evidence.
+    adas::LaneSemanticTracker tracker;
+    adas::LaneMarkingObservation observation;
+    const auto base=std::chrono::steady_clock::time_point(std::chrono::seconds(1));
+    int step=0;
+    auto update=[&](adas::LaneMarking marking) {
+      observation.left=observation.right=marking;
+      observation.left_coverage=observation.right_coverage=.9f;
+      return tracker.update(observation,display,base+std::chrono::milliseconds(330*step++));
+    };
+    auto confirmed=update(adas::LaneMarking::DASHED);
+    confirmed=update(adas::LaneMarking::DASHED);
+    assert(confirmed.left_change_allowed && confirmed.right_change_allowed);
+    for(auto marking:{adas::LaneMarking::SOLID,adas::LaneMarking::UNKNOWN,
+                      adas::LaneMarking::SOLID}) {
+      const auto pending=update(marking);
+      assert(pending.left==adas::LaneMarking::UNKNOWN && !pending.left_change_allowed);
+      assert(pending.right==adas::LaneMarking::UNKNOWN && !pending.right_change_allowed);
+      const auto transition=render(display,adas::RiskResult(),{},&pending);
+      for(auto point:{cv::Point(180,350),cv::Point(460,350)}) {
+        const auto pixel=transition.at<cv::Vec3b>(point);
+        assert(pixel[1]>pixel[0]+50 && pixel[1]>pixel[2]+50);
+      }
+    }
+    confirmed=update(adas::LaneMarking::SOLID);
+    assert(confirmed.left==adas::LaneMarking::SOLID && !confirmed.left_change_allowed);
+    const auto pending=update(adas::LaneMarking::DASHED);
+    assert(pending.left==adas::LaneMarking::UNKNOWN && !pending.left_change_allowed);
+    confirmed=update(adas::LaneMarking::DASHED);
+    assert(confirmed.left_change_allowed && confirmed.right_change_allowed);
+    auto absent=display;absent.valid=false;
+    const auto hidden=render(absent,adas::RiskResult(),{},&pending);
+    assert(hidden.at<cv::Vec3b>(350,180)==cv::Vec3b(40,40,40));
+    assert(hidden.at<cv::Vec3b>(350,460)==cv::Vec3b(40,40,40));
+    cv::Mat candidate(360,640,CV_8UC3,cv::Scalar(40,40,40));
+    adas::draw_lane_geometry_reference(candidate,display);
+    assert(candidate.at<cv::Vec3b>(350,180)[1]>100);
+    assert(candidate.at<cv::Vec3b>(300,320)==cv::Vec3b(40,40,40)); // no confident corridor
+    candidate.setTo(cv::Scalar(40,40,40));
+    adas::draw_lane_geometry_reference(candidate,absent);
+    assert(cv::norm(candidate,cv::Mat(candidate.size(),candidate.type(),cv::Scalar(40,40,40)))==0);
+    auto uncertain=display;uncertain.identity_uncertain=true;
+    adas::draw_lane_geometry_reference(candidate,uncertain); // held geometry is never a current observation
+    assert(candidate.at<cv::Vec3b>(350,180)==cv::Vec3b(40,40,40));
+    std::cout<<"PASS: dashed/solid/unknown transitions preserve current geometry without granting permission\n";
+  }
+
+  // Adjacent candidates require a supported outer slot and a reliable ego pair.
+  {
+    adas::LanePaintDisplayTracker animation;
+    adas::LaneSemantic evidence;
+    evidence.left=evidence.right=adas::LaneMarking::SOLID;
+    const auto start=std::chrono::steady_clock::time_point(std::chrono::seconds(10));
+    auto style=animation.update(evidence,display,start);
+    assert(style.left.solid==1.f && style.left.dashed==0.f);
+    evidence.left=evidence.right=adas::LaneMarking::UNKNOWN;
+    style=animation.update(evidence,display,start+std::chrono::milliseconds(50));
+    assert(style.left.solid>.7f && style.left.solid<1.f);
+    assert(evidence.left==adas::LaneMarking::UNKNOWN && !evidence.left_change_allowed);
+    const auto unchanged=animation.update(evidence,display,start+std::chrono::milliseconds(50));
+    assert(unchanged.left.solid==style.left.solid); // redraw count cannot accelerate animation
+    evidence.left=evidence.right=adas::LaneMarking::DASHED;
+    style=animation.update(evidence,display,start+std::chrono::milliseconds(100));
+    assert(style.left.dashed>0.f && style.left.dashed<.3f && style.left.solid>.5f);
+    for(int ms=150;ms<=650;ms+=50)style=animation.update(evidence,display,start+std::chrono::milliseconds(ms));
+    assert(style.left.dashed>.95f && style.left.solid<.03f);
+    cv::Mat blended(360,640,CV_8UC3,cv::Scalar(40,40,40));
+    adas::draw_overlay(blended,{},display,{}, {},{},3,250,&evidence,&style);
+    int bright=0,faint=0;
+    for(int y=150;y<340;++y){
+      const int x=cvRound(180+(350-y)*3./7.);
+      const auto value=blended.at<cv::Vec3b>(y,x);
+      if(value[1]>170)++bright;
+      if(value[1]>45 && value[1]<120)++faint;
+    }
+    assert(bright>40 && faint>20); // real gaps remain distinct, with a subdued reference
+    auto absent=display;absent.valid=false;
+    style=animation.update(evidence,absent,start+std::chrono::milliseconds(700));
+    assert(style.left.solid==0.f && style.left.dashed==0.f);
+    auto identity=display;identity.identity_uncertain=true;
+    style=animation.update(evidence,identity,start+std::chrono::milliseconds(750));
+    assert(style.right.solid==0.f && style.right.dashed==0.f);
+    style=animation.update(evidence,display,start+std::chrono::milliseconds(800));
+    assert(style.left.dashed==1.f); // new identity never inherits the old solid style
+    std::cout<<"PASS: time-based paint animation preserves evidence, distinguishes dashes, resets on missing geometry\n";
+  }
 
   // Adjacent candidates require a supported outer slot and a reliable ego pair.
   adas::LaneResult multi;

@@ -3,6 +3,7 @@
 #include "adas/signal_logic.hpp"
 #include "adas/text_renderer.hpp"
 #include "adas/lamp_annotation.hpp"
+#include "adas/lane_paint_display.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -97,8 +98,42 @@ void draw_decision_panel(cv::Mat& frame, const DriveResult& drive) {
 
 void draw_lane_boundary(cv::Mat& frame, const std::vector<cv::Point>& curve,
                         LaneMarking marking, const cv::Scalar& color,
-                        int thickness) {
-  if (curve.size() < 2 || marking == LaneMarking::UNKNOWN) return;
+                        int thickness, bool ego_geometry_reference = false,
+                        const LanePaintBlend* paint = nullptr) {
+  if (curve.size() < 2) return;
+  if (paint) {
+    // Blend styles on CURRENT geometry. A faint continuous reference remains
+    // in dashed gaps; no historical coordinates or permission are introduced.
+    const float solid = std::max(0.f, std::min(1.f, paint->solid));
+    const float dashed = std::max(0.f, std::min(1.f - solid, paint->dashed));
+    float travelled = 0.f;
+    for (size_t i = 1; i < curve.size(); ++i) {
+      const float length = cv::norm(curve[i] - curve[i-1]);
+      if (length <= 0.f) continue;
+      cv::Point previous = curve[i-1];
+      const int steps = std::max(1, int(std::ceil(length)));
+      for (int step = 1; step <= steps; ++step) {
+        const float t = float(step) / steps;
+        const cv::Point point(cvRound(curve[i-1].x + (curve[i].x-curve[i-1].x)*t),
+                              cvRound(curve[i-1].y + (curve[i].y-curve[i-1].y)*t));
+        const bool dash = int(travelled + length*t) % 26 < 15;
+        const float strength = .65f*(1.f-solid-dashed) + solid + dashed*(dash ? 1.f : .23f);
+        cv::line(frame, previous, point, color*strength, thickness, cv::LINE_AA);
+        previous = point;
+      }
+      travelled += length;
+    }
+    return;
+  }
+  if (marking == LaneMarking::UNKNOWN) {
+    // Paint confirmation is independent of geometric presence. During a
+    // solid/dashed transition keep a thin, subdued current ego reference.
+    // The semantic label and crossing permissions remain UNKNOWN.
+    if (ego_geometry_reference)
+      cv::polylines(frame, curve, false, color * .65,
+                    std::max(1, thickness / 2), cv::LINE_AA);
+    return;
+  }
   if (marking == LaneMarking::SOLID) {
     cv::polylines(frame, curve, false, color, thickness, cv::LINE_AA);
     return;
@@ -380,9 +415,26 @@ void draw_risk_card(cv::Mat& frame, const Detection& detection,
 }  // namespace
 
 cv::Scalar normal_object_color(int class_id) {
-  if (class_id == 0 || class_id == 1 || class_id == 5 || class_id == 6)
-    return cv::Scalar(205, 120, 185);
-  if (class_id >= 2 && class_id <= 4) return cv::Scalar(210, 180, 75);
+  // Stable semantic colours across cameras and frames (OpenCV BGR).
+  // Risk overlays are applied by the caller and retain red priority.
+  switch (class_id) {
+    case 0: return cv::Scalar(230, 85, 245);   // pedestrian: pink
+    case 1: return cv::Scalar(235, 120, 185);  // rider: violet
+    case 2: return cv::Scalar(255, 215, 60);   // car: cyan
+    case 3: return cv::Scalar(255, 140, 80);   // bus: blue
+    case 4: return cv::Scalar(55, 170, 255);   // truck: orange
+    case 5: return cv::Scalar(255, 160, 220);  // motorcycle: lavender
+    case 6: return cv::Scalar(165, 240, 85);   // bicycle: mint
+    case 7: case 8: case 9: case 10: return cv::Scalar(45, 65, 245);
+    case 11: case 12: case 13: case 14: return cv::Scalar(80, 235, 95);
+    case 15: return cv::Scalar(60, 225, 255);  // traffic sign: yellow
+    case 16: return cv::Scalar(205, 225, 130); // crosswalk: pale turquoise
+    case 17: return cv::Scalar(115, 245, 190); // road arrow: lime
+    case 18: return cv::Scalar(70, 155, 255);  // cone: orange
+    case 19: return cv::Scalar(65, 195, 255);  // roadworks: gold
+    case 20: return cv::Scalar(235, 155, 125); // delineator: periwinkle
+    default: break;
+  }
   return cv::Scalar(145, 155, 160);
 }
 
@@ -482,11 +534,26 @@ SignalResult tracked_signal_for_display(const SignalResult& signal,
   return displayed;
 }
 
+void draw_lane_geometry_reference(cv::Mat& frame, const LaneResult& observed) {
+  if (frame.empty() || !visually_trustworthy_lane(observed)) return;
+  for (const auto* curve : {&observed.left, &observed.right})
+    draw_lane_boundary(frame, *curve, LaneMarking::UNKNOWN,
+                       cv::Scalar(55, 255, 70), 4, true);
+}
+
 void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
                   const LaneResult& lane, const SignalResult& observed_signal,
                   const RiskResult& risk, const DriveResult& drive,
                   double fps, double npu_ms,
                   const LaneSemantic* semantics) {
+  draw_overlay(frame,detections,lane,observed_signal,risk,drive,fps,npu_ms,semantics,nullptr);
+}
+
+void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
+                  const LaneResult& lane, const SignalResult& observed_signal,
+                  const RiskResult& risk, const DriveResult& drive,
+                  double fps, double npu_ms,
+                  const LaneSemantic* semantics, const LanePaintDisplay* paint) {
   const SignalResult signal = tracked_signal_for_display(observed_signal, detections);
   if (frame.empty()) return;
   draw_adjacent_lanes(frame, lane, semantics);
@@ -519,9 +586,9 @@ void draw_overlay(cv::Mat& frame, const std::vector<Detection>& detections,
     if (approach_side == CrossingSide::RIGHT && !right_danger)
       right_color = approach_color;
     draw_lane_boundary(frame, lane.left, left_marking,
-                       left_color, left_danger ? 7 : 4);
+                       left_color, left_danger ? 7 : 4, true, paint ? &paint->left : nullptr);
     draw_lane_boundary(frame, lane.right, right_marking,
-                       right_color, right_danger ? 7 : 4);
+                       right_color, right_danger ? 7 : 4, true, paint ? &paint->right : nullptr);
   }
   const Detection* selected_target = nullptr;
   ui::LampAnnotationLayout lamp_layout(frame.size(),detections);

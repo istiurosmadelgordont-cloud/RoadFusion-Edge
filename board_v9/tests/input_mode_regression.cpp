@@ -38,6 +38,52 @@ bool parse_test(std::initializer_list<const char*> values,Options& options) {
 }
 
 int main(int argc,char** argv) {
+  {
+    adas::LaneResult lane;lane.valid=true;lane.departure=true;
+    lane.departure_side=adas::LaneDepartureSide::RIGHT;lane.offset_ratio=.3f;
+    lane.left={{100,350},{260,150}};lane.right={{540,350},{380,150}};
+    suppress_lane_departure_alarm(lane);
+    assert(!lane.departure && lane.departure_side==adas::LaneDepartureSide::NONE);
+    assert(lane.valid && lane.offset_ratio==.3f && lane.left.front()==cv::Point(100,350));
+    adas::LaneSemantic semantic;semantic.trend=adas::CrossingSide::RIGHT;semantic.tlc_s=.5f;
+    semantic.left=adas::LaneMarking::DASHED;semantic.right=adas::LaneMarking::SOLID;
+    auto levels=view_alert_levels({}, {},lane,semantic,{}, {},false,{});
+    assert(levels[0]==0); // approach warnings are disabled as well
+    adas::RiskResult risk;risk.target=risk.reliable=true;risk.warning=true;risk.ttc_s=1.f;
+    levels=view_alert_levels(risk,{},lane,semantic,{}, {},false,{});
+    assert(levels[0]==3); // disabling LDW must not disable object warnings
+    const auto drawing=center_lane_display(lane);
+    assert(drawing.offset_ratio==0.f && drawing.left==lane.left && drawing.right==lane.right);
+    assert(semantic.left==adas::LaneMarking::DASHED && semantic.right==adas::LaneMarking::SOLID);
+    std::cout<<"LDW_DISABLED_PASS: no departure/TLC alarm; geometry, paint evidence and object warnings retained\n";
+  }
+  {
+    adas::Test4Safety safety; bool show=true; Simulator demo;
+    adas::MomentaryInput input;
+    auto press=[&](const cv::Rect& b,double t) {
+      input.press(b.x+3,b.y+3); input.release();
+      apply_test4_controls(safety,show,-1,input.take(),t);
+    };
+    press(kTest4Enable,0); assert(safety.current().enabled);
+    adas::Detection ped;ped.class_id=0;ped.track_id=1;ped.score=.9f;ped.box={300,140,40,160};
+    safety.update({ped},640,360,nullptr,false,true,0,0);
+    safety.update({ped},640,360,nullptr,false,true,.3,.3);
+    demo.toggle_direction(Direction::STRAIGHT);assert(demo.moving());
+    apply_test4_interlock(safety.current(),demo);assert(!demo.moving());
+    cv::Mat front(360,640,CV_8UC3,cv::Scalar(0,0,0));
+    draw_test4_view(front,safety.current(),{ped});
+    assert(front.at<cv::Vec3b>(140,300)[2]>200); // target follows visible tracker box
+    press(kTest4Resume,.31);assert(safety.current().brake);
+    for(double t:{.6,.95,1.3,1.65}) safety.update({},640,360,nullptr,false,true,t,t);
+    press(kTest4Resume,1.66);assert(!safety.current().brake && !demo.moving());
+    demo.toggle_direction(Direction::STRAIGHT);assert(demo.moving());
+    apply_test4_interlock(safety.current(),demo);assert(demo.moving());
+    press(kTest4Tab,1.7);assert(!show);
+    press(kTest4Enable,1.8);assert(safety.current().enabled);
+    for(const auto& b:kDemoDirections) assert((b&kTest4Enable).area()==0 && (b&kTest4Resume).area()==0);
+    for(const auto& b:kTest2Directions) assert((b&kTest4Enable).area()==0 && (b&kTest4Resume).area()==0);
+    std::cout<<"TEST4_CONTROLS_PASS: stop interlock, blocked early release, manual restart, hidden controls and original button isolation\n";
+  }
   cv::setNumThreads(1);
   Options o;
   assert(parse_test({"viewer","--pcie","/dev/mock","--scene","missing/profile","--display-fps","0"},o));

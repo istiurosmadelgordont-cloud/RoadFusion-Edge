@@ -48,7 +48,7 @@
     "绿色直行箭头",
     "拒识"
   ],
-  "version_label": "测试一、测试二与检测框闪烁修复",
-  "snapshot_date": "2026-10-20",
-  "upload_date": "2026-10-21"
+  "version_label": "四宫格 ADAS、车道显示过渡与 LDW 关闭",
+  "snapshot_date": "2026-10-22",
+  "upload_date": "2026-10-23"
 }

@@ -2,6 +2,27 @@ cmake_minimum_required(VERSION 3.10)
 project(rk3568_adas LANGUAGES CXX)
 find_package(OpenCV REQUIRED)
 
+add_executable(box_motion_regression EXCLUDE_FROM_ALL tests/box_motion_regression.cpp)
+target_include_directories(box_motion_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(box_motion_regression PRIVATE -UNDEBUG)
+target_link_libraries(box_motion_regression PRIVATE ${OpenCV_LIBS})
+
+add_executable(track_ghost_regression EXCLUDE_FROM_ALL
+  tests/track_ghost_regression.cpp src/byte_tracker.cpp)
+target_include_directories(track_ghost_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(track_ghost_regression PRIVATE -UNDEBUG)
+target_link_libraries(track_ghost_regression PRIVATE ${OpenCV_LIBS})
+
+add_executable(navigation_demo_regression EXCLUDE_FROM_ALL tests/navigation_demo_regression.cpp)
+target_include_directories(navigation_demo_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(navigation_demo_regression PRIVATE -UNDEBUG)
+target_link_libraries(navigation_demo_regression PRIVATE ${OpenCV_LIBS})
+
+add_executable(test4_safety_regression EXCLUDE_FROM_ALL tests/test4_safety_regression.cpp)
+target_include_directories(test4_safety_regression PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_compile_options(test4_safety_regression PRIVATE -UNDEBUG)
+target_link_libraries(test4_safety_regression PRIVATE ${OpenCV_LIBS})
+
 add_executable(npu_executor_regression EXCLUDE_FROM_ALL tests/npu_executor_regression.cpp)
 target_include_directories(npu_executor_regression PRIVATE include)
 target_compile_options(npu_executor_regression PRIVATE -UNDEBUG)

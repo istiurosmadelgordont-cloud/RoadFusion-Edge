@@ -122,22 +122,23 @@ int main() {
     assert(vehicle_tracker.predict(at(600)).size()==1);
     assert(vehicle_tracker.predict(at(700)).empty());
     vehicle_tracker.update({},at(200),at(200));
-    assert(vehicle_tracker.predict(at(200)).size()==1);
+    assert(vehicle_tracker.predict(at(200)).empty());
     vehicle_tracker.update({},at(300),at(300));
     assert(vehicle_tracker.predict(at(300)).empty());
-    // A delayed shared-NPU result must remain visible until the next result,
-    // without turning held tracks into observations or extending lamp validity.
+    // Ordinary objects bridge bounded inference gaps but never survive a fresh
+    // detector miss. Slow results must not leave old geometry on a turning scene.
     ByteTracker delayed;
     delayed.update({car},at(0),at(450));
-    assert(delayed.predict(at(700)).size()==1);
-    assert(delayed.predict(at(950)).size()==1);
+    assert(delayed.predict(at(600)).size()==1);
+    assert(delayed.predict(at(700)).empty());
+    assert(delayed.predict(at(950)).empty());
     assert(delayed.predict(at(1001)).empty()); // absolute source-age limit
     delayed.update({car},at(500),at(950));
     assert(delayed.predict(at(1150)).size()==1); // matched tracks refresh receipt time too
     delayed.update({},at(700),at(1150));
-    assert(delayed.observations().empty() && delayed.predict(at(1150)).size()==1);
+    assert(delayed.observations().empty() && delayed.predict(at(1150)).empty());
     delayed.update({},at(800),at(1250));
-    assert(delayed.predict(at(1250)).empty()); // two genuine misses still remove vehicles
+    assert(delayed.predict(at(1250)).empty());
     ByteTracker receipt_bound;
     receipt_bound.update({car},at(0),at(100));
     assert(receipt_bound.predict(at(751)).empty()); // receipt-age limit
@@ -327,7 +328,7 @@ int main() {
   assert(tracker.observations().size() == 1);
   tracker.update({}, at(100), at(100));
   assert(tracker.observations().empty());
-  assert(!tracker.predict(at(100)).empty()); // prediction is not a fresh measurement
+  assert(tracker.predict(at(100)).empty()); // a fresh miss hides old ordinary geometry
   tracker.reset();
   tracker.update({close}, at(0), at(0));
   close.box.x += 5;

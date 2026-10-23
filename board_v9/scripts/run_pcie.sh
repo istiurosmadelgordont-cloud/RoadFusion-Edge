@@ -51,4 +51,4 @@ if [ -r "$adas_npu_freq/min_freq" ] && [ -r "$adas_npu_freq/max_freq" ] && \
 fi
 exec ./build/adas_four_view --pcie "$PCIE_DEVICE" --model "$MODEL" \
   --ufld-model "$UFLD_MODEL" --scene "$SCENE_DIR" --cpu-threads 1 \
-  --detect-every 1 --npu-workers 2 --no-lanes --no-ttc --display-fps 0 "$@"
+  --detect-every 1 --npu-workers 2 --no-lanes --no-ttc --display-fps 0 --demo-navigation "$@"

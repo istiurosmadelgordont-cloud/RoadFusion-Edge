@@ -254,12 +254,13 @@ std::vector<Detection> ByteTracker::predict(std::chrono::steady_clock::time_poin
   std::vector<Detection> result;
   for (const Track& track : tracks_) {
     const bool lamp=(track.class_id>=7 && track.class_id<=14) || track.class_id==21;
-    // Shared UFLD/YOLO execution can spend most of the old 650 ms TTL in
-    // inference. Bridge the inter-result gap for the parent and its child as
-    // well as vehicles, with the same hard source-age bound. Decision evidence
-    // is supplied only by measured observations and remains unchanged.
+    // Bridge the inter-result gap, but a fresh ordinary-object miss must hide
+    // its old geometry immediately. Retain the internal ID for reassociation,
+    // not for drawing another box beside a newly created track after a turn.
+    // Lamps keep their longer, parent/child display lifetime independently.
     if (!display_fresh(track.measured_at,track.received_at,now) ||
-        (!lamp && track.missed>1)) continue;
+        (!lamp && (track.missed!=0 ||
+                   now-track.measured_at>std::chrono::milliseconds(650)))) continue;
     // 父灯组失效时一并隐藏其子灯，不能继续用邻近灯组或无限预测接替。
     if (classified_lamp(track.class_id) && track.parent_track_id >= 0 && !parent_of(track, now)) continue;
     if(lamp && track.missed>0) {
