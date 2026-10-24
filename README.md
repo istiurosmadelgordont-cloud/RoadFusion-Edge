@@ -20,6 +20,13 @@
 
 运行方式、模型区别及验证范围见 [board_v9 说明](board_v9/README.md) 和 [验证记录](board_v9/docs/VALIDATION_20261020.md)。UFLDv2 1600×320 QAT 续训、真实 INT8 PC 测试脚本及局限见 [QAT 记录](training/UFLDV2_QAT.md)。本次上传源码、配置与摘要；模型、原视频、训练集和本地测试视频独立保存。
 
+## 板卡一融合 / 四宫格切换（2026-10-24）
+
+[板卡一说明](fpga/dual_board/board1_capture/README.md)已更新为四路采集、三路 LUT 融合及 KEY2 模式切换版。
+下载[工程 ZIP](fpga/dual_board/board1_capture/board1_fusion_quad_20261024.zip)或[最新调试 bit](fpga/dual_board/board1_capture/test_ddr_mode_switch_20261024.sbit)；配套 FIC 在工程包内。
+通道顺序为 HDMI、以太网1、以太网0、SFP；前三路参与融合。上电默认 1920×540 上半区融合，KEY2（L15）切换 1920×1080 四宫格，HDMI/SFP 同时切换。
+切换集成仿真零欠读，已生成 bit；物理时序仍有违例，新集成版尚未完成上板验收，见[验证与限制](fpga/dual_board/board1_capture/README.md#验证与已知限制)。
+
 ## 板卡二PCIe图像处理工程（2026-10-19）
 
 [板卡二源码与仿真库](fpga/dual_board/board2_sfp_pcie/README.md) 已更新为3DW包头修正版，包含DDR后统一图像处理、PCIe五字控制、RECEIVED/APPLIED两阶段回传和最新FIC探针。修复Logos IP包头tkeep=1111被图像命令过滤的问题；视频DMA和PCIe/SFP生成IP保持原有协议/源码。
@@ -64,14 +71,14 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 
 ## 双板采集与光口/PCIe 链路（2026-09-27）
 
-新增[双板系统说明](fpga/dual_board/README.md)，包含可直接打开的两份 PDS 工程：
+新增[双板系统说明](fpga/dual_board/README.md)。下面是早期整合记录；当前两块板卡均以工程 ZIP 提供，板卡一现行功能以 2026-10-24 更新为准：
 
-- [板卡 1：四路采集与光口回传](fpga/dual_board/board1_capture/README.md)：当前接入 HDMI、板卡 2 的 SFP 视频、以太网 0、以太网 1，合成 1920×1080 四宫格。
+- [板卡 1：四路采集、融合与光口回传](fpga/dual_board/board1_capture/README.md)：当前通道为 HDMI、以太网1、以太网0、SFP，KEY2 切换上半区三路融合与完整四宫格。
 - [板卡 2：DDR后图像处理与PCIe输出](fpga/dual_board/board2_sfp_pcie/README.md)：HDMI 送板卡 1，反向接收四宫格，经 DDR/增强/PCIe 四缓冲握手送鲁班猫 2。
 - [最新版 Windows 以太网上位机](tools/udp_video_sender/README.md)：可配置本机 IP、目标 IP/MAC、输入/输出尺寸与帧率、VS 消隐及包间隔。
 - [鲁班猫 PCIe 采集与图像参数控制](tools/pcie_v2/README.md)：驱动 7.0（四槽视频 + STOP 安全 + 单向参数提交）+ Qt 上位机，对应板卡二 20261015 位流；五字整包提交，无 0x220/0x224 配置状态 DMA。
 
-板卡一按源码目录保存；板卡二按ZIP提供，下载解压后打开PDS。旧版本由Git历史保留。当前接线、OV5640 保留状态、通道 1 VS 连接、HS2 驱动依赖与验证边界见系统说明。此次整合不等同于双板链路已完成时序签核及板级验收。
+板卡一、板卡二均按ZIP提供，下载解压后打开PDS。旧版本由Git历史保留。当前接线、KEY2 切换、OV5640 保留状态、HS2 驱动依赖与验证边界见系统说明。此次整合不等同于双板链路已完成时序签核及板级验收。
 
 该快照位于私有仓库，仅作内部备份和调试；第三方材料仍受其原许可约束。详见
 [免责声明与权利通知](fpga/dual_board/DISCLAIMER.md)。
@@ -87,7 +94,7 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 | [`fpga/pcie_video`](fpga/pcie_video/) | 1080p RGB565 PCIe 彩条基线及 ARM 操作说明 | 用于先验证 BAR 命令、TLP/DMA 和四缓冲传输，不代表摄像头链路完成 |
 | [`fpga/ethernet_video`](fpga/ethernet_video/README.md) | 千兆以太网接收 960×540 RGB565、写 DDR 并显示，配套 Windows UDP 发送器 | 已有彩条显示现场观察；协议没有包序号、确认或重传 |
 
-早期 PDS 基线以 ZIP 或分卷形式保存；双板版本位于 `fpga/dual_board`：板卡一为源码目录，板卡二为工程ZIP。
+早期 PDS 基线以 ZIP 或分卷形式保存；双板版本位于 `fpga/dual_board`：板卡一、板卡二均提供工程ZIP，板卡一另附最新调试bit。
 恢复方式、SHA-256、工具版本、已知 RTL/CDC 问题见各目录 README 和验证记录。综合成功不等于板级数据完整性、
 缓存一致性和时序已经签核。
 
