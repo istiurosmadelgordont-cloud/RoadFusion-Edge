@@ -45,6 +45,8 @@ sh scripts/run_pcie.sh --enable-lanes --enable-test4
 
 PCIe 走 `/dev/fpga_frame_<BDF>` 的 read 路径；多节点时设置 `PCIE_DEVICE`。启动脚本沿用已有的 NPU 最低频率恢复条件。此次源码同步没有切换已加载驱动、替换模型或重启板端程序。
 
+相机输入变化的诊断及适配方向见 [相机输入与车道适配](docs/CAMERA_INPUTS.md)；长焦专用配置尚未部署。
+
 ## 验证范围
 
 2026-10-26 对板端文件做逐文件哈希快照，并在板端重跑 5 项已部署回归；另外从待上传源码独立编译并运行 10 项 CPU 回归。详见 [同步验证记录](docs/VALIDATION_20261026.md)。
