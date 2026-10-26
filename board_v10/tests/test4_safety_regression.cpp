@@ -40,7 +40,7 @@ int main() {
     assert(!s.acknowledge(2.)); // stale data cannot release STOP
     for(double t:{2.1,2.45,2.8}) { feed(s,t,{}); assert(!s.current().can_resume); }
     assert(feed(s,3.15,{}).can_resume);
-    assert(s.acknowledge(3.16));
+    assert(!s.acknowledge(3.16)); // already released automatically
     assert(!s.current().brake && s.current().enabled);
   }
   {
@@ -53,6 +53,66 @@ int main() {
     feed(s,1.2,{}); feed(s,1.55,{}); feed(s,1.9,{});
     feed(s,2.25,{ped}); assert(!s.current().can_resume); // danger interrupts release
     s.set_enabled(false); assert(!s.current().brake && !s.current().enabled);
+  }
+  {
+    Test4Safety s; s.set_enabled(true);
+    const auto second=object(0,9,{360,140,30,160});
+    feed(s,0,{ped,second,roadside});
+    const auto& both=feed(s,.3,{ped,second,roadside});
+    assert(both.brake && both.hazards.size()==2);
+    assert(both.hazards[0].track_id==7 && both.hazards[1].track_id==9);
+    const auto& one=feed(s,.6,{second,roadside});
+    assert(one.brake && one.hazards.size()==1 && one.hazards[0].track_id==9);
+    // One pedestrian leaving cannot release STOP while another remains.
+    for(double t:{.9,1.2,1.5,1.8}) assert(feed(s,t,{second}).brake);
+    for(double t:{2.1,2.4,2.7,3.0}) assert(feed(s,t,{roadside}).brake);
+    const auto& clear=feed(s,3.2,{roadside});
+    assert(!clear.brake && clear.can_resume && clear.hazards.empty());
+    assert(clear.hazard==Test4Hazard::NONE && clear.track_id==-1);
+    // Re-entry must be confirmed again; clearance is not a permanent bypass.
+    assert(!feed(s,3.5,{ped}).brake);
+    assert(feed(s,3.8,{ped}).brake && !s.current().can_resume);
+    s.tick(4.5); assert(s.current().brake && s.current().hazards.empty());
+  }
+  {
+    Test4Safety s; s.set_enabled(true);
+    feed(s,0,{ped}); feed(s,.3,{ped});
+    // Four fast clear observations are not one second of clearance.
+    for(double t:{.4,.5,.6,.7}) assert(feed(s,t,{}).brake);
+    for(int i=0;i<20;++i) s.update({},640,360,nullptr,false,false,.7,1.2);
+    assert(s.current().brake);
+    s.tick(1.4); assert(s.current().stale && s.current().brake);
+    // A stale interval resets clearance, even with no intervening repaint.
+    for(double t:{1.5,1.8,2.1,2.4}) assert(feed(s,t,{}).brake);
+    assert(!feed(s,2.55,{}).brake);
+  }
+  {
+    Test4Safety s; s.set_enabled(true);
+    feed(s,0,{ped}); feed(s,.3,{ped});
+    feed(s,.6,{}); feed(s,.9,{}); feed(s,1.2,{});
+    feed(s,1.5,{ped}); assert(s.current().brake && !s.current().can_resume);
+    // Any fresh danger, even before its second vote, restarts clearance.
+    for(double t:{1.8,2.1,2.4,2.7}) assert(feed(s,t,{}).brake);
+    assert(!feed(s,2.85,{}).brake);
+  }
+  {
+    // Near-field pedestrians just beyond the earlier narrow fallback region
+    // are included on both sides; genuinely roadside people remain excluded.
+    for(float x:{169.f,439.f}) {
+      Test4Safety s;s.set_enabled(true);
+      const auto edge=object(0,20,{x,140,32,190});
+      assert(!feed(s,0,{edge}).brake);
+      assert(feed(s,.3,{edge}).brake && s.current().hazards.size()==1);
+      assert(!s.current().lane_based);
+    }
+    Test4Safety s;s.set_enabled(true);
+    const auto outside=object(0,21,{100,140,32,190});
+    for(double t:{0.,.3,.6})assert(!feed(s,t,{outside}).brake);
+    for(float x:{140.f,410.f}) {
+      Test4Safety vehicle_s;vehicle_s.set_enabled(true);
+      const auto parked=object(2,22,{x,140,90,190});
+      for(double t:{0.,.3,.6})assert(!feed(vehicle_s,t,{parked}).brake);
+    }
   }
   {
     Test4Safety s; s.set_enabled(true);
@@ -90,5 +150,5 @@ int main() {
     for(double t:{0.,.3,.6}) assert(!feed(s,t,{bad,low,sign}).brake);
     s.reset(); assert(s.current().enabled && !s.current().brake);
   }
-  std::cout<<"PASS: Test4 pedestrian/vehicle hazards, roadside exclusion, fresh-only votes, identity, stale hold, manual release and lane freshness\n";
+  std::cout<<"PASS: Test4 multiple hazards, roadside exclusion, fresh-only votes, identity, stale hold, sustained automatic release, re-entry and lane freshness\n";
 }

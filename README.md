@@ -16,7 +16,7 @@ FPGA 负责视频采集、拼接、图像处理和 PCIe 传输；RK3568 NPU 运�
 | 测试一：交通灯 | 用途车道匹配灯态，左/直/右方向和行驶/停止按钮，红灯优先报警 |
 | 测试二：车道控制 | 前视 UFLDv2 本车道，实虚线区分，左/右变道、保持直行、强制实线变道报警 |
 | 测试三：导航 | 右上模拟方向与距离输入，结合灯态给出建议；视频导航 OCR 尚未接入 |
-| 测试四：模拟停车 | 行人/近距障碍危险确认、停车锁定和人工解除；默认关闭 |
+| 测试四：模拟停车 | 多个危险目标分别标红，持续确认安全后自动解除模拟刹车；起步仍手动，默认关闭 |
 | 前向碰撞预警 FCW | 独立开关、小号估计距离、柔和绿/黄/红车道覆盖及顶部碰撞等级 |
 | 图像参数控制 | 预设、详细参数、草稿/应用和 RECEIVED/APPLIED 两阶段回执状态 |
 
@@ -70,7 +70,7 @@ UFLD 未切换为新续训 QAT 候选。模型 SHA256 见 [模型清单](board_v
 | --- | --- |
 | 当前 RK3568 程序、驱动源文件与配置 | [board_v10](board_v10/CURRENT.md) |
 | 前向 FCW 规则与显示 | [FCW.md](board_v10/docs/FCW.md) |
-| 测试四停车锁定与人工恢复 | [TEST4.md](board_v10/docs/TEST4.md) |
+| 测试四多人标红、停车与自动解除 | [TEST4.md](board_v10/docs/TEST4.md) |
 | 模拟导航 | [NAVIGATION_DEMO.md](board_v10/docs/NAVIGATION_DEMO.md) |
 | FPGA 图像参数窗口与回执 | [PCIE_V3_IMAGE_CONTROLS.md](board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md) |
 | 板卡一：采集、三路融合、KEY2 四宫格切换 | [工程及调试 bit](fpga/dual_board/board1_capture/README.md) |

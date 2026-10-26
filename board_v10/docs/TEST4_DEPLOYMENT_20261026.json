@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-26",
+  "board_directory": "/home/cat/rk3568_adas/board_v10",
+  "verification": {
+    "verified": true,
+    "technical_files": 108,
+    "binary_sha256": "1b5c2036896c2b3caf047192e36f1bd5999038e8faea9bf5fdb3700b296dc402",
+    "model_sha256": {
+      "ufldv2_culane_res18_1600x320_int8.rknn": "897d1337128a6f8068f74f6b9cf3d3770374645ea2123d1d96807afb595dbf7d",
+      "yolo14_960x544_qat_int8.rknn": "c945308722fe99b3b35c099c4e1faa1513ca9eb555d13d891abe88e4d8b28fba",
+      "mo_fp16_baseline.rknn": "2f3504e695c801ffe6255d674e2729011eecbc89ebcc74340c3e4cf534e9950d"
+    }
+  },
+  "changed_source_sha256": {
+    "include/adas/test4_safety.hpp": "41d890e71db394a4109e442d2c5a7a82d2b471065a97ea10fc8e463c46c4c8fc",
+    "src/four_view.cpp": "aa2a7a91d2117fa8a119d08cd611c4d34428618ba61fe687ba19d0f9b094f1e9",
+    "tests/test4_safety_regression.cpp": "5f68627adedbb6ca8ebc0aca3423ee275f00c8895f3a4ee7caf2b87222f30c69",
+    "tests/input_mode_regression.cpp": "9f3f8c92867f01aebc36f2de8c059696a848f32353846dc21a1b510eb812784a",
+    "docs/TEST4.md": "13ce7a415d0f0847d55f2304712d23ecd47546f43cd79f9659d4941a9bab2b72"
+  },
+  "rules_and_ui_tests": [
+    "test4_safety_regression",
+    "input_mode_regression"
+  ],
+  "additional_regressions": [
+    "overlay_regression",
+    "fcw_regression"
+  ],
+  "material_replay": {
+    "single": {
+      "samples": 61,
+      "max_hazards": 2,
+      "first_brake": 8.666666666666666,
+      "first_release": 12.333333333333334
+    },
+    "crowd": {
+      "samples": 61,
+      "max_hazards": 4,
+      "first_brake": 11.333333333333334,
+      "first_release": 13.0
+    }
+  },
+  "material_scope": "Actual RKNN INT8 NPU, 3 Hz offline sampled replay, 61 frames each; RGB565 and actual composite split/ByteTracker/Test4Safety/rendering, centre fallback region, no UFLD. JPEG quality 98 transferred source samples. Not model accuracy or real-time end-to-end validation."
+}

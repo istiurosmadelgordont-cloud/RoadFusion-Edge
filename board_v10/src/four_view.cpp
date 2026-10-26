@@ -1602,14 +1602,13 @@ void apply_test4_controls(adas::Test4Safety& safety, bool& show_panel,
   for (const auto& click:input.clicks) {
     if (allow_tab && kTest4Tab.contains(click)) show_panel=!show_panel;
     else if (show_panel && kTest4Enable.contains(click)) safety.set_enabled(!safety.current().enabled);
-    else if (show_panel && kTest4Resume.contains(click)) safety.acknowledge(now);
   }
 }
 
 const char* test4_reason(const adas::Test4Result& r) {
   if (!r.enabled) return "手动开启后参与模拟停车";
   if (r.brake && r.stale) return "检测过期，保持停车";
-  if (r.can_resume) return "危险已解除，可确认解除刹车";
+  if (r.can_resume) return "区域安全，已自动解除刹车";
   if (r.brake) return r.hazard==adas::Test4Hazard::PEDESTRIAN?
       "行人进入行驶区域，模拟刹车":"前方车辆危险，模拟刹车";
   return r.stale?"等待新的前视检测":"监测行人及本车道前方车辆";
@@ -1629,15 +1628,16 @@ void draw_test4_controls(cv::Mat& canvas,const adas::Test4Result& r,bool show_pa
     panel(canvas,kTest4Enable.x,kTest4Enable.y,kTest4Enable.width,kTest4Enable.height);
     caption(canvas,r.enabled?"危险监测 开  [B]":"危险监测 关  [B]",1418,166,r.enabled?green:muted,.52);
     panel(canvas,kTest4Resume.x,kTest4Resume.y,kTest4Resume.width,kTest4Resume.height);
-    caption(canvas,"确认解除刹车",1653,166,r.can_resume?green:muted,.52);
+    caption(canvas,r.can_resume?"刹车已自动解除":"安全后自动解除",1653,166,r.can_resume?green:muted,.52);
     caption(canvas,r.brake?"车辆状态：模拟停车":r.enabled?"车辆状态：监测中":"车辆状态：测试四未启用",
         1408,211,r.brake?red:white,.64);
     caption(canvas,test4_reason(r),1408,246,r.brake?red:muted,.55);
     caption(canvas,r.lane_based?"行驶区域：当前车道线":"行驶区域：中心估计区域",1408,282,cyan,.51);
-    caption(canvas,"连续新观测确认，屏幕预测框不计票",1408,318,muted,.48);
+    caption(canvas,"连续安全至少1秒、4次新观测后解除",1408,318,muted,.48);
     caption(canvas,"解除后用原方向按钮手动起步",1408,352,muted,.51);
     caption(canvas,"模拟输出 / 未连接车辆制动执行器",1408,390,muted,.47);
-    caption(canvas,r.brake?"危险解除需持续新观测确认":"行人横穿 / 前车接近及近距阻挡",1408,429,white,.47);
+    caption(canvas,r.brake?"危险目标："+std::to_string(r.hazards.size())+"，持续确认安全后解除":
+        "行人横穿 / 前车接近及近距阻挡",1408,429,white,.47);
   }
   panel(canvas,kTest4Tab.x,kTest4Tab.y,kTest4Tab.width,kTest4Tab.height);
   caption(canvas,show_panel?"切换 AVM":"切换测试四",kTest4Tab.x+10,kTest4Tab.y+21,cyan,.49);
@@ -1652,14 +1652,17 @@ void draw_test4_view(cv::Mat& frame,const adas::Test4Result& r,
   cv::addWeighted(frame(band),.25,shade,.75,0,frame(band));
   cv::rectangle(frame,band,color,1);
   caption(frame,r.brake?"测试四 / 模拟停车":"测试四 / 危险监测",band.x+7,band.y+17,color,.47);
-  caption(frame,r.stale?"等待新检测，禁止自动恢复":r.can_resume?"危险解除，等待手动确认":
+  caption(frame,r.stale?"等待新检测，禁止自动解除":r.can_resume?"已自动解除，等待手动起步":
       r.brake?(r.hazard==adas::Test4Hazard::PEDESTRIAN?"行人进入行驶区域":"前方车辆危险"):"行人 / 前车",band.x+7,band.y+35,color,.40);
   if (r.brake) {
     cv::rectangle(frame,cv::Rect(1,1,frame.cols-2,frame.rows-2),color,2);
     // Rendering may follow the existing bounded tracker display; it never
     // feeds a new danger/clear vote back into Test4Safety.
-    for (const auto& d:visible)
-      if (d.track_id==r.track_id) cv::rectangle(frame,d.box,color,3,cv::LINE_AA);
+    for (const auto& target:r.hazards)
+      for (const auto& d:visible)
+        if (d.track_id==target.track_id) {
+          cv::rectangle(frame,d.box,color,3,cv::LINE_AA); break;
+        }
   }
 }
 
@@ -1965,7 +1968,7 @@ int run_four_view(int argc, char** argv) {
   test4_safety.set_enabled(options.test4_enabled);
   bool show_test4_panel=true;
   bool show_navigation_panel=options.demo_navigation;
-  int navigation_top_panel=0;
+  int navigation_top_panel=options.test4_enabled?1:0;
   adas::NavigationDemo navigation_demo;
   navigation_demo.set_enabled(options.demo_navigation);
   adas::LaneSignalSimulator navigation_signal;
@@ -2736,13 +2739,15 @@ int run_four_view(int argc, char** argv) {
         adas::lane_decision_fresh(lane_captured_at[0],advice_now),fresh_measurement[0],detection_seconds[0],demo_time);
     apply_test4_interlock(test4_result,signal_demo);
     const int test4_signature=int(test4_result.enabled)+2*int(test4_result.brake)+
-        4*int(test4_result.stale)+8*int(test4_result.can_resume)+16*int(test4_result.hazard);
+        4*int(test4_result.stale)+8*int(test4_result.can_resume)+16*int(test4_result.hazard)+
+        64*int(test4_result.hazards.size());
     if (test4_signature!=test4_saved_signature) {
       test4_saved_signature=test4_signature;
       std::cout<<"TEST4_STATE t="<<demo_time<<" enabled="<<test4_result.enabled
           <<" brake="<<test4_result.brake<<" stale="<<test4_result.stale
           <<" resume="<<test4_result.can_resume<<" hazard="<<int(test4_result.hazard)
-          <<" track="<<test4_result.track_id<<" moving="<<signal_demo.moving()<<std::endl;
+          <<" track="<<test4_result.track_id<<" hazards="<<test4_result.hazards.size()
+          <<" moving="<<signal_demo.moving()<<std::endl;
     }
     if (test4_result.enabled && test4_result.brake) {
       vehicle_state_manager.set_demo_turn(adas::TurnSignal::OFF,advice_now);

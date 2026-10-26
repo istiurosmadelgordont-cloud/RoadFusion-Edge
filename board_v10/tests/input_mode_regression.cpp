@@ -97,15 +97,23 @@ int main(int argc,char** argv) {
     };
     press(kTest4Enable,0); assert(safety.current().enabled);
     adas::Detection ped;ped.class_id=0;ped.track_id=1;ped.score=.9f;ped.box={300,140,40,160};
-    safety.update({ped},640,360,nullptr,false,true,0,0);
-    safety.update({ped},640,360,nullptr,false,true,.3,.3);
+    auto second=ped;second.track_id=2;second.box.x=360;
+    auto roadside=ped;roadside.track_id=3;roadside.box.x=30;
+    safety.update({ped,second,roadside},640,360,nullptr,false,true,0,0);
+    safety.update({ped,second,roadside},640,360,nullptr,false,true,.3,.3);
     demo.toggle_direction(Direction::STRAIGHT);assert(demo.moving());
     apply_test4_interlock(safety.current(),demo);assert(!demo.moving());
     cv::Mat front(360,640,CV_8UC3,cv::Scalar(0,0,0));
-    draw_test4_view(front,safety.current(),{ped});
+    draw_test4_view(front,safety.current(),{ped,second,roadside});
     assert(front.at<cv::Vec3b>(140,300)[2]>200); // target follows visible tracker box
+    assert(front.at<cv::Vec3b>(140,360)[2]>200); // every dangerous pedestrian
+    assert(front.at<cv::Vec3b>(140,30)[2]==0); // roadside pedestrian excluded
     press(kTest4Resume,.31);assert(safety.current().brake);
     for(double t:{.6,.95,1.3,1.65}) safety.update({},640,360,nullptr,false,true,t,t);
+    assert(!safety.current().brake && safety.current().can_resume && !demo.moving());
+    cv::Mat cleared(360,640,CV_8UC3,cv::Scalar(0,0,0));
+    draw_test4_view(cleared,safety.current(),{ped,second,roadside});
+    assert(cleared.at<cv::Vec3b>(140,300)[2]==0 && cleared.at<cv::Vec3b>(140,360)[2]==0);
     press(kTest4Resume,1.66);assert(!safety.current().brake && !demo.moving());
     demo.toggle_direction(Direction::STRAIGHT);assert(demo.moving());
     apply_test4_interlock(safety.current(),demo);assert(demo.moving());
@@ -113,7 +121,7 @@ int main(int argc,char** argv) {
     press(kTest4Enable,1.8);assert(safety.current().enabled);
     for(const auto& b:kDemoDirections) assert((b&kTest4Enable).area()==0 && (b&kTest4Resume).area()==0);
     for(const auto& b:kTest2Directions) assert((b&kTest4Enable).area()==0 && (b&kTest4Resume).area()==0);
-    std::cout<<"TEST4_CONTROLS_PASS: stop interlock, blocked early release, manual restart, hidden controls and original button isolation\n";
+    std::cout<<"TEST4_CONTROLS_PASS: multiple red boxes, roadside exclusion, automatic release without restart, hidden controls and original button isolation\n";
   }
   cv::setNumThreads(1);
   Options o;
