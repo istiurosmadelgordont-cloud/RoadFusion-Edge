@@ -1,0 +1,63 @@
+{
+  "version_label": "模拟板端测试一",
+  "source_cpp_token_files": 50,
+  "source_tokens_equal_to_live_board": true,
+  "shell_scripts_lf": true,
+  "secret_scan_passed": true,
+  "board_build_and_existing_regressions_passed": true,
+  "validation_did_not_replace_live_binary_or_models": true,
+  "checks": [
+    {
+      "step": "shell build.sh",
+      "return_code": 0
+    },
+    {
+      "step": "shell build_fpga_composite.sh",
+      "return_code": 0
+    },
+    {
+      "step": "shell run.sh",
+      "return_code": 0
+    },
+    {
+      "step": "shell run_four_view.sh",
+      "return_code": 0
+    },
+    {
+      "step": "shell run_pcie.sh",
+      "return_code": 0
+    },
+    {
+      "step": "cmake configure",
+      "return_code": 0
+    },
+    {
+      "step": "build production and existing regressions",
+      "return_code": 0
+    },
+    {
+      "step": "perception_regression",
+      "return_code": 0
+    },
+    {
+      "step": "overlay_regression",
+      "return_code": 0
+    },
+    {
+      "step": "avm_regression",
+      "return_code": 0
+    },
+    {
+      "step": "preview_resize_regression",
+      "return_code": 0
+    },
+    {
+      "step": "ufld_decode_regression",
+      "return_code": 0
+    },
+    {
+      "step": "ui_upload_regression",
+      "return_code": 0
+    }
+  ]
+}

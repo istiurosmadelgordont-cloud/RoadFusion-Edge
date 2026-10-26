@@ -1,0 +1,794 @@
+{
+  "export_date": "2026-10-26",
+  "board_directory": "/home/cat/rk3568_adas/board_v10",
+  "deployed_binary_sha256": "143109522d401a0a5e8e2ebf56a502b8244e95ab77a6f44d2cf2455b1dac6f2c",
+  "model_sha256": {
+    "yolo14_960x544_qat_int8.rknn": "c945308722fe99b3b35c099c4e1faa1513ca9eb555d13d891abe88e4d8b28fba",
+    "ufldv2_culane_res18_1600x320_int8.rknn": "897d1337128a6f8068f74f6b9cf3d3770374645ea2123d1d96807afb595dbf7d",
+    "mo_fp16_baseline.rknn": "2f3504e695c801ffe6255d674e2729011eecbc89ebcc74340c3e4cf534e9950d"
+  },
+  "board_snapshot_files": {
+    "src/lane_detector.cpp": {
+      "sha256": "de6269976ae422b0d1c8f45ca08de8d6e441271b549818bc76c0f41ba3e79729",
+      "bytes": 24776,
+      "executable": false
+    },
+    "src/text_renderer.cpp": {
+      "sha256": "808ceb6e21d8cd11ade450e012d0e460fb3ce2bfcd5e236a6eac4018af798d53",
+      "bytes": 5413,
+      "executable": false
+    },
+    "src/main.cpp": {
+      "sha256": "38b1360cba001e2bdc8cbf93513601e36eabc469bb88d49f82bcfe8b7005c2e1",
+      "bytes": 25307,
+      "executable": false
+    },
+    "src/overlay.cpp": {
+      "sha256": "9b4f0b793552d529906fefe4f62eefdfcedec048284560632f799950ff367406",
+      "bytes": 35324,
+      "executable": false
+    },
+    "src/rknn_detector.cpp": {
+      "sha256": "88114aa3c773c2e1a9d33fc5df382a091b76cdadc10225898b1a06ae65c979f2",
+      "bytes": 14052,
+      "executable": false
+    },
+    "src/ufld_benchmark.cpp": {
+      "sha256": "a97951d97e965fcb6a992e668fe2d220dcb692d3dc1b1960b20d505b148d25d8",
+      "bytes": 5193,
+      "executable": false
+    },
+    "src/drive_decision.cpp": {
+      "sha256": "7e7ccae5f63e735c13f7a730d95677eb63876698d234d45a85183a7ad64516a8",
+      "bytes": 1686,
+      "executable": false
+    },
+    "src/gl_presenter.cpp": {
+      "sha256": "1f904f69c94439ad0f7892eaf63e3f8d58fb01938514c089e001c7e22ad8049d",
+      "bytes": 17504,
+      "executable": false
+    },
+    "src/ufld_lane_detector.cpp": {
+      "sha256": "7d450b1c7bdfbbc9e9d97e41e0e394d4b8a8230785328f9d0af05bbab0cdcf6b",
+      "bytes": 17075,
+      "executable": false
+    },
+    "src/signal_logic.cpp": {
+      "sha256": "1aede95a74597dbe1a86f28b9d845ebed06ff6f3dab69eb13ca6974f4d1bcb27",
+      "bytes": 2466,
+      "executable": false
+    },
+    "src/dma_probe.cpp": {
+      "sha256": "65d3b223a1af7bffc6febb383080c59a7d4a78c491a4dc9682e454bb20c5b501",
+      "bytes": 3831,
+      "executable": false
+    },
+    "src/risk_estimator.cpp": {
+      "sha256": "76e66d231f322d3a547bde21047592f7e17269bd349af446f0bce4246b25f81f",
+      "bytes": 6000,
+      "executable": false
+    },
+    "src/warning_logic.cpp": {
+      "sha256": "2563438b627ea163ce173ea3bc4c6fffd90bd63b36c54219030da61c8330bc58",
+      "bytes": 7554,
+      "executable": false
+    },
+    "src/byte_tracker.cpp": {
+      "sha256": "1f5ce0460bb5bd39d750b17a7c0910b11917190ae4a067377c5006bff1c1ce12",
+      "bytes": 17862,
+      "executable": false
+    },
+    "src/lamp_classifier.cpp": {
+      "sha256": "28b619b198aeb987597001ffa91b5174d655612f0b7686eb207e038410007806",
+      "bytes": 6837,
+      "executable": false
+    },
+    "src/four_view.cpp": {
+      "sha256": "1f2a5f01013cff2bd2b57808daf471736218307f8e2b4c37bd189d2f83a51be5",
+      "bytes": 179451,
+      "executable": false
+    },
+    "include/adas/image_processing_dialog.hpp": {
+      "sha256": "253d0d0d1de82e9f7553103f36e64139706b8a7d3ebc134e29b584739e26d881",
+      "bytes": 9510,
+      "executable": false
+    },
+    "include/adas/test4_safety.hpp": {
+      "sha256": "28ea7d5e1c606a0e5c259cfb5085112c16b62874d04f87f561b11ce355e59a19",
+      "bytes": 7072,
+      "executable": false
+    },
+    "include/adas/experimental_adas.hpp": {
+      "sha256": "eaecdc08bf2a238ff219239bf0637573431c1ccb5da3435670343073c1af5684",
+      "bytes": 5329,
+      "executable": false
+    },
+    "include/adas/navigation_demo.hpp": {
+      "sha256": "16b95329dd34541e0bc8d7262cdadba175aec49d87cc9219ff02516907f165a9",
+      "bytes": 2813,
+      "executable": false
+    },
+    "include/adas/preview_resize.hpp": {
+      "sha256": "a6fd3f8a45fb88c45a85bcc66f42bdab814c91aa490fb3b47c4968b637518a21",
+      "bytes": 5242,
+      "executable": false
+    },
+    "include/adas/config.hpp": {
+      "sha256": "c28fb368b0680fec2c65ae6bde7c28857abdbb98bbc4ddc2876c745219a44ff7",
+      "bytes": 864,
+      "executable": false
+    },
+    "include/adas/image_transaction.hpp": {
+      "sha256": "dad3bd65289a66f0092c942a62e1ee7a6a194fa23c9a39575de6fd55879b40db",
+      "bytes": 3035,
+      "executable": false
+    },
+    "include/adas/lamp_classifier.hpp": {
+      "sha256": "3d246427f2650c7a41b61f3ef186127ad4f9413ae8f067e5ff58f2772dc7d396",
+      "bytes": 727,
+      "executable": false
+    },
+    "include/adas/lane_paint_contrast.hpp": {
+      "sha256": "6dec9cd4ffbb81b4cabc0ade27ea75b74cd9591641596f6ec895d88598a38da2",
+      "bytes": 6233,
+      "executable": false
+    },
+    "include/adas/types.hpp": {
+      "sha256": "03732e60d8a759e4ccf32d9eb959719c2356194de5193780f0923f29b5008ff2",
+      "bytes": 3971,
+      "executable": false
+    },
+    "include/adas/lane_detector.hpp": {
+      "sha256": "a9feb9db5561925236003dad27d64e5f4d3af2d801e89a8a0800925866eb62c2",
+      "bytes": 2055,
+      "executable": false
+    },
+    "include/adas/box_motion_compensator.hpp": {
+      "sha256": "95454f1b3520bb86c75c0ccff42def084af1400c69e3dc5ab0fa7647c710fd19",
+      "bytes": 5494,
+      "executable": false
+    },
+    "include/adas/pcie_capture.hpp": {
+      "sha256": "22567b2d21adf595a9f0e37faaca90456da3b9df6219daa2b61c8baf99c8688d",
+      "bytes": 9562,
+      "executable": false
+    },
+    "include/adas/byte_tracker.hpp": {
+      "sha256": "674d7b6ffa7579a5887c3536bf8856e46480e4cf5a24e24f0188c94f0e48ce10",
+      "bytes": 2808,
+      "executable": false
+    },
+    "include/adas/image_protocol.h": {
+      "sha256": "0f927acad90b5ddc5a517d994db4738a31095bc8469667d6613dd10f00d7bd1e",
+      "bytes": 1032,
+      "executable": false
+    },
+    "include/adas/lane_signal_simulator.hpp": {
+      "sha256": "a840720755ce47c32ce72369ac572f4faed6109f5bd54700912dcfd963667536",
+      "bytes": 9684,
+      "executable": false
+    },
+    "include/adas/lane_geometry_tracker.hpp": {
+      "sha256": "307777c3e6146be981d6f812b81ac1e90d88309f26d32370c0732b7354ef0338",
+      "bytes": 3153,
+      "executable": false
+    },
+    "include/adas/warning_logic.hpp": {
+      "sha256": "64ba985a3fcc1791f20eb9a123835706c7a2ae50381eeabd88d0349fab6f3e30",
+      "bytes": 1653,
+      "executable": false
+    },
+    "include/adas/signal_logic.hpp": {
+      "sha256": "ad6744a85ca8472b279ca6dbb554d210e84f4850fcaaf2dde4bdc120f173a5b5",
+      "bytes": 347,
+      "executable": false
+    },
+    "include/adas/signal_demo.hpp": {
+      "sha256": "1042047f928c39dba6833e2c50b46c6f4a15b88c9e72766551c9617c64000e6d",
+      "bytes": 9983,
+      "executable": false
+    },
+    "include/adas/scene_profile.hpp": {
+      "sha256": "c549e3462066f8f65b32df1634e4da051b3bba34453ac9c61c4692ea9bc99e62",
+      "bytes": 1633,
+      "executable": false
+    },
+    "include/adas/text_renderer.hpp": {
+      "sha256": "1dc91c088182a0eeb7356e2677bf262ccd423264bc00a4a960f3cb022ceda22f",
+      "bytes": 430,
+      "executable": false
+    },
+    "include/adas/risk_estimator.hpp": {
+      "sha256": "d4cf032b3c47d1eec85c4b1c8d85527de435738c04cab3dc17581d82b5571593",
+      "bytes": 1257,
+      "executable": false
+    },
+    "include/adas/gl_presenter.hpp": {
+      "sha256": "c0d7a559c4ecfdafa553e8fbbc8fe80e03bb06c99406353458555ac918f601a2",
+      "bytes": 1910,
+      "executable": false
+    },
+    "include/adas/image_parameters.hpp": {
+      "sha256": "165deb3c4cee6137487eed53ae0775b50a181fc4a09aa88e30fe1f4cf8345320",
+      "bytes": 3466,
+      "executable": false
+    },
+    "include/adas/fcw_monitor.hpp": {
+      "sha256": "ebe5dd905b8255c287048586c80d5f8eac734899e7d994d59932666d49a81ef9",
+      "bytes": 5391,
+      "executable": false
+    },
+    "include/adas/npu_run_guard.hpp": {
+      "sha256": "2c3d1f77c995a1109498b865126954ea4625374574f1c3e643af5402a077eb43",
+      "bytes": 524,
+      "executable": false
+    },
+    "include/adas/adas_logic_v2.hpp": {
+      "sha256": "32ba6ce62bbfc0814adc8a223507d5c5166370641bbb86cbc39951bf1bd52fa3",
+      "bytes": 24206,
+      "executable": false
+    },
+    "include/adas/model_file.hpp": {
+      "sha256": "3fda20e507d08162179e83aa7473df18197e5c2eb8f4f1c6439d2713a951210a",
+      "bytes": 1277,
+      "executable": false
+    },
+    "include/adas/lane_displacement_kalman.hpp": {
+      "sha256": "cc6d499a7348a5f12940564bcb196d6bacb5be04a8c048d87d27071b9b8fbe4a",
+      "bytes": 1844,
+      "executable": false
+    },
+    "include/adas/npu_executor.hpp": {
+      "sha256": "2d3ed254db87fcb7acd40d4a429b1ca59a64435c5a734ac0a317f3ee7feb4278",
+      "bytes": 2187,
+      "executable": false
+    },
+    "include/adas/drive_decision.hpp": {
+      "sha256": "30e453aad9bf8bf23fc155d4ed2cadfe05062b4e6d5bf7bfcceefbc92f9c1425",
+      "bytes": 1006,
+      "executable": false
+    },
+    "include/adas/light_verification_frames.hpp": {
+      "sha256": "12ed9bf3789f8464b06976f9919483f419b178310b0072bde7cacb711b7f9d5a",
+      "bytes": 826,
+      "executable": false
+    },
+    "include/adas/lamp_annotation.hpp": {
+      "sha256": "31ed7da124d0aa1f81c7ee6db8c7f7936a17bf627027434c069640448cd777fc",
+      "bytes": 5058,
+      "executable": false
+    },
+    "include/adas/avm_renderer.hpp": {
+      "sha256": "3f09ed798e12d5eb4c9101b1a95be40260598eeca4945624ba1bed9d1d010d11",
+      "bytes": 11761,
+      "executable": false
+    },
+    "include/adas/lane_outer_style_tracker.hpp": {
+      "sha256": "a479acc585ea9c71b51180c2a5ff19d3a55f683fd614a4fa94fdb14b4ed1e5f4",
+      "bytes": 2086,
+      "executable": false
+    },
+    "include/adas/perception_schedule.hpp": {
+      "sha256": "9895010a9638702a90826a31bb2a44620e2e7ecf9da4b4d6b077ad8e7c4a270a",
+      "bytes": 2354,
+      "executable": false
+    },
+    "include/adas/pcie_image_control.hpp": {
+      "sha256": "32ac5068fa30feba7a33770bb69ebe50c82de65d5c61601dc27af945fdac7c48",
+      "bytes": 4279,
+      "executable": false
+    },
+    "include/adas/ufld_v2_decode.hpp": {
+      "sha256": "76b6d2b60a56f29091264cea428b19e77bb9a4c51dc54ded2834b479a168bfee",
+      "bytes": 2845,
+      "executable": false
+    },
+    "include/adas/lane_paint_display.hpp": {
+      "sha256": "ec43f50fadfc2b264bfd1c796d5c67652c906b492499c661117ff84b46c41523",
+      "bytes": 1642,
+      "executable": false
+    },
+    "include/adas/overlay.hpp": {
+      "sha256": "85086c32fc73755c54bb17f9d66a20790144f48aac4ec2c08c7a81d6c9fc8953",
+      "bytes": 2126,
+      "executable": false
+    },
+    "include/adas/lane_freshness.hpp": {
+      "sha256": "b2e9f0b5605351884dbc2576958147d6165ce5a9e25e44bcdbbe55009e6417c1",
+      "bytes": 873,
+      "executable": false
+    },
+    "include/adas/ufld_lane_detector.hpp": {
+      "sha256": "74ce335d02a8789745e5f944ed186b4b50f264b768a094838cb695b39539f0ac",
+      "bytes": 1782,
+      "executable": false
+    },
+    "include/adas/lane_visual_tracker.hpp": {
+      "sha256": "2bf3b121a4882c8f85263de31fa24643988414cd96832d9f1d25329f3dbf5cba",
+      "bytes": 12166,
+      "executable": false
+    },
+    "include/adas/image_processing_toolbar.hpp": {
+      "sha256": "075ea5416c37c40e3a9e9b4cdec28a5119631247b3eff31b1b1ee4a782bcbc35",
+      "bytes": 6754,
+      "executable": false
+    },
+    "include/adas/ui_upload_regions.hpp": {
+      "sha256": "6cc94865d153c011e0e41107181c15a97609d601c4047b45b3012b7817778f4e",
+      "bytes": 1410,
+      "executable": false
+    },
+    "include/adas/momentary_input.hpp": {
+      "sha256": "aad167a10ce3ac213c4d387391ad18d38ae4219b3bcc7e254cca3a00d70b17a1",
+      "bytes": 1330,
+      "executable": false
+    },
+    "include/adas/fpga_uapi.h": {
+      "sha256": "f29a6445067418fcda417d9dacfc89be0b5a223b49f1d54c7a3cabcb22630494",
+      "bytes": 4201,
+      "executable": false
+    },
+    "include/adas/rknn_detector.hpp": {
+      "sha256": "cedb0f40e4fc8584a08e1edd7906acd85c4a2b063846e2f8f7f60c81e65f3249",
+      "bytes": 1570,
+      "executable": false
+    },
+    "tests/overlay_regression.cpp": {
+      "sha256": "9d1122272748d84e9a69fb5f8a5400b7f4bf6153e7624914ebed8a20ecd88aee",
+      "bytes": 13955,
+      "executable": false
+    },
+    "tests/track_ghost_regression.cpp": {
+      "sha256": "b5ba067ab4e65c9bec9e9abd8d628868c86ded81d7978db150f3b0ae8196e2d2",
+      "bytes": 2322,
+      "executable": false
+    },
+    "tests/test4_safety_regression.cpp": {
+      "sha256": "f290e044d01ffcd25a2d6a8c698c83bf6898bcc795126ad39d07c2956e7b8e44",
+      "bytes": 4195,
+      "executable": false
+    },
+    "tests/ufld_decode_regression.cpp": {
+      "sha256": "f5354d0010544c4386f0d0d562929b75d627a4f6b3174a5cd58bb187110f15d6",
+      "bytes": 2205,
+      "executable": false
+    },
+    "tests/lane_kalman_regression.cpp": {
+      "sha256": "5449297d02ce8e1f41f1cc6fc25f22e6ca1f216690058254d11d968eb03ee981",
+      "bytes": 1543,
+      "executable": false
+    },
+    "tests/lane_visual_regression.cpp": {
+      "sha256": "e09a0ecfbe2a8f294a463cbe4356cf29c3f404a6a314e63eae8477d6a8bcfeb9",
+      "bytes": 4934,
+      "executable": false
+    },
+    "tests/avm_regression.cpp": {
+      "sha256": "0803b642418b6f250af82c975b8d8418b5c2ac87877f45ed492e95ebf889849e",
+      "bytes": 1830,
+      "executable": false
+    },
+    "tests/lane_video_replay.cpp": {
+      "sha256": "f95a6cf75b03644574b4621578e7788c86ac2a1d262418e489ae7d985121ae78",
+      "bytes": 3095,
+      "executable": false
+    },
+    "tests/driver_io_regression.py": {
+      "sha256": "38faacd79b981c76236bde3188c93af62a666c5bbc7fe27af05ad50c7457a392",
+      "bytes": 10498,
+      "executable": false
+    },
+    "tests/fcw_regression.cpp": {
+      "sha256": "1c479b9d0c93f36c5ff573b44229a4ac37c547dfcea3d3b351d7c6be57ed8f5e",
+      "bytes": 4890,
+      "executable": false
+    },
+    "tests/preview_resize_regression.cpp": {
+      "sha256": "44681e373b929f74964c331200907ea8fa7b091af6f385b7a6e301478afea22b",
+      "bytes": 1763,
+      "executable": false
+    },
+    "tests/pcie_capture_regression.cpp": {
+      "sha256": "2d3ccb6b640b96b9983b0272aa46300411972bbda07857254ff5c82beca6b156",
+      "bytes": 9643,
+      "executable": false
+    },
+    "tests/avm_approximate_probe.py": {
+      "sha256": "d265dde7a70538c14dfd1af11aa2c1a233cc3ea45dc9b4e45b27f8f476c859a9",
+      "bytes": 2472,
+      "executable": false
+    },
+    "tests/lane_paint_regression.cpp": {
+      "sha256": "67eb9f31774b31604bf277b0c1aa40110208f245d141cb10d872de243518d5ed",
+      "bytes": 6080,
+      "executable": false
+    },
+    "tests/npu_executor_regression.cpp": {
+      "sha256": "522943f4ffd4541862c0efc6817c78b05f95eb600b779d76d8e2df513c822389",
+      "bytes": 3741,
+      "executable": false
+    },
+    "tests/ufld_onnx_preview.py": {
+      "sha256": "d95cf3d36408f2e63741063b4ac5bcaec1357b8b0b78db2bd3bd769a4fddb4f1",
+      "bytes": 7418,
+      "executable": false
+    },
+    "tests/image_control_regression.cpp": {
+      "sha256": "98cae90cb569d01ca2d40a77377548446fc35553b3cbb477064c0835d305e628",
+      "bytes": 10556,
+      "executable": false
+    },
+    "tests/lane_outer_style_regression.cpp": {
+      "sha256": "e1e630a76a4e024a238ec9c5df3dd8029f7f11bdd190d7c7e59a39b7b351ea29",
+      "bytes": 2255,
+      "executable": false
+    },
+    "tests/driver_control_regression.py": {
+      "sha256": "0c6d9ff8623ee1cc2a726eb0eef9f87ac41c9a4a55869d822c7a1328a2edba09",
+      "bytes": 14000,
+      "executable": false
+    },
+    "tests/box_motion_regression.cpp": {
+      "sha256": "bec5f39756a55e918346ce94154a6aef05d297f290716ddbe2900fa05905db8e",
+      "bytes": 2575,
+      "executable": false
+    },
+    "tests/signal_demo_regression.cpp": {
+      "sha256": "41464c891b4ce49faf48ce79e9a651cb4c00650f8275a6736f4cebed72091207",
+      "bytes": 4123,
+      "executable": false
+    },
+    "tests/ui_upload_regression.cpp": {
+      "sha256": "28e0b68c22797a92035b6094bb608ef26659218c22134b9836479efd38b94278",
+      "bytes": 1325,
+      "executable": false
+    },
+    "tests/make_avm_calibration.py": {
+      "sha256": "e7d7e418014d19276dcf3f5c2034f2d81de08db259b7f522aaaa857448c18244",
+      "bytes": 2038,
+      "executable": false
+    },
+    "tests/input_mode_regression.cpp": {
+      "sha256": "b262b17d61a882547bc8907acb0b96af72216e1860ad9e41ad3dce48bfef72dd",
+      "bytes": 26113,
+      "executable": false
+    },
+    "tests/input_presentation_regression.cpp": {
+      "sha256": "301df9b8632be62d8a1cbac0ecbb212a783597e81f609e2fc6286cf337bd6e78",
+      "bytes": 8338,
+      "executable": false
+    },
+    "tests/light_verification_frames_regression.cpp": {
+      "sha256": "b39f96b36312e4e66ed5a3173c5d50d03cdde5861533d14cadb84de1a154836e",
+      "bytes": 1616,
+      "executable": false
+    },
+    "tests/navigation_demo_regression.cpp": {
+      "sha256": "59c6c4a80555ab6bf60014ad959ee6d058157da345040c86891c716f8c34caf5",
+      "bytes": 2139,
+      "executable": false
+    },
+    "tests/lane_timeline_replay.cpp": {
+      "sha256": "b39bffa831ee786a1100051cdf1634a583d9290da6a51f61efc2be0b96a00a69",
+      "bytes": 3004,
+      "executable": false
+    },
+    "tests/perception_regression.cpp": {
+      "sha256": "4a64940cd6faad313d20ad864cbdb2a3c9c16d950b288ab4c368ac5ff5d6e415",
+      "bytes": 24162,
+      "executable": false
+    },
+    "tests/fixtures/signal_demo_roi.txt": {
+      "sha256": "5e7633b7fb15cbf6e45d1e1731fe0ab23ca758376397ff853d00c22fa8ab64a8",
+      "bytes": 25,
+      "executable": false
+    },
+    "scripts/run.sh": {
+      "sha256": "2904d68b283f9204fa3f60f25006aaf1f58f2260de89fba27bb04566dec3be7a",
+      "bytes": 696,
+      "executable": false
+    },
+    "scripts/run_test4.sh": {
+      "sha256": "b32a5c9badba119931f9003cd77fc53f58a8ce03e8f55e1138ea800c44ea95a6",
+      "bytes": 159,
+      "executable": false
+    },
+    "scripts/build.sh": {
+      "sha256": "bbe3c44ceb944e5e76c47bc7ed660fd070b29a238bc6a4fe72c1a759af259c64",
+      "bytes": 283,
+      "executable": true
+    },
+    "scripts/run_four_view.sh": {
+      "sha256": "bad4d311c757c2b012d343cd297fa0e7a4132c2adb416951a6057259a1ad653c",
+      "bytes": 796,
+      "executable": true
+    },
+    "scripts/run.pcie.sh": {
+      "sha256": "f971e53fa6c2b98a2bfff19b4e1bde9aa7e9dffabb87b88d01479634d9c7ff31",
+      "bytes": 125,
+      "executable": false
+    },
+    "scripts/run_navigation_demo.sh": {
+      "sha256": "9f0dc46448b8cdaf12d549b326eb7274fac965307b7ead4ff8ebe6a262ce9bdf",
+      "bytes": 172,
+      "executable": false
+    },
+    "scripts/build_fpga_composite.sh": {
+      "sha256": "47a3298f34153b119a04c5b2013ba23a11837041fe41903fee445638df8abb99",
+      "bytes": 457,
+      "executable": false
+    },
+    "scripts/run_pcie.sh": {
+      "sha256": "9ede33bda32db4bbd092a30c437ba24b1292e1442f5032e65dba535fae0ea536",
+      "bytes": 2581,
+      "executable": true
+    },
+    "config/rear_lane_roi.txt": {
+      "sha256": "0e6063f3e4c833c397974d49cdda6eb3181d4b29fc5385faf49219f4c40560e2",
+      "bytes": 72,
+      "executable": false
+    },
+    "config/model_manifest.json": {
+      "sha256": "23c705c703b4bdc848004500d193332b82ba13335f43b2c4c7452a1d62921fc7",
+      "bytes": 1414,
+      "executable": false
+    },
+    "config/front_lane_roi.txt": {
+      "sha256": "bb11ea07c45abd38a9b551ff319084d738b81b00866265183ede42917496d813",
+      "bytes": 78,
+      "executable": false
+    },
+    "config/recommended_light_scenes.txt": {
+      "sha256": "3e6b7bfd02f18e014c1f683749c7f3e28961d4db451f02c469e7a9c1b86e0ee5",
+      "bytes": 425,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes.json": {
+      "sha256": "12d2759c120ebe18aadc1d04df239e767ff2136504463334fa204fb7ed2fc735",
+      "bytes": 6886,
+      "executable": false
+    },
+    "config/avm/66b5fa4b_approximate.yml": {
+      "sha256": "673eee71a5d78456fe3ddb0249dee0231e56c343a67c7ca44b63c2a375c2dadc",
+      "bytes": 996,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/near_china_a_driving_20261012/signal_demo.txt": {
+      "sha256": "8ebe06309a83345f0370f3cc1cdcb37058cc9e4804ac93ab4e67d6cfcca15185",
+      "bytes": 53,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/candidate_nvidia_010722d8_near_left_straight_20261013/signal_demo.txt": {
+      "sha256": "ba7f482b89405b03632b016b7947cc39665404fe105c6ae63dfc5527d7473a0a",
+      "bytes": 61,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/G_右绿前红/signal_demo.txt": {
+      "sha256": "9d08b07ea15ee2fcf3b01beef1c246199b905d139a9ab8927dcb147d093b5faf",
+      "bytes": 84,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/新候选1待审/signal_demo.txt": {
+      "sha256": "d3ea209b0cb63ed17d516defbd3410a22eea90069929301a23283b7d8eff0765",
+      "bytes": 61,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/B_双左转灯/signal_demo.txt": {
+      "sha256": "d3ea209b0cb63ed17d516defbd3410a22eea90069929301a23283b7d8eff0765",
+      "bytes": 61,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/H_右绿圆红/signal_demo.txt": {
+      "sha256": "c6511b95f3e26ed7dc7fd062c88486d59569b8f8cd641e29fc7aafd523f0c0a8",
+      "bytes": 126,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/新候选2待审/signal_demo.txt": {
+      "sha256": "d3ea209b0cb63ed17d516defbd3410a22eea90069929301a23283b7d8eff0765",
+      "bytes": 61,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/A_左转圆灯/signal_demo.txt": {
+      "sha256": "d3ea209b0cb63ed17d516defbd3410a22eea90069929301a23283b7d8eff0765",
+      "bytes": 61,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/I_右绿圆绿/signal_demo.txt": {
+      "sha256": "033af66f38e39a4a7fb47a5bb63f5d18fd3272f0aad906d4869f4c9d5e594da8",
+      "bytes": 126,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/新候选4待审/signal_demo.txt": {
+      "sha256": "d3ea209b0cb63ed17d516defbd3410a22eea90069929301a23283b7d8eff0765",
+      "bytes": 61,
+      "executable": false
+    },
+    "config/simulated_test_1_scenes/新候选3待审/signal_demo.txt": {
+      "sha256": "d3ea209b0cb63ed17d516defbd3410a22eea90069929301a23283b7d8eff0765",
+      "bytes": 61,
+      "executable": false
+    },
+    "docs/LEGACY_README.md": {
+      "sha256": "d032725a212f79054a5ad1dd5615c9634fb143b9a7611d023f2e9c9fe6e8f5db",
+      "bytes": 8420,
+      "executable": false
+    },
+    "docs/PCIE_V3_IMAGE_CONTROLS.md": {
+      "sha256": "cb44f3a9c893632a6649d25e6c6926169fcb2648929a711bc9b7df59f11700f3",
+      "bytes": 5101,
+      "executable": false
+    },
+    "docs/FCW.md": {
+      "sha256": "43023210458e06dd0927985b69c0ebb4cc5eb9f1eb8aa6390980cacdd956cd09",
+      "bytes": 3563,
+      "executable": false
+    },
+    "docs/VALIDATION_20261022.md": {
+      "sha256": "6484c191eb44a141cb8c286a70f88862a9f21bb4cf0743fa4926152997ff1819",
+      "bytes": 2956,
+      "executable": false
+    },
+    "docs/SIMULATED_BOARD_TEST_1.md": {
+      "sha256": "b404d8946e4d7a00e27a70252c9a80e5958472378b0035c15948423b2f4c9c62",
+      "bytes": 3330,
+      "executable": false
+    },
+    "docs/BOARD_SNAPSHOT_20261010.json": {
+      "sha256": "2a14a58b7c947272804f26b7a09ad715bb6ea0f690d8892710019d29795e6d80",
+      "bytes": 11731,
+      "executable": false
+    },
+    "docs/VALIDATION_SIMULATED_TEST_1_20261015.json": {
+      "sha256": "bdcbbc82f5308b9db55ede567efad873534a5d7b840de9d2e2b1a56c85592061",
+      "bytes": 1350,
+      "executable": false
+    },
+    "docs/TEST4.md": {
+      "sha256": "ba13a4bb06e03269c9d6d0795ee2753ca0accc05074a3b890644f28ff5dd5d4a",
+      "bytes": 2876,
+      "executable": false
+    },
+    "docs/BOARD_SNAPSHOT_20261015_SIMULATED_TEST_1.json": {
+      "sha256": "51b12c4469db0256378911b6dda8eae54b8612068edb8086b1621424dc17c79d",
+      "bytes": 14453,
+      "executable": false
+    },
+    "docs/DRIVER_PERFORMANCE.md": {
+      "sha256": "46a80f3d234a3346c732eb6836aa3440c8f18239b3de7e43c71cf0667e0a6efc",
+      "bytes": 4056,
+      "executable": false
+    },
+    "docs/VALIDATION_20261020.md": {
+      "sha256": "078fb1e8440fe9579d8f0890b3e42d11d345d2f9ee74dbab374581566936dd3f",
+      "bytes": 3363,
+      "executable": false
+    },
+    "docs/NAVIGATION_DEMO.md": {
+      "sha256": "c880da72863b8a766eaed8ffbe9cdc3816702e32da15060cf6431e85092afa16",
+      "bytes": 1671,
+      "executable": false
+    },
+    "docs/VALIDATION_20261010.md": {
+      "sha256": "7baa7471cadebf38304a1b9af74cad5c656083bef6251bcc074009465266beb6",
+      "bytes": 2837,
+      "executable": false
+    },
+    "third_party/rknn/rknn_api.h": {
+      "sha256": "3cd1004d75176fb32688ff6747a784c86a8234b3aa1fe4c93e48dcdeef8c111a",
+      "bytes": 31078,
+      "executable": false
+    },
+    "driver/image_protocol.h": {
+      "sha256": "0f927acad90b5ddc5a517d994db4738a31095bc8469667d6613dd10f00d7bd1e",
+      "bytes": 1032,
+      "executable": false
+    },
+    "driver/my_pciedriver.c": {
+      "sha256": "6efbf98913d54ebfce97c692fec56b58ce913607f229e6b0a3c3795e7ea9a530",
+      "bytes": 44998,
+      "executable": false
+    },
+    "driver/Makefile": {
+      "sha256": "ce6647999721f444c05957183e78fd80b2899b35213af407bba174b510a88a6d",
+      "bytes": 830,
+      "executable": false
+    },
+    "driver/fpga_uapi.h": {
+      "sha256": "f29a6445067418fcda417d9dacfc89be0b5a223b49f1d54c7a3cabcb22630494",
+      "bytes": 4201,
+      "executable": false
+    },
+    "tools/build_nvidia_avm_calibration.py": {
+      "sha256": "06d855e9fb34fb1c0dcfd725628c736bf6872e2d1a7fd197d6d2c20b9cbe0170",
+      "bytes": 5376,
+      "executable": false
+    },
+    "CMakeLists.txt": {
+      "sha256": "16dc484243a17a72fd4cafeb643a40c7ee91d2fe5f96e2e22a1c2ab16c13e234",
+      "bytes": 11923,
+      "executable": false
+    },
+    "PERCEPTION_OPTIMIZATION.md": {
+      "sha256": "5cf4f79e93dce4c4cf59169bde1e8b0b27deda1d2020f817c233d72d861a2856",
+      "bytes": 5823,
+      "executable": false
+    },
+    "CURRENT.md": {
+      "sha256": "583923bc27b3bc164224a95339d3629afe66c5e5c83b286a5bbbdca92b3d5fa7",
+      "bytes": 6162,
+      "executable": false
+    },
+    "OVERLAY_V2.md": {
+      "sha256": "ce34b22b588ccdae33b7699edd02e40d71519f60d1450232778c10a1d2c9f6e4",
+      "bytes": 5456,
+      "executable": false
+    },
+    "PCIE_INPUT.md": {
+      "sha256": "3feab24a81961c239318ec5ce8fcb55b8e93c9140e71427832073756343ca4f6",
+      "bytes": 6118,
+      "executable": false
+    },
+    "ENGINEERING.md": {
+      "sha256": "50667eed7566e3e954ec152aa08bd09e4a01138abfd28f27309b312fe01dc3ca",
+      "bytes": 3206,
+      "executable": false
+    },
+    "README.md": {
+      "sha256": "306ea1ceebc1757cfc38d88eff2ed48a50bca43d64076f3e919ef20497b4dabb",
+      "bytes": 4390,
+      "executable": false
+    },
+    "UI_REFERENCE_NOTES.md": {
+      "sha256": "0d54e5c4f6bad460ac5ee749f9ed0abb5b3fc045443988651668a257716d3759",
+      "bytes": 2321,
+      "executable": false
+    },
+    "AVM.md": {
+      "sha256": "c8b9225269b16ca048d59950159381b43ac8d564a81c7cf37209cb8b3ff88a54",
+      "bytes": 2842,
+      "executable": false
+    },
+    "ARCHITECTURE.md": {
+      "sha256": "7ab8f60cf9f285a4ab935259d4c3b1f89f974b339ce22668933a0e2c1cef11d6",
+      "bytes": 3608,
+      "executable": false
+    },
+    "OVERLAY_V3.md": {
+      "sha256": "8419f914646b6abeee3771567b64630eeb6ad425c954d7025a2646716dfb9ef0",
+      "bytes": 7688,
+      "executable": false
+    },
+    "启动指令.txt": {
+      "sha256": "2a83e3b855cd803efab9023ec103052ee113fa797df283f92d9f1dbbb7c38122",
+      "bytes": 996,
+      "executable": false
+    }
+  },
+  "excluded_generated_files": [
+    "driver/my_pciedriver.mod.c"
+  ],
+  "publication_metadata_changes": [
+    "README.md",
+    "CURRENT.md",
+    "config/model_manifest.json"
+  ],
+  "board_regressions": [
+    "lane_paint_regression",
+    "fcw_regression",
+    "overlay_regression",
+    "input_mode_regression",
+    "perception_regression"
+  ],
+  "cpu_regressions": [
+    "lane_paint_regression",
+    "fcw_regression",
+    "overlay_regression",
+    "perception_regression",
+    "test4_safety_regression",
+    "box_motion_regression",
+    "track_ghost_regression",
+    "navigation_demo_regression",
+    "image_control_regression",
+    "pcie_capture_regression"
+  ]
+}

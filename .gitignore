@@ -102,3 +102,21 @@ check*.onnx
 *.f32
 *.npz
 board_v9/include/adas/*_before.hpp
+
+# Current RK3568 board_v10 build, models and runtime data
+board_v10/build/
+board_v10/build_*/
+board_v10/output/
+board_v10/four_view_sample/
+board_v10/models/
+board_v10/*.log
+board_v10/snapshot*.png
+board_v10/driver/*.ko
+board_v10/driver/*.o
+board_v10/driver/*.mod
+board_v10/driver/*.mod.c
+board_v10/driver/*.mod.cmd
+board_v10/driver/.*.cmd
+board_v10/driver/Module.symvers
+board_v10/driver/modules.order
+board_v10/driver/.tmp_versions/

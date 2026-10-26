@@ -1,0 +1,152 @@
+{
+  "version_label": "模拟板端测试一",
+  "snapshot_date": "2026-10-15",
+  "scene_count": 11,
+  "whole_mosaic_yolo_calls_per_update": 1,
+  "yolo_input_size": [
+    960,
+    544
+  ],
+  "mo_input_size": [
+    128,
+    128
+  ],
+  "default_lanes_enabled": false,
+  "default_ttc_enabled": false,
+  "directions_require_manual_signal_roi_binding": true,
+  "local_originals_note": "红绿D 中前10组各含七路原视频，保持原始编码与完整时长；第11组为中国素材的独立四格回放，不属于同车同步七路。当前检测采用四路拼接输入，七路原片数量不等于鸟瞰标定完成数量。",
+  "scenes": [
+    {
+      "index": 1,
+      "name": "H_右绿圆红",
+      "board_scene": "four_view_sample/H_右绿圆红",
+      "local_group_folder": "01_H_右绿圆红",
+      "duration_s": 3.4,
+      "four_view_input_sha256": "f7b7066cbab95c83ca7c0e54fecfc9d9e05f9aa697cabaea02714112f8a2d9f5",
+      "independent_original_camera_count": 7,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/H_右绿圆红/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 2,
+      "name": "I_右绿圆绿",
+      "board_scene": "four_view_sample/I_右绿圆绿",
+      "local_group_folder": "02_I_右绿圆绿",
+      "duration_s": 4.5,
+      "four_view_input_sha256": "16d7285867ceab5c46c41258b9fe9e7ae7d7948f26845b425071a6d17e624505",
+      "independent_original_camera_count": 7,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/I_右绿圆绿/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 3,
+      "name": "G_右绿前红",
+      "board_scene": "four_view_sample/G_右绿前红",
+      "local_group_folder": "03_G_右绿前红",
+      "duration_s": 4.0,
+      "four_view_input_sha256": "c700b35bbb44d70d1aba98bc2ac3d5b044935471608be26f1849db2181458e8c",
+      "independent_original_camera_count": 7,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/G_右绿前红/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 4,
+      "name": "新候选1待审",
+      "board_scene": "four_view_sample/新候选1待审",
+      "local_group_folder": "04_新候选1待审",
+      "duration_s": 14.0,
+      "four_view_input_sha256": "7e2193f2d9ca777564b0cc6e8b3432e93de1512499d51ccf208a6d6103059e1f",
+      "independent_original_camera_count": 7,
+      "selection_state": "待审",
+      "signal_config": "config/simulated_test_1_scenes/新候选1待审/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 5,
+      "name": "新候选2待审",
+      "board_scene": "four_view_sample/新候选2待审",
+      "local_group_folder": "05_新候选2待审",
+      "duration_s": 14.0,
+      "four_view_input_sha256": "43ed84945f019703fe505dab25c46302e2588ef7aab8bd12bc4f59b5aa27df0e",
+      "independent_original_camera_count": 7,
+      "selection_state": "待审",
+      "signal_config": "config/simulated_test_1_scenes/新候选2待审/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 6,
+      "name": "新候选3待审",
+      "board_scene": "four_view_sample/新候选3待审",
+      "local_group_folder": "06_新候选3待审",
+      "duration_s": 14.0,
+      "four_view_input_sha256": "863bb76ec4caca3850c25e7b7c70b06caa0fc439ba99ff51845677e92a4be7a6",
+      "independent_original_camera_count": 7,
+      "selection_state": "待审",
+      "signal_config": "config/simulated_test_1_scenes/新候选3待审/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 7,
+      "name": "新候选4待审",
+      "board_scene": "four_view_sample/新候选4待审",
+      "local_group_folder": "07_新候选4待审",
+      "duration_s": 7.0,
+      "four_view_input_sha256": "2a66bdcab3bf798618a2e37b617852057c43404abfab5885ff8544fc8b8a547c",
+      "independent_original_camera_count": 7,
+      "selection_state": "待审",
+      "signal_config": "config/simulated_test_1_scenes/新候选4待审/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 8,
+      "name": "A_左转圆灯",
+      "board_scene": "four_view_sample/A_左转圆灯",
+      "local_group_folder": "08_A_左转圆灯",
+      "duration_s": 13.5,
+      "four_view_input_sha256": "19d5b72b8ed9804bc3d412ccbcc090a2e5b40e30d12900e71154e0cbcdc7f0b0",
+      "independent_original_camera_count": 7,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/A_左转圆灯/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 9,
+      "name": "B_双左转灯",
+      "board_scene": "four_view_sample/B_双左转灯",
+      "local_group_folder": "09_B_双左转灯",
+      "duration_s": 12.0,
+      "four_view_input_sha256": "280e9be131da5a0dad7b11443e4786b72276db1c613c5c6e2139ce7a76105bc3",
+      "independent_original_camera_count": 7,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/B_双左转灯/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 10,
+      "name": "candidate_nvidia_010722d8_near_left_straight_20261013",
+      "board_scene": "four_view_sample/candidate_nvidia_010722d8_near_left_straight_20261013",
+      "local_group_folder": "10_英伟达_近距离左转直行_010722d8",
+      "duration_s": 14.0,
+      "four_view_input_sha256": "6c7f6d069b07736f2b3f5c347fee4a84c15722d798100b9112f35aeb9e87548a",
+      "independent_original_camera_count": 7,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/candidate_nvidia_010722d8_near_left_straight_20261013/signal_demo.txt",
+      "source_kind": "synchronized_nvidia_seven_cameras"
+    },
+    {
+      "index": 11,
+      "name": "near_china_a_driving_20261012",
+      "board_scene": "four_view_sample/near_china_a_driving_20261012",
+      "local_group_folder": "11_中国驾驶视角_near_china_a",
+      "duration_s": 30.0,
+      "four_view_input_sha256": "f5d0b0b0f82c4466a6c0b061ae6871b6a7700473e2daeaadb1da7f52130662a0",
+      "independent_original_camera_count": null,
+      "selection_state": "当前菜单保留素材",
+      "signal_config": "config/simulated_test_1_scenes/near_china_a_driving_20261012/signal_demo.txt",
+      "source_kind": "independent_chinese_video_replay"
+    }
+  ]
+}
