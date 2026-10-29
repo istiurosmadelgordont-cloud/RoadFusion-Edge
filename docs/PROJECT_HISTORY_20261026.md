@@ -1,6 +1,6 @@
 # 项目历史说明：2026-10-26 整理前的 README
 
-本页保存此前项目首页中的版本沿革、FPGA 工程记录和旧版操作说明。文中“当前版本”等措辞属于原记录的时间点；最新板端与启动方式请从 [项目首页](../README.md) 和 [board_v10 当前版本](../board_v10/CURRENT.md) 进入。
+本页保存此前项目首页中的版本沿革、FPGA 工程记录和旧版操作说明。文中“当前版本”等措辞属于原记录的时间点；最新板端与启动方式请从 [项目首页](../README.md) 和 [board_v12 当前版本](../board_v12/CURRENT.md) 进入。
 
 ---
 
@@ -16,21 +16,21 @@
 
 ## 最新板端源码（2026-10-26 上传）
 
-[`board_v10`](../board_v10/CURRENT.md) 与 RK3568 上 `/home/cat/rk3568_adas/board_v10` 的源码同步，包含 PCIe 四宫格、图像参数窗口、测试一红绿灯、测试二车道控制、前车 FCW 开关及淡色风险覆盖。修复低位置路面取不到线型证据、失效后保留旧虚线标签的问题；保留测试四模拟停车与人工恢复模块，自动 LDW 关闭。
+[`board_v10`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md) 与 RK3568 上 `/home/cat/rk3568_adas/board_v10` 的源码同步，包含 PCIe 四宫格、图像参数窗口、测试一红绿灯、测试二车道控制、前车 FCW 开关及淡色风险覆盖。修复低位置路面取不到线型证据、失效后保留旧虚线标签的问题；保留测试四模拟停车与人工恢复模块，自动 LDW 关闭。
 
-模型名称与哈希、启动参数和验证范围见 [当前版本](../board_v10/CURRENT.md) 与 [同步验证记录](../board_v10/docs/VALIDATION_20261026.md)。YOLO 为 QAT INT8，UFLD 仍为原始 1600×320 INT8 部署模型。源码上传不包含模型、原视频、训练数据或编译产物。
+模型名称与哈希、启动参数和验证范围见 [当前版本](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md) 与 [同步验证记录](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/VALIDATION_20261026.md)。YOLO 为 QAT INT8，UFLD 仍为原始 1600×320 INT8 部署模型。源码上传不包含模型、原视频、训练数据或编译产物。
 
 ## 历史板端源码（2026-10-23 上传）
 
-[`board_v9`](../board_v9/CURRENT.md) 保存 2026-10-22 已在 RK3568 PCIe 程序部署验证的版本：虚实线画法平滑过渡、普通目标残影修复、按类别着色、模拟导航与测试四。自动车道偏离报警已关闭；测试一红绿灯与测试二强制实线变道报警保留。模型未更换，导航为人工模拟输入。构建、启动及验证范围见 [当前版本](../board_v9/CURRENT.md) 和 [验证摘要](../board_v9/docs/VALIDATION_20261022.md)。
+[`board_v9`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/CURRENT.md) 保存 2026-10-22 已在 RK3568 PCIe 程序部署验证的版本：虚实线画法平滑过渡、普通目标残影修复、按类别着色、模拟导航与测试四。自动车道偏离报警已关闭；测试一红绿灯与测试二强制实线变道报警保留。模型未更换，导航为人工模拟输入。构建、启动及验证范围见 [当前版本](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/CURRENT.md) 和 [验证摘要](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/docs/VALIDATION_20261022.md)。
 
 ## 上次同步：测试二与检测框闪烁修复（2026-10-21）
 
-[`board_v9`](../board_v9/README.md) 已同步 2026-10-20 板端验证通过的版本：保留四宫格、测试一红绿灯匹配及方向/行驶/停止按钮，增加测试二虚线变道、实线直行、强制实线变道报警，以及本车道显示与虚实线区分。盲区联动暂缓。
+[`board_v9`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/README.md) 已同步 2026-10-20 板端验证通过的版本：保留四宫格、测试一红绿灯匹配及方向/行驶/停止按钮，增加测试二虚线变道、实线直行、强制实线变道报警，以及本车道显示与虚实线区分。盲区联动暂缓。
 
 修复开启车道后 YOLO 红绿灯框闪烁：一次 YOLO＋MO 观测连续占用 NPU，获准执行后再读取最新 PCIe 帧，父灯组与子灯使用统一且有上限的显示续接。灯态决策仍只使用真实观测，未延长原证据时限。
 
-运行方式、模型区别及验证范围见 [board_v9 说明](../board_v9/README.md) 和 [验证记录](../board_v9/docs/VALIDATION_20261020.md)。UFLDv2 1600×320 QAT 续训、真实 INT8 PC 测试脚本及局限见 [QAT 记录](../training/UFLDV2_QAT.md)。本次上传源码、配置与摘要；模型、原视频、训练集和本地测试视频独立保存。
+运行方式、模型区别及验证范围见 [board_v9 说明](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/README.md) 和 [验证记录](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/docs/VALIDATION_20261020.md)。UFLDv2 1600×320 QAT 续训、真实 INT8 PC 测试脚本及局限见 [QAT 记录](../training/UFLDV2_QAT.md)。本次上传源码、配置与摘要；模型、原视频、训练集和本地测试视频独立保存。
 
 ## 板卡一融合 / 四宫格切换（2026-10-24）
 
@@ -47,7 +47,7 @@
 
 ## board_v9 初始接入记录（2026-10-17）
 
-[`board_v9`](../board_v9/README.md) 在 board_v8 的「模拟板端测试一」基础上，把 PCIe 实时输入接到 [`tools/pcie_v2`](../tools/pcie_v2/README.md) 的 read 路径（`/dev/fpga_frame_<BDF>`），回放与实时共用同一套车道、选灯和按钮逻辑：
+[`board_v9`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/README.md) 在 board_v8 的「模拟板端测试一」基础上，把 PCIe 实时输入接到 [`tools/pcie_v2`](../tools/pcie_v2/README.md) 的 read 路径（`/dev/fpga_frame_<BDF>`），回放与实时共用同一套车道、选灯和按钮逻辑：
 
 - **用途车道选灯**：左转车道只看左箭头、直行车道优先直行箭头（无箭头时才用圆灯）、右转车道只看右箭头；不再依赖 `signal_demo.txt` 的场景 ROI 人工绑定
 - **方向按钮单击切换**：第一次单击开始模拟行驶，再点同一按钮停车；行驶中点另一方向即切换方向
@@ -55,17 +55,17 @@
 - 新增 `lane_signal_simulator.hpp`、`momentary_input.hpp`、`tests/input_mode_regression.cpp`；`four_view.cpp` 大改
 - `driver/` 随附与 `tools/pcie_v2` 同源的驱动（4 个文件逐字节一致），驱动已加载时无需重编
 
-仍使用 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128），四路整图单次 YOLO，车道线与 TTC 默认关闭。说明见 [PCIe 输入说明](../board_v9/PCIE_INPUT.md) 与 [启动指令](../board_v9/启动指令.txt)。板端验证记录见 [验证记录](../board_v9/docs/VALIDATION_SIMULATED_TEST_1_20261015.json) 与 [模拟板端测试一](../board_v9/docs/SIMULATED_BOARD_TEST_1.md)：板端完成 CMake 配置与 `adas_four_view` 构建，`perception_regression`、`overlay_regression`、`avm_regression`、`preview_resize_regression`、`ufld_decode_regression`、`ui_upload_regression` 六项全部通过。**未实现自动车道/控制灯组归属判断**，夜间素材仍有拒识、漏判与灯形误分类。
+仍使用 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128），四路整图单次 YOLO，车道线与 TTC 默认关闭。说明见 [PCIe 输入说明](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/PCIE_INPUT.md) 与 [启动指令](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/%E5%90%AF%E5%8A%A8%E6%8C%87%E4%BB%A4.txt)。板端验证记录见 [验证记录](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/docs/VALIDATION_SIMULATED_TEST_1_20261015.json) 与 [模拟板端测试一](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/docs/SIMULATED_BOARD_TEST_1.md)：板端完成 CMake 配置与 `adas_four_view` 构建，`perception_regression`、`overlay_regression`、`avm_regression`、`preview_resize_regression`、`ufld_decode_regression`、`ui_upload_regression` 六项全部通过。**未实现自动车道/控制灯组归属判断**，夜间素材仍有拒识、漏判与灯形误分类。
 
 ## 上一版：模拟板端测试一（board_v8，2026-10-15）
 
-[`board_v8`](../board_v8/README.md) 已同步当前 RK3568 正在使用的 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128）版本，包含四路整图单次 YOLO、中文紧凑标签、图形叠加开关、ByteTrack、指定灯组的方向判断和模拟报警。车道线与 TTC 默认关闭。
+[`board_v8`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/README.md) 已同步当前 RK3568 正在使用的 YOLO 14 类 QAT INT8（960×544）＋MobileNet 灯态 FP16（128×128）版本，包含四路整图单次 YOLO、中文紧凑标签、图形叠加开关、ByteTrack、指定灯组的方向判断和模拟报警。车道线与 TTC 默认关闭。
 
-“模拟板端测试一”采用视频回放和控件模拟方向/行驶状态，YOLO 与 MO 实际在 NPU 推理。保留当前 11 组菜单素材的配置和哈希清单，夜间拒识与误分类限制如实记录。源码、构建脚本与配置随本次提交；模型、视频和本地七路原视频独立保存。见 [版本说明与验证](../board_v8/docs/SIMULATED_BOARD_TEST_1.md)。
+“模拟板端测试一”采用视频回放和控件模拟方向/行驶状态，YOLO 与 MO 实际在 NPU 推理。保留当前 11 组菜单素材的配置和哈希清单，夜间拒识与误分类限制如实记录。源码、构建脚本与配置随本次提交；模型、视频和本地七路原视频独立保存。见 [版本说明与验证](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/docs/SIMULATED_BOARD_TEST_1.md)。
 
-Windows PC 鸟瞰预览：双击根目录的 [启动PC鸟瞰.cmd](../启动PC鸟瞰.cmd)，
+Windows PC 鸟瞰预览：双击根目录的 [启动PC鸟瞰.cmd](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/%E5%90%AF%E5%8A%A8PC%E9%B8%9F%E7%9E%B0.cmd)，
 可切换八组 NVIDIA 七视角拼接视频。操作和环境说明见
-[PC_AVM_START.md](../board_v8/PC_AVM_START.md)。该入口是 PC 视频预览，板端启动流程另见 board_v8 文档。
+[PC_AVM_START.md](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/PC_AVM_START.md)。该入口是 PC 视频预览，板端启动流程另见 board_v8 文档。
 
 ## 数据流
 
@@ -110,8 +110,8 @@ ARM 决策反馈 → FPGA 图像叠加 / LED / 控制信号
 恢复方式、SHA-256、工具版本、已知 RTL/CDC 问题见各目录 README 和验证记录。综合成功不等于板级数据完整性、
 缓存一致性和时序已经签核。
 
-`board_v7` 保留同步视频演示；[`board_v8`](../board_v8/PCIE_INPUT.md) 增加 PCIe 实时合成帧输入；
-[`board_v9`](../board_v9/PCIE_INPUT.md) 改用 pcie_v2 的 read 路径，并接入用途车道选灯与方向按钮切换。
+`board_v7` 保留同步视频演示；[`board_v8`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/PCIE_INPUT.md) 增加 PCIe 实时合成帧输入；
+[`board_v9`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v9/PCIE_INPUT.md) 改用 pcie_v2 的 read 路径，并接入用途车道选灯与方向按钮切换。
 双板工程提供四路采集/拼接、SFP 互传和 PCIe 输出源码；完整联合链路仍需对应位流、
 HS2 驱动及鲁班猫板级验收，不能将旧版历史验证记录视为本次链路验证结果。
 
@@ -152,10 +152,10 @@ traffic_green_circle  traffic_green_left   traffic_green_right  traffic_green_st
 和 INT8 RKNN 一并保留，便于重新转换及核对模型来源。测试视频、NVIDIA PhysicalAI
 原始素材、量化图片、运行日志和构建产物体积较大，不进入 Git 仓库。
 
-四路版本的详细操作、已验证性能和当前模型限制见 [`board_v7/README.md`](../board_v7/README.md)，
-九层软件框架与模块完成边界见 [`board_v7/ARCHITECTURE.md`](../board_v7/ARCHITECTURE.md)，
+四路版本的详细操作、已验证性能和当前模型限制见 [`board_v7/README.md`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v7/README.md)，
+九层软件框架与模块完成边界见 [`board_v7/ARCHITECTURE.md`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v7/ARCHITECTURE.md)，
 当前及后续代码的扩展性、健壮性、安全性与验证要求见
-[`board_v7/ENGINEERING.md`](../board_v7/ENGINEERING.md)。
+[`board_v7/ENGINEERING.md`](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v7/ENGINEERING.md)。
 
 ## 软件模块
 

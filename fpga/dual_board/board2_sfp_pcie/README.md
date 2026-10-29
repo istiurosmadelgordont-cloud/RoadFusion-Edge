@@ -20,7 +20,7 @@
 2. 完成编译、综合、映射、布局布线和时序检查，再生成/下载位流；工具与下载方式按板卡环境配置。
 3. SFP RX 接板卡一 TX，板卡二 TX 接板卡一 RX；自身 HDMI 源用于送往板卡一的单路输入。
 4. 先检查 DDR、SFP 与 HDMI 输出，再连接 RK3568 PCIe、加载匹配驱动并开始取帧。
-5. 修改图像草稿后，点击 ARM 界面的“应用设置”；核对对应 cookie 的 RECEIVED 和 APPLIED，详情见 [图像控制窗口](../../../board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md)。
+5. 修改图像草稿后，点击 ARM 界面的“应用设置”；核对对应 cookie 的 RECEIVED 和 APPLIED，详情见 [图像控制窗口](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md)。
 
 重新下载匹配位流后，应停止并重新开始 ARM 采集，以重新登记图像回执邮箱。
 
@@ -36,7 +36,7 @@ SFP 原始 RGB565 写 DDR，恢复的视频经过 `image_processing_top`，公�
 
 RECEIVED 表示参数接收回执，APPLIED 表示对应配置在帧边界应用；提交函数成功、TX 完成事件或 STOP cookie 均不等于 APPLIED，也不保证主机已显示对应新画面。旧 `0x220/0x224` 配置状态 DMA 不用于本版。
 
-当前推荐配套软件是 [board_v10 及其 driver](../../../board_v10/CURRENT.md)，其 pcie_v3 8.0/8.1 接口支持两阶段回执。[tools/pcie_v2](../../../tools/pcie_v2/README.md) 保留驱动 7.0 单向提交，不能将其消息当作本协议已确认生效。
+当前推荐配套软件是 [board_v10 及其 driver](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md)，其 pcie_v3 8.0/8.1 接口支持两阶段回执。[tools/pcie_v2](../../../tools/pcie_v2/README.md) 保留驱动 7.0 单向提交，不能将其消息当作本协议已确认生效。
 
 ## 本版包头修复
 

@@ -138,3 +138,11 @@ board_v12/driver/.*.cmd
 board_v12/driver/Module.symvers
 board_v12/driver/modules.order
 board_v12/driver/.tmp_versions/
+
+# Retired board versions and Windows PC demo shortcuts (kept in Git history)
+/board/
+/board_v7/
+/board_v8/
+/board_v9/
+/board_v10/
+/启动PC*.cmd

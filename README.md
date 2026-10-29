@@ -8,7 +8,7 @@ FPGA 负责视频采集、拼接、图像处理和 PCIe 传输；RK3568 NPU 运�
 
 ## 当前版本
 
-2026-10-29 已从 RK3568 板端同步 `board_v12`：PCIe 实时输入固定为**驱动 8.2 DMA-BUF + 同步 RGA**，非 RGA 功能同步板端 `board_v11.before-new-baseline-20261027-195936` 基线。`board_v10`、`board_v9`、`board_v8` 等目录保留历史版本。
+2026-10-29 已从 RK3568 板端同步 `board_v12`：PCIe 实时输入固定为**驱动 8.2 DMA-BUF + 同步 RGA**，非 RGA 功能同步板端 `board_v11.before-new-baseline-20261027-195936` 基线。仓库工作树只保留 `board_v12`；旧版源码通过 Git 历史查看，PC 演示快捷入口不再跟踪。
 
 | 模块 | 当前功能与状态 |
 | --- | --- |
@@ -63,7 +63,7 @@ sh scripts/run_pcie.sh --enable-lanes --enable-fcw
 
 UFLD 未切换为新续训 QAT 候选。模型 SHA256 见 [模型清单](board_v12/config/model_manifest.json)，训练与转换记录见 [UFLDv2 QAT 说明](training/UFLDV2_QAT.md)。RKNN 是部署格式，INT8 是量化精度，QAT 是训练方式。
 
-车道效果同时受原始模型输出、输入裁剪和几何门限影响。前广角与前长焦需要分别验证；长焦不是只替换文件路径即可完成适配。当前两路对比结果和调整方向见 [相机输入与车道适配](board_v10/docs/CAMERA_INPUTS.md)（该文档随 board_v10 记录保留）。
+车道效果同时受原始模型输出、输入裁剪和几何门限影响。前广角与前长焦需要分别验证；长焦不是只替换文件路径即可完成适配。当前两路对比结果和调整方向见 [相机输入与车道适配](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/CAMERA_INPUTS.md)（历史版本记录）。
 
 ## 工程入口
 
@@ -73,7 +73,7 @@ UFLD 未切换为新续训 QAT 候选。模型 SHA256 见 [模型清单](board_v
 | PCIe DMA-BUF + RGA 图像与预览路径 | [PCIE_RGA_PREVIEW.md](board_v12/docs/PCIE_RGA_PREVIEW.md) |
 | 驱动自动准备与启动调整 | [STARTUP_20261029.md](board_v12/docs/STARTUP_20261029.md) |
 | 基线同步与验证记录 | [BASELINE_SYNC_20261029.md](board_v12/docs/BASELINE_SYNC_20261029.md) |
-| 前向 FCW 规则与显示 | [FCW.md](board_v10/docs/FCW.md) |
+| 前向 FCW 规则与显示 | [FCW.md](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/FCW.md) |
 | 测试四多人标红、停车与自动解除 | [TEST4.md](board_v12/docs/TEST4.md) |
 | 模拟导航 | [NAVIGATION_DEMO.md](board_v12/docs/NAVIGATION_DEMO.md) |
 | FPGA 图像参数窗口与回执 | [PCIE_V3_IMAGE_CONTROLS.md](board_v12/docs/PCIE_V3_IMAGE_CONTROLS.md) |

@@ -1,6 +1,6 @@
 # Windows FPGA 视频 / 图片上位机
 
-将本地视频、图片或彩条转换为大端 RGB565，经 UDP 发到板卡一。用于道路素材、四路采集和图像处理演示。**本地预览/发送计数不代表 FPGA 已确认收到。** 系统连接见 [双板 FPGA 说明](../../fpga/dual_board/README.md)，识别程序见 [board_v10](../../board_v10/CURRENT.md)。
+将本地视频、图片或彩条转换为大端 RGB565，经 UDP 发到板卡一。用于道路素材、四路采集和图像处理演示。**本地预览/发送计数不代表 FPGA 已确认收到。** 系统连接见 [双板 FPGA 说明](../../fpga/dual_board/README.md)，识别程序见 [board_v10](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md)。
 
 ## 快速启动
 

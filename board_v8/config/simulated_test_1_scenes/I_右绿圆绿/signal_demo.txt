@@ -1,5 +1,0 @@
-roi 0.00 0.00 1.00 0.75
-left_unbound 1
-right_arrow_only 1
-straight_roi 0.20 0.00 0.38 0.55
-right_roi 0.30 0.00 0.50 0.55

@@ -1,6 +1,6 @@
 # FPGA 双板视频系统
 
-两块紫光同创 FPGA 组成四路视频采集、融合/四宫格、光口互传与 PCIe 输出链路，RK3568 运行 [board_v10 ADAS 程序](../../board_v10/CURRENT.md)。板卡一已于 2026-10-29 更新为 2026-10-27 共用 LUT 构建；其他组件沿用 2026-10-26 仓库记录，版本与验证状态分别列明。
+两块紫光同创 FPGA 组成四路视频采集、融合/四宫格、光口互传与 PCIe 输出链路，RK3568 运行 [board_v10 ADAS 程序](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md)。板卡一已于 2026-10-29 更新为 2026-10-27 共用 LUT 构建；其他组件沿用 2026-10-26 仓库记录，版本与验证状态分别列明。
 
 ## 工程入口
 
@@ -9,7 +9,7 @@
 | 板卡一 | [2026-10-27 共用 LUT 工程、bit 与说明](board1_capture/README.md) | 四路采集，三路 LUT 融合，KEY2 切换完整四宫格，缺 SFP 象限黑色，HDMI/SFP 输出 |
 | 板卡二 | [2026-10-19 工程与协议](board2_sfp_pcie/README.md) | 本机 HDMI 经光口送板卡一；接收合成帧，DDR 后处理并输出 HDMI/PCIe |
 | Windows 上位机 | [udp_video_sender](../../tools/udp_video_sender/README.md) | 视频、图片、彩条转 RGB565，以 UDP 送板卡一以太网输入 |
-| RK3568 | [board_v10](../../board_v10/CURRENT.md) | PCIe read 采集、NPU 推理、图像参数控制和 ADAS 演示 |
+| RK3568 | [board_v10](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md) | PCIe read 采集、NPU 推理、图像参数控制和 ADAS 演示 |
 
 两个 PDS 工程均使用 **PDS 2022.2-SP6.4，PGL50H / FBG484 / -6**。工程 ZIP、bit、FIC 和约束以各板说明为准，旧目录保留的协议不能直接当作当前接口。
 
@@ -54,7 +54,7 @@ SFP 使用工程内自定义 8b/10b 视频协议。板卡二→板卡一传单�
 2. 两个方向分别连接：板卡一 TX→板卡二 RX，板卡二 TX→板卡一 RX；物理插座依 FDC 与板卡丝印核对。
 3. HDMI 源接各自 HDMI IN；确认 DDR 初始化和 HDMI 画面，板卡一切到所需输出模式。
 4. PC 千兆网卡接板卡一以太网口，配置本机 IPv4 和对应静态邻居，再启动 Windows 上位机发送彩条或视频。
-5. 板卡二 PCIe 接兼容的 RK3568 RC 接口，确认枚举、驱动及读取权限，再按 [board_v10 启动说明](../../board_v10/CURRENT.md) 运行。
+5. 板卡二 PCIe 接兼容的 RK3568 RC 接口，确认枚举、驱动及读取权限，再按 [board_v10 启动说明](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md) 运行。
 
 板卡二 SFP 使用工程中修改后的 PCIe IP 所提供的 `sfp_*`/fabric 接口，不能直接用原生成 IP 覆盖或另外实例化竞争相同 HSST 资源的收发器。
 
@@ -69,7 +69,7 @@ SFP 使用工程内自定义 8b/10b 视频协议。板卡二→板卡一传单�
 
 ## PCIe 与图像控制版本
 
-当前板卡二包含五字参数提交、唯一 cookie、128 字节独立邮箱及 RECEIVED/APPLIED 两阶段回传。`board_v10/driver` 以 pcie_v3 8.0 为基线并包含 8.1 性能修改，匹配说明见 [图像参数控制](../../board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md)。
+当前板卡二包含五字参数提交、唯一 cookie、128 字节独立邮箱及 RECEIVED/APPLIED 两阶段回传。`board_v10/driver` 以 pcie_v3 8.0 为基线并包含 8.1 性能修改，匹配说明见 [图像参数控制](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md)。
 
 [tools/pcie_v2](../../tools/pcie_v2/README.md) 保留的是驱动 7.0 单向参数提交查看器；它的“提交成功”不等于双阶段回执已确认。不要把视频 ABI 同为 2 视为图像参数协议完全一致。Qt 查看器和 ADAS 程序不能同时占用同一设备。
 
