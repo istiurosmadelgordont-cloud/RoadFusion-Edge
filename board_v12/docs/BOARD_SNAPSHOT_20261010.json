@@ -1,0 +1,337 @@
+{
+  "snapshot_date": "2026-10-10",
+  "source_project": "/home/cat/rk3568_adas/board_v8",
+  "notes": "Read-only snapshot before Chinese annotation; build/runtime/model/video artifacts excluded. Existing repository files absent from board snapshot were retained.",
+  "files": [
+    {
+      "path": "board_v8/third_party/rknn/rknn_api.h",
+      "bytes": 31078,
+      "sha256": "3cd1004d75176fb32688ff6747a784c86a8234b3aa1fe4c93e48dcdeef8c111a"
+    },
+    {
+      "path": "board_v8/CMakeLists.txt",
+      "bytes": 5769,
+      "sha256": "3b5537c0a373d8f437f9c2c97cdc1acaf4dec5243c7579fb434dc3ff13f8c7b5"
+    },
+    {
+      "path": "board_v8/PERCEPTION_OPTIMIZATION.md",
+      "bytes": 5823,
+      "sha256": "5cf4f79e93dce4c4cf59169bde1e8b0b27deda1d2020f817c233d72d861a2856"
+    },
+    {
+      "path": "board_v8/OVERLAY_V2.md",
+      "bytes": 5456,
+      "sha256": "ce34b22b588ccdae33b7699edd02e40d71519f60d1450232778c10a1d2c9f6e4"
+    },
+    {
+      "path": "board_v8/PCIE_INPUT.md",
+      "bytes": 2643,
+      "sha256": "7a2f1be34f1eee9b48988769769e4d132b9ecd40b88c21c8fd925f83d138cd6e"
+    },
+    {
+      "path": "board_v8/scripts/run.sh",
+      "bytes": 696,
+      "sha256": "2904d68b283f9204fa3f60f25006aaf1f58f2260de89fba27bb04566dec3be7a"
+    },
+    {
+      "path": "board_v8/scripts/build.sh",
+      "bytes": 292,
+      "sha256": "661ec1cd7306bafe1cd4c10c508f45025675c36863a23263ed8e72e800893ef2"
+    },
+    {
+      "path": "board_v8/scripts/run_four_view.sh",
+      "bytes": 741,
+      "sha256": "0a6cbb5aa69fca9e5a99dd7f5a2af1ed1e9ff0b4fd6503af3d087274202d7127"
+    },
+    {
+      "path": "board_v8/scripts/build_fpga_composite.sh",
+      "bytes": 472,
+      "sha256": "86d17529cea39931fe6471483a2f9dc75cf3245e843aa574c4edcc1e03ce6dd2"
+    },
+    {
+      "path": "board_v8/scripts/run_pcie.sh",
+      "bytes": 664,
+      "sha256": "42ebf4ed055f5bab5eae6ada2ce5f95dbb1be46898f76cb263dd792e784e108e"
+    },
+    {
+      "path": "board_v8/config/rear_lane_roi.txt",
+      "bytes": 72,
+      "sha256": "0e6063f3e4c833c397974d49cdda6eb3181d4b29fc5385faf49219f4c40560e2"
+    },
+    {
+      "path": "board_v8/config/front_lane_roi.txt",
+      "bytes": 78,
+      "sha256": "bb11ea07c45abd38a9b551ff319084d738b81b00866265183ede42917496d813"
+    },
+    {
+      "path": "board_v8/ENGINEERING.md",
+      "bytes": 3206,
+      "sha256": "50667eed7566e3e954ec152aa08bd09e4a01138abfd28f27309b312fe01dc3ca"
+    },
+    {
+      "path": "board_v8/include/adas/experimental_adas.hpp",
+      "bytes": 5329,
+      "sha256": "eaecdc08bf2a238ff219239bf0637573431c1ccb5da3435670343073c1af5684"
+    },
+    {
+      "path": "board_v8/include/adas/preview_resize.hpp",
+      "bytes": 1356,
+      "sha256": "400ec862aecf7c53cef5952a28a2d67cae4bd113d312a0f93a3e5cd7091fc538"
+    },
+    {
+      "path": "board_v8/include/adas/config.hpp",
+      "bytes": 828,
+      "sha256": "e5b6cbcba964c4f19764fcb91eeffb51e462065c9604c5a2373224cd32e311ef"
+    },
+    {
+      "path": "board_v8/include/adas/lamp_classifier.hpp",
+      "bytes": 706,
+      "sha256": "b3eecbf9090d06bc83c3fe5975aaafcc3b7569329aa0e416310c134398513935"
+    },
+    {
+      "path": "board_v8/include/adas/types.hpp",
+      "bytes": 3544,
+      "sha256": "17fa10bf3aec904f1f2fd3f9260ddd4a88d57f07b9187ab2922076532c4481fb"
+    },
+    {
+      "path": "board_v8/include/adas/lane_detector.hpp",
+      "bytes": 2055,
+      "sha256": "a9feb9db5561925236003dad27d64e5f4d3af2d801e89a8a0800925866eb62c2"
+    },
+    {
+      "path": "board_v8/include/adas/pcie_capture.hpp",
+      "bytes": 4806,
+      "sha256": "db0f61321a80f25d6446051339928065a6fd1fec5bd0ccfbe40646fe5a79000b"
+    },
+    {
+      "path": "board_v8/include/adas/byte_tracker.hpp",
+      "bytes": 1594,
+      "sha256": "db87cf482f4897fd1a87976293ab453e35f849c2c5ff58252c1cc26d0967415f"
+    },
+    {
+      "path": "board_v8/include/adas/lane_geometry_tracker.hpp",
+      "bytes": 3153,
+      "sha256": "307777c3e6146be981d6f812b81ac1e90d88309f26d32370c0732b7354ef0338"
+    },
+    {
+      "path": "board_v8/include/adas/warning_logic.hpp",
+      "bytes": 1653,
+      "sha256": "64ba985a3fcc1791f20eb9a123835706c7a2ae50381eeabd88d0349fab6f3e30"
+    },
+    {
+      "path": "board_v8/include/adas/signal_logic.hpp",
+      "bytes": 347,
+      "sha256": "ad6744a85ca8472b279ca6dbb554d210e84f4850fcaaf2dde4bdc120f173a5b5"
+    },
+    {
+      "path": "board_v8/include/adas/signal_demo.hpp",
+      "bytes": 7532,
+      "sha256": "77e3c7d9ce91efc8970d04a18925143d05c16f391d767dc513017ed28d0a40f3"
+    },
+    {
+      "path": "board_v8/include/adas/text_renderer.hpp",
+      "bytes": 430,
+      "sha256": "1dc91c088182a0eeb7356e2677bf262ccd423264bc00a4a960f3cb022ceda22f"
+    },
+    {
+      "path": "board_v8/include/adas/risk_estimator.hpp",
+      "bytes": 1257,
+      "sha256": "d4cf032b3c47d1eec85c4b1c8d85527de435738c04cab3dc17581d82b5571593"
+    },
+    {
+      "path": "board_v8/include/adas/gl_presenter.hpp",
+      "bytes": 1787,
+      "sha256": "83396e53b7f789dde31552879393537833cdf3c510799d6c3a79f38df33dc3af"
+    },
+    {
+      "path": "board_v8/include/adas/adas_logic_v2.hpp",
+      "bytes": 21923,
+      "sha256": "243377d5bb6631d7fed2025ba40257a12335da3242e7864b349ef706225bbae5"
+    },
+    {
+      "path": "board_v8/include/adas/model_file.hpp",
+      "bytes": 1277,
+      "sha256": "3fda20e507d08162179e83aa7473df18197e5c2eb8f4f1c6439d2713a951210a"
+    },
+    {
+      "path": "board_v8/include/adas/drive_decision.hpp",
+      "bytes": 1006,
+      "sha256": "30e453aad9bf8bf23fc155d4ed2cadfe05062b4e6d5bf7bfcceefbc92f9c1425"
+    },
+    {
+      "path": "board_v8/include/adas/avm_renderer.hpp",
+      "bytes": 11553,
+      "sha256": "fba7f5f31b150c8a0d1b72b75d0e260e9dca9ec82c03cfc0f23a810db2a7b407"
+    },
+    {
+      "path": "board_v8/include/adas/perception_schedule.hpp",
+      "bytes": 1974,
+      "sha256": "2f0601dd59337aac96e23d25c8bdd7fcae24deb6c3b0ce9dad8c5def9f653c82"
+    },
+    {
+      "path": "board_v8/include/adas/ufld_v2_decode.hpp",
+      "bytes": 2776,
+      "sha256": "70ec153ed4cd24fff2f66033d25d91234b116f25ad57c8ce09b891f1d2f0a7af"
+    },
+    {
+      "path": "board_v8/include/adas/overlay.hpp",
+      "bytes": 946,
+      "sha256": "bb41c23683a260e12b16543e446bdb2725702907a28d1aaf8643438fcb6f610f"
+    },
+    {
+      "path": "board_v8/include/adas/ufld_lane_detector.hpp",
+      "bytes": 1782,
+      "sha256": "74ce335d02a8789745e5f944ed186b4b50f264b768a094838cb695b39539f0ac"
+    },
+    {
+      "path": "board_v8/include/adas/ui_upload_regions.hpp",
+      "bytes": 1375,
+      "sha256": "59a17ae906c78d7d45dedf8abfa701b020bb623054e5800ec6742318bc3ea07d"
+    },
+    {
+      "path": "board_v8/include/adas/rknn_detector.hpp",
+      "bytes": 1570,
+      "sha256": "cedb0f40e4fc8584a08e1edd7906acd85c4a2b063846e2f8f7f60c81e65f3249"
+    },
+    {
+      "path": "board_v8/README.md",
+      "bytes": 8283,
+      "sha256": "de74dea77fcf0b3c29299d34d510b2d26e15990996805441c234bd0e11ca463b"
+    },
+    {
+      "path": "board_v8/UI_REFERENCE_NOTES.md",
+      "bytes": 2321,
+      "sha256": "0d54e5c4f6bad460ac5ee749f9ed0abb5b3fc045443988651668a257716d3759"
+    },
+    {
+      "path": "board_v8/tests/overlay_regression.cpp",
+      "bytes": 5444,
+      "sha256": "5db58d1b173d9141e7790f68f651235d7693b1d374466d0a71c6477166966f6a"
+    },
+    {
+      "path": "board_v8/tests/ufld_decode_regression.cpp",
+      "bytes": 2161,
+      "sha256": "f98f9e9224ca63f6e78863e3b4701921211de200066babe3c009904acaef7a7e"
+    },
+    {
+      "path": "board_v8/tests/avm_regression.cpp",
+      "bytes": 1799,
+      "sha256": "53a4da5cea39b1a69bcc60b5bd99411a21e711d9fffbca0c940210758e8b026d"
+    },
+    {
+      "path": "board_v8/tests/lane_video_replay.cpp",
+      "bytes": 3095,
+      "sha256": "f95a6cf75b03644574b4621578e7788c86ac2a1d262418e489ae7d985121ae78"
+    },
+    {
+      "path": "board_v8/tests/preview_resize_regression.cpp",
+      "bytes": 713,
+      "sha256": "1fe7017c05d5e2d824c72525b8518775408ec42bc77f9bb691f5e6d9b492a59e"
+    },
+    {
+      "path": "board_v8/tests/ui_upload_regression.cpp",
+      "bytes": 1297,
+      "sha256": "9fc9306bc607d54bcafb67ee71c6ce64c5560402c0de86f9214f223ccb87d1dd"
+    },
+    {
+      "path": "board_v8/tests/perception_regression.cpp",
+      "bytes": 16307,
+      "sha256": "ff7999bd39ba3a8a0c0f1532854bab6aedc7da006a24adc16599a1ec811d5510"
+    },
+    {
+      "path": "board_v8/src/lane_detector.cpp",
+      "bytes": 24776,
+      "sha256": "de6269976ae422b0d1c8f45ca08de8d6e441271b549818bc76c0f41ba3e79729"
+    },
+    {
+      "path": "board_v8/src/text_renderer.cpp",
+      "bytes": 5413,
+      "sha256": "808ceb6e21d8cd11ade450e012d0e460fb3ce2bfcd5e236a6eac4018af798d53"
+    },
+    {
+      "path": "board_v8/src/main.cpp",
+      "bytes": 24776,
+      "sha256": "c048c14471c2577086379af58247dbde038963b86c8866cda40050839527bc39"
+    },
+    {
+      "path": "board_v8/src/overlay.cpp",
+      "bytes": 28654,
+      "sha256": "eabafbe50dbf8a7369071f53b37e17188a4d88a2750fc7d8e4512960575bd099"
+    },
+    {
+      "path": "board_v8/src/rknn_detector.cpp",
+      "bytes": 12705,
+      "sha256": "f5b63775b514a149627b67026768b84183b2cb584c7c4b8c4f89065f4aee4e4d"
+    },
+    {
+      "path": "board_v8/src/ufld_benchmark.cpp",
+      "bytes": 5193,
+      "sha256": "a97951d97e965fcb6a992e668fe2d220dcb692d3dc1b1960b20d505b148d25d8"
+    },
+    {
+      "path": "board_v8/src/drive_decision.cpp",
+      "bytes": 1686,
+      "sha256": "7e7ccae5f63e735c13f7a730d95677eb63876698d234d45a85183a7ad64516a8"
+    },
+    {
+      "path": "board_v8/src/gl_presenter.cpp",
+      "bytes": 16508,
+      "sha256": "458fa0fc0180d9b84e6d7ce7d9cd4a973895744c4c28ef96b20c1d9cba660fd2"
+    },
+    {
+      "path": "board_v8/src/ufld_lane_detector.cpp",
+      "bytes": 16974,
+      "sha256": "49411bd6c7784b68745ee4c7a335876182db27a63d51cbf6eec8edd0355076b2"
+    },
+    {
+      "path": "board_v8/src/signal_logic.cpp",
+      "bytes": 2423,
+      "sha256": "b5433e38bc67ade90cad6a30d14daae7c8cacd03ebf1b611964eb2bc55c8da41"
+    },
+    {
+      "path": "board_v8/src/dma_probe.cpp",
+      "bytes": 3831,
+      "sha256": "65d3b223a1af7bffc6febb383080c59a7d4a78c491a4dc9682e454bb20c5b501"
+    },
+    {
+      "path": "board_v8/src/risk_estimator.cpp",
+      "bytes": 6000,
+      "sha256": "76e66d231f322d3a547bde21047592f7e17269bd349af446f0bce4246b25f81f"
+    },
+    {
+      "path": "board_v8/src/warning_logic.cpp",
+      "bytes": 7554,
+      "sha256": "2563438b627ea163ce173ea3bc4c6fffd90bd63b36c54219030da61c8330bc58"
+    },
+    {
+      "path": "board_v8/src/byte_tracker.cpp",
+      "bytes": 6116,
+      "sha256": "fae78908e7c4a198bcf243f1fe3f401ceed5e50c4d51d5f64100eba1d39d467e"
+    },
+    {
+      "path": "board_v8/src/lamp_classifier.cpp",
+      "bytes": 5977,
+      "sha256": "66c77690c96b113fd105c5ec587750c9ac52e6696ca6929e18f1d5bb7739b2fb"
+    },
+    {
+      "path": "board_v8/src/four_view.cpp",
+      "bytes": 128087,
+      "sha256": "9d6f388240bcec93f0dc90561e194a83a05fb08507310091ce422c3bf81ced88"
+    },
+    {
+      "path": "board_v8/ARCHITECTURE.md",
+      "bytes": 3608,
+      "sha256": "7ab8f60cf9f285a4ab935259d4c3b1f89f974b339ce22668933a0e2c1cef11d6"
+    },
+    {
+      "path": "board_v8/OVERLAY_V3.md",
+      "bytes": 7631,
+      "sha256": "c139b384e5b37a76022333045d2aeefcb68d8a7f3cbb36a8d7825914bc346e93"
+    },
+    {
+      "path": "board_v8/启动指令.txt",
+      "bytes": 650,
+      "sha256": "3e59942929b6770e7e2c646a9ee1f29c89a686bc9e5b70050c4ef02d24b4d9d8"
+    }
+  ]
+}

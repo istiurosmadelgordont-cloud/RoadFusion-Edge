@@ -1,0 +1,20 @@
+board_v12：指定旧基线业务功能 + 最新固定 RGA 路径。
+
+cd /home/cat/rk3568_adas/board_v12
+sh scripts/build.sh
+export DISPLAY=:0
+export XAUTHORITY="$HOME/.Xauthority"
+sh scripts/run_pcie.sh
+
+开启车道和 FCW：sh scripts/run_pcie.sh --enable-lanes --enable-fcw
+本地鸟瞰素材：sh scripts/run_avm_473423e3.sh
+视频回放：sh scripts/run_four_view.sh --scene 实际视频目录
+调整 BGR 池：sh scripts/run_pcie.sh --pcie-buffers 8
+
+PCIe 采集/预览固定 RGA，不提供 read/CPU 对照开关。沿用板端 8.2 驱动及原模型。
+run_pcie.sh 自动检查、按需编译并加载驱动，补齐设备权限；需要时会调用 sudo。
+已加载 8.2 时直接复用；若已加载旧驱动，会提示先退出采集程序再卸载旧驱动。
+只准备驱动、不启动界面：sh scripts/prepare_pcie.sh
+原始槽默认左/前/右/后；显示左上左视、右上前视、左下右视、右下后视。
+标题栏放大视角，Z 键返回/放大。其他默认开关及业务逻辑与指定基线一致。
+完整状态见 CURRENT.md，同步和验证见 docs/BASELINE_SYNC_20261029.md。

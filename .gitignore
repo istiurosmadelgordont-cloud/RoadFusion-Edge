@@ -120,3 +120,21 @@ board_v10/driver/.*.cmd
 board_v10/driver/Module.symvers
 board_v10/driver/modules.order
 board_v10/driver/.tmp_versions/
+
+# Current RK3568 board_v12 (DMA-BUF + RGA) build, models and runtime data
+board_v12/build/
+board_v12/build_*/
+board_v12/output/
+board_v12/four_view_sample/
+board_v12/models/
+board_v12/*.log
+board_v12/snapshot*.png
+board_v12/driver/*.ko
+board_v12/driver/*.o
+board_v12/driver/*.mod
+board_v12/driver/*.mod.c
+board_v12/driver/*.mod.cmd
+board_v12/driver/.*.cmd
+board_v12/driver/Module.symvers
+board_v12/driver/modules.order
+board_v12/driver/.tmp_versions/
