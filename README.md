@@ -80,7 +80,8 @@ UFLD 未切换为新续训 QAT 候选。模型 SHA256 见 [模型清单](board_v
 | 板卡一：采集、三路融合、KEY2 四宫格切换 | [工程及调试 bit](fpga/dual_board/board1_capture/README.md) |
 | 板卡二：DDR 图像处理、光口与 PCIe 输出 | [工程及协议说明](fpga/dual_board/board2_sfp_pcie/README.md) |
 | Windows 视频/图片 UDP 发送上位机 | [udp_video_sender](tools/udp_video_sender/README.md) |
-| 独立 PCIe 采集与控制工具 | [pcie_v2](tools/pcie_v2/README.md) |
+| 独立 PCIe 采集与控制工具（驱动 7.0） | [pcie_v2](tools/pcie_v2/README.md) |
+| 独立 PCIe 采集查看器（驱动 8.2，DMA-BUF + RGA 预览缩放） | [pcie_v4](tools/pcie_v4/README.md) |
 
 板卡一的最新融合/四宫格集成版已有工程 ZIP 与调试 bit，物理时序和上板验收限制见其说明；板卡二的位流与 ARM 回执协议须配套。应用回归通过不等于 FPGA 链路和全部位流已完成板级验收。
 
