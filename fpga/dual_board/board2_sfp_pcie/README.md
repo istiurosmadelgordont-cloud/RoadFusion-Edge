@@ -1,61 +1,45 @@
-# 板卡二：光口接收、图像处理与 PCIe 输出
+# 板卡二：SFP 接收、图像处理与 PCIe 四缓冲
 
-当前归档为 **2026-10-19 / HEADER_KEEP_FIX**，工程名 `sfp_ddr_image_pice_handshake`。接收板卡一的 SFP 合成视频，写 DDR、恢复时序，经统一图像处理后输出到 HDMI 与 PCIe；同时将自身 HDMI 输入通过 SFP 送板卡一。完整链路见 [双板说明](../README.md)。
+2026-10-30 按用户指定归档 **`sfp_ddr_image_pice_handshake`** 当前桌面工程与现有 bit；用户确认该版已上板测试通过。不是名称相近的旧 `sfp_ddr_img_pice_handshake`，也没有接入暂停中的 HSV / 金字塔暗光融合实验。
 
-## 下载与还原
+- [完整工程 ZIP](sfp_ddr_image_pice_handshake_tested_20261030.zip)：单个 ZIP 包含 PDS 输入、RTL/IP、约束、bit、FIC、RC 参考、测试源码及历史说明；不需要再合并旧版两个 ZIP。
+- [bit](hdmi_ddr_pcie_tested_20261030.sbit) · [配套 FIC](hdmi_ddr_pcie_tested_20261030.fic) · [SHA256](SHA256SUMS.txt)。
+- 解压 `sfp_ddr_image_pice_handshake`，用 **PDS 2022.2-SP6.4** 打开 `hdmi_ddr_pice.pds`，顶层 `hdmi_ddr_pcie`，器件 **PGL50H / FBG484 / -6**。从 Compile 开始重建，使用包内手工整合的全部 IP，不能用重新生成的原始 PCIe IP 覆盖共享 SFP / HSST 接口。
 
-| 文件 | 内容 |
+## 码流来源与状态
+
+本次直接收录桌面 `generate_bitstream/hdmi_ddr_pcie.sbit`，本地生成日志结束于 **2026-10-18 20:56:54**。独立下载文件增加 `tested_20261030` 后缀只是本次归档 / 用户确认日期，不代表 10 月 30 日重建。ZIP 中保留通用文件名与同字节的有日期副本。
+
+bit SHA256：`d33c267f4e2caa739a00c9a019687e00e052c7234967922f38d5ded198db57f5`。
+
+FIC SHA256：`940e659a73ab1b1149f0b01e9eb8327eb3346d56104b91cf07960673b300e34d`。`debug/image_pcie_debug.fic` 与 `synthesize/hdmi_ddr_pcie_syn.fic` 相同；独立 FIC 也取自此配置。
+
+本次未重新编译、重新下载或复跑 RTL；已核对当前 PDS 引用齐全、构建输入没有比 bit 更新、ZIP CRC 与逐文件哈希。文件时间只能辅助判断，完整源码和 bit 的证明边界仍以现有日志、归档哈希与用户上板反馈为准。根目录旧 README / BUILD_STATUS 中“未编译 / 未上板”的文字保留在 `docs/history`，代表当时阶段，不是本次发布状态。
+
+## 视频与处理链
+
+本机 HDMI 经 SFP 发往板卡一作为第四路；反向接收板卡一的 1920×1080 合成画面，RGB565 写 DDR，再经统一图像处理输出本地 HDMI 与 PCIe。断开两板光纤后，板卡二和上位机停留末帧属于输入链路中断。
+
+当前处理包括 DCP 去雾、Y 通道双边去噪、Gamma、CLAHE、原暗部 / 高光调整和软膝高光压缩等，按参数开关。默认五字配置：`000001C0 00F38034 00004100 02030190 0080C040`，算法开关默认关闭；保护标志保留。字0 bit1 为 Gamma，bit2 为 CLAHE。新增多尺度暗光融合尚未实施。
+
+## PCIe 与参数回执
+
+保持 RGB565、64 字节图像 Payload、四缓冲所有权、帧尾 token、RELEASE / STOP 协议。
+
+| BAR1 偏移 | 用途 |
 | --- | --- |
-| [主工程 ZIP](sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip) | 2,425,732 字节、560 个文件：RTL/IP、约束、FIC、RC 参考及验证记录 |
-| [PCIe 仿真库 ZIP](sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip) | 4,978,960 字节、18 个文件 |
-| [SHA256SUMS.txt](SHA256SUMS.txt) / [归档检查](SNAPSHOT_CHECKS.json) | 两包哈希、文件数及完整性记录 |
+| 0x200 / 0x204 / 0x208 / 0x20C / 0x210 | 完整五字图像参数 |
+| 0x214 | 提交唯一非零 cookie |
+| 0x218 | 可选 128 字节独立 DMA 确认区地址 |
 
-**两个 ZIP 解压到同一父目录，合并同名工程文件夹，共 578 个文件。** IP 内容按目录拆包，不能只解压主工程就认为仿真库齐全。
+RECEIVED 位于确认区 +0，APPLIED 位于 +64，均携带同一 cookie；APPLIED 表示已在帧边界生效。TX 完成、STOP 回执或寄存器写成功不能替代 APPLIED。具体缓存同步、字节序和寄存器语义以包内 `docs/IMAGE_PARAMETER_ACK.md`、`docs/RC_HANDSHAKE_GUIDE.md`、`rc` 参考为准。
 
-用 **PDS 2022.2-SP6.4** 打开 `hdmi_ddr_pice.pds`；顶层 `hdmi_ddr_pcie`，器件 **PGL50H / FBG484 / -6**。已检查 215 个 PDS 设计输入存在。此归档不附 bit；须重建、检查时序并使用匹配的 FIC。
+当前 `source/source/pcie_dma_ctrl.v` 保留 3DW Posted Header 对 `tkeep[2:0]==111` 的兼容处理，支持 0111 / 1111；其 SHA256 与仓库 2026-10-19 HEADER_KEEP_FIX 记录一致：`f0411b2aba80385ba66849006127d2a46f3b399165bcb78a76b336514c68ccf3`。
 
-## 使用步骤
+FIC 标识 `IMAGE_ACK_RX_APPLIED_TX_20261017`；Core0 端口 133 / 161 位，Core1 244 / 245 位，各 256 点。导入 FIC 前请下载本版 bit，避免和旧固件探针不匹配。
 
-1. 合并两个 ZIP，核对哈希和工程输入，保留工程内的生成 IP、RTL 与约束。
-2. 完成编译、综合、映射、布局布线和时序检查，再生成/下载位流；工具与下载方式按板卡环境配置。
-3. SFP RX 接板卡一 TX，板卡二 TX 接板卡一 RX；自身 HDMI 源用于送往板卡一的单路输入。
-4. 先检查 DDR、SFP 与 HDMI 输出，再连接 RK3568 PCIe、加载匹配驱动并开始取帧。
-5. 修改图像草稿后，点击 ARM 界面的“应用设置”；核对对应 cookie 的 RECEIVED 和 APPLIED，详情见 [图像控制窗口](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md)。
+## 时序与验证边界
 
-重新下载匹配位流后，应停止并重新开始 ARM 采集，以重新登记图像回执邮箱。
+用户确认当前版本上板测试通过；功能可运行不等于物理时序闭合。现有 2026-10-18 报告显示 **pclk_div2 Slow Setup −2.866 ns**、像素 PLL CLKOUT1 Slow Setup **−1.149 ns**，报告标记 `Some Constraints Violated`。完整报告保留在 `report_timing/hdmi_ddr_pcie.rtr`，本次只归档，不改 RTL 或约束修复这些路径。
 
-## 视频与图像控制
-
-SFP 原始 RGB565 写 DDR，恢复的视频经过 `image_processing_top`，公共结果送 HDMI 和 `pcie_dma_ctrl`。后者同时管理图像参数与原视频四缓冲 DMA。默认输出 1920×1080 RGB565，图像负载 64 字节、每帧 64,800 个图像包；帧尾 token、RELEASE 与 STOP 生命周期见 [RC 指南](docs/RC_PCIE_CONTROL.md)。
-
-| BAR1 地址 | 用途 |
-| --- | --- |
-| `0x200 / 0x204 / 0x208 / 0x20C / 0x210` | 五个完整图像参数字 |
-| `0x214` | 提交唯一 cookie |
-| `0x218` | 登记 128 字节独立图像确认区 |
-
-RECEIVED 表示参数接收回执，APPLIED 表示对应配置在帧边界应用；提交函数成功、TX 完成事件或 STOP cookie 均不等于 APPLIED，也不保证主机已显示对应新画面。旧 `0x220/0x224` 配置状态 DMA 不用于本版。
-
-当前推荐配套软件是 [board_v10 及其 driver](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md)，其 pcie_v3 8.0/8.1 接口支持两阶段回执。[tools/pcie_v2](../../../tools/pcie_v2/README.md) 保留驱动 7.0 单向提交，不能将其消息当作本协议已确认生效。
-
-## 本版包头修复
-
-修正图像路径把 3DW Posted 包头只按 `tkeep=0111` 识别的问题：Logos IP 的合法包头可以是 `1111`，原外层解析器已接受它，图像路径又将其拒绝，造成“视频可收但参数无效/回执超时”。本版复用已验证的外层包头判断；单 DW 数据拍仍要求 `0001`。
-
-详细修改和复现见 [PCIE_HEADER_KEEP_FIX.md](docs/PCIE_HEADER_KEEP_FIX.md)。未修改 PCIe/SFP 生成 IP 和原四缓冲视频协议；ARM 无须因该包头修复改变合法命令格式，但仍须匹配位流和驱动。
-
-## 文档与调试入口
-
-- [代码解说](docs/CODE_WALKTHROUGH.md)：模块关系与数据流。
-- [RC 控制指南](docs/RC_PCIE_CONTROL.md)：寄存器、端序、缓冲与启停。
-- [RECEIVED/APPLIED 协议](docs/IMAGE_PARAMETER_ACK.md)：参数生命周期。
-- [FIC 探针](docs/IMAGE_PCIE_FIC.md)：`IMAGE_ACK_RX_APPLIED_TX_20261017`，Core0 端口 133/161 位、Core1 244/245 位，各 256 点。
-- [DDR/输入 debug](docs/DRM_REDUCTION_AND_PCIE_IMAGE_DEBUG.md)：调试细节。
-
-## 验证状态
-
-9 项离线仿真通过，覆盖两种包头、参数跨域、两阶段回包、视频 DMA 并发控制与 DDR 后完整集成。日志在工程包内 `docs/verification/20261019/header_keep_fix/`；哈希与归档检查见本页下载表。
-
-本次工程发布未运行 PDS 位流构建或下载，不附 bit；以前生成的文件不能证明这次快照已通过时序或上板验收。2026-10-26 的 README 整理不改变该验证边界，也未改写工程 ZIP、IP 或位流。
-
-旧版本由 Git 历史保留，第三方声明沿用 [系统权利通知](../DISCLAIMER.md)。
+历史 RTL / RC 验证记录及源码随包保留，不能把历史离线测试视作本次新跑的板级验收。上位机 / RK3568 驱动源码不在本次工程上传范围。见 [双板说明](../README.md) 与 [权利通知](../DISCLAIMER.md)；旧版本可从 Git 历史恢复。
