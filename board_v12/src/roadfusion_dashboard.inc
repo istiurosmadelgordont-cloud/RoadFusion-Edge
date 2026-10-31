@@ -3,9 +3,11 @@
 class RoadFusionUi {
  public:
   bool dirty=true,theme_menu=false;
+  bool lane_assist_enabled=false,lane_assist_changed=false;
   int utility=0; // 0 closed, 1 FCW, 2 runtime information
   static cv::Rect overview(){return {604,30,126,40};}
   static cv::Rect surround(){return {742,30,126,40};}
+  static cv::Rect lane_assist(){return {1068,30,200,36};}
   static cv::Rect fcw(){return {1280,30,110,36};}
   static cv::Rect info(){return {1400,30,110,36};}
   static cv::Rect themes(){return {1522,30,184,36};}
@@ -26,6 +28,8 @@ class RoadFusionUi {
           adas::dashboard::theme()=i;std::ofstream("config/ui_theme.txt")<<i<<'\n';
         }
         theme_menu=false;
+      } else if(lane_assist().contains(p)){
+        lane_assist_enabled=!lane_assist_enabled;lane_assist_changed=true;utility=0;
       } else if(fcw().contains(p)){utility=utility==1?0:1;}
       else if(info().contains(p)){utility=utility==2?0:2;}
       else if(utility){
@@ -66,23 +70,27 @@ class RoadFusionUi {
     label(canvas,"四视角高级辅助驾驶系统",{322,42},16);
     label(canvas,"FPGA + RK3568 · EDGE INTELLIGENCE",{322,67},12,accent());
     control(canvas,overview(),"驾驶总览",top==0);control(canvas,surround(),"环视拼接",top==2);
+    control(canvas,lane_assist(),lane_assist_enabled?"车道保持辅助 开":"车道保持辅助 关",lane_assist_enabled,14);
+    label(canvas,lane_assist_enabled&&!options.lanes_enabled?"偏离提醒 · 等待车道检测":"偏离提醒 · 不控制转向",{1078,22},11,muted());
     control(canvas,fcw(),"碰撞预警",fcw_state.enabled||test4.enabled);control(canvas,info(),"运行信息",utility==2);
     control(canvas,themes(),theme_name(theme()),theme_menu,14);
     control(canvas,{1720,30,168,36},live?"● PCIe 实时输入":"● 视频回放",true,14);
     label(canvas,"道路感知",{32,146},24);label(canvas,"ROAD PERCEPTION",{146,145},12,muted());
     control(canvas,kLaneDetectionToggle,lane_toggle.label(options.lanes_enabled),lane_toggle.requested,14);
     control(canvas,adas::CameraViewLayout::priority_button(),"主视角优先",layout.priority(),14);
-    control(canvas,adas::CameraViewLayout::return_button(),layout.focused()<0?"四路均分":"返回四路",layout.focused()<0&&!layout.priority(),14);
+    control(canvas,adas::CameraViewLayout::return_button(),layout.focused()<0?"四路均分":"返回四路",layout.focused()<0&&!layout.priority()&&!layout.fusion(),14);
+    control(canvas,adas::CameraViewLayout::fusion_button(),"三路融合",layout.fusion(),14);
     if(!live){control(canvas,kPrevSceneButton,"上一场景",false,12);control(canvas,kNextSceneButton,"下一场景",false,12);}
     const char* names[]={"前视","后视","左视","右视"};
     const char* english[]={"FRONT CAMERA","REAR CAMERA","LEFT CAMERA","RIGHT CAMERA"};
     const char* numbers[]={"01","04","02","03"};
     const auto views=layout.rects();
-    if(layout.focused()>=0)for(int i=0;i<4;++i)control(canvas,adas::CameraViewLayout::select_button(i),names[i],i==layout.focused(),14);
-    for(int i=0;i<4;++i)if(views[i].area()>0){
-      const auto r=views[i];card(canvas,{r.x-1,r.y-39,r.width+2,r.height+(layout.priority()&&i==0?40:66)});
+    if(layout.focused()>=0&&!layout.fusion())for(int i=0;i<4;++i)control(canvas,adas::CameraViewLayout::select_button(i),names[i],i==layout.focused(),14);
+    for(int i=0;i<4;++i)if(layout.window_rect(i).area()>0){
+      const auto r=layout.window_rect(i);card(canvas,{r.x-1,r.y-39,r.width+2,r.height+(layout.priority()&&i==0?40:66)});
       control(canvas,{r.x+14,r.y-29,28,24},numbers[i],false,12);
-      label(canvas,names[i],{r.x+54,r.y-10},18);label(canvas,english[i],{r.x+108,r.y-11},12,muted());
+      if(layout.fusion() && i==0)label(canvas,"三路融合",{r.x+54,r.y-10},18);
+      else {label(canvas,names[i],{r.x+54,r.y-10},18);label(canvas,english[i],{r.x+108,r.y-11},12,muted());}
       if(!(layout.priority()&&i==0))label(canvas,"● 目标感知",{r.x+16,r.br().y+19},12,accent());
       control(canvas,adas::CameraViewLayout::zoom_button(r),"[ ]",layout.focused()==i,15);
     }
@@ -151,8 +159,8 @@ class RoadFusionUi {
     label(canvas,options.lanes_enabled?"车道检测已开启":"车道检测已关闭",{1577,940},12,muted());
     metrics(canvas,fps,yolo,ufld,npu,fresh,options.lanes_enabled,live);
     if(warning.priority>0){
-      rounded(canvas,{1044,30,222,38},rgb(0x49251d),7);
-      label(canvas,warning.priority>=100?"模拟驾驶报警":warning.priority>=70?"危险预警":"驾驶提示",{1058,56},18,rgb(0xffb295));
+      rounded(canvas,{878,30,178,38},rgb(0x49251d),7);
+      label(canvas,warning.priority>=100?"模拟驾驶报警":warning.priority>=70?"危险预警":"驾驶提示",{890,55},14,rgb(0xffb295));
       cv::Mat detail=canvas(cv::Rect(1044,72,844,23));
       label(detail,warning.text,{0,17},14,rgb(0xffb295));
     }

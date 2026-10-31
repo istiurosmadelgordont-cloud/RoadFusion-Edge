@@ -1008,15 +1008,17 @@ void warning_banner(cv::Mat& frame, const std::string& text) {
                       16, cv::Scalar(255, 255, 255));
 }
 
-adas::LaneResult center_lane_display(const adas::LaneResult& source) {
+adas::LaneResult center_lane_display(const adas::LaneResult& source, bool departure_enabled=false) {
   adas::LaneResult result=source;
   for(int slot:{0,3}) {result.boundaries[slot].clear();result.boundary_coverage[slot]=0;}
   result.lane_polygons[0].clear();result.lane_polygons[2].clear();
-  // LDW is disabled in the demo. Keep measured coordinates and paint styles,
-  // but omit departure/approach colouring in this drawing-only copy.
-  result.departure=false;
-  result.departure_side=adas::LaneDepartureSide::NONE;
-  result.offset_ratio=0.f;
+  // Keep the original drawing when assistance is off; only fresh enabled
+  // departure warnings may restore its existing deviation presentation.
+  if(!departure_enabled) {
+    result.departure=false;
+    result.departure_side=adas::LaneDepartureSide::NONE;
+    result.offset_ratio=0.f;
+  }
   return result;
 }
 
@@ -2280,6 +2282,12 @@ int run_four_view(int argc, char** argv) {
     if(!input.clicks.empty() || (key>=0 && key!=255))dashboard.dirty=true;
     // Popovers own the press; never route through covered navigation controls.
     dashboard.route(input,click_x,click_y,navigation_top_panel,avm_visible,verify_colors,navigation_demo);
+    if(dashboard.lane_assist_changed){
+      dashboard.lane_assist_changed=false;
+      front_lane_warning.reset();
+      suppress_lane_departure_alarm(front_lane_target);
+      std::cout<<"LANE_ASSIST enabled="<<dashboard.lane_assist_enabled<<std::endl;
+    }
     if(dashboard.verify_changed){
       dashboard.verify_changed=false;signal_logic=adas::SignalLogic();drive_logic.reset();
       signal=adas::SignalResult();drive=adas::DriveResult();
@@ -2824,9 +2832,10 @@ int run_four_view(int argc, char** argv) {
     }
     lane = front_lane_target;
     rear_lane = rear_lane_target;
-    // Retain internal geometry/semantic tracking for Test Two, while disabling
-    // the automatic LDW alarm on every view and dashboard snapshot.
-    suppress_lane_departure_alarm(lane);
+    // The independent switch gates only front LDW; keep rear behaviour and
+    // Test Two geometry/rules unchanged.
+    if(!dashboard.lane_assist_enabled || !options.lanes_enabled || calibration_paused)
+      suppress_lane_departure_alarm(lane);
     suppress_lane_departure_alarm(rear_lane);
     // Display hold must never authorize a lane change or a new LDW alert.
     if(!adas::lane_decision_fresh(lane_captured_at[1],presentation_now))rear_lane.departure=false;
@@ -2922,7 +2931,8 @@ int run_four_view(int argc, char** argv) {
         vehicle_state, rule_semantic, advice_now) : adas::LaneChangeResult();
     warning_summary = warning_manager.update(
         front_risk.warning, rear_risk.warning, side_fresh && left_blind.occupied,
-        side_fresh && right_blind.occupied, false /* LDW disabled */, lane_change_result,
+        side_fresh && right_blind.occupied,
+        dashboard.lane_assist_enabled && options.lanes_enabled && lane.departure, lane_change_result,
         signal_demo.motion_intersection());
     apply_signal_demo_warning(signal_demo, warning_summary);
     if (test4_result.enabled && test4_result.brake) {
@@ -2941,7 +2951,8 @@ int run_four_view(int argc, char** argv) {
             live?std::chrono::duration<double>(advice_now-start).count():source_frame_index/source_fps));
     const adas::LaneResult visual_lane=front_lane_visual.render(lane,visual_at);
     front_outer_style.apply(display_semantic,visual_lane,visual_at);
-    const adas::LaneResult center_lane=center_lane_display(visual_lane);
+    const adas::LaneResult center_lane=center_lane_display(visual_lane,
+        dashboard.lane_assist_enabled && lane.departure);
     const auto paint_display=front_paint_display.update(display_semantic,center_lane,visual_at);
     // Only adjust the boxes being drawn, after all safety decisions consumed
     // measured evidence. Invisible/expired ByteTrack entries stay invisible.
@@ -2970,8 +2981,7 @@ int run_four_view(int argc, char** argv) {
                left_blind.occupied && left_intent);
     draw_boxes(frames[3], detections[3], nullptr, side_fresh && right_blind.occupied ? right_blind.track_id : -1,
                right_blind.occupied && right_intent);
-    if(signal_overlay_visible)
-      for(int view=1;view<4;++view)draw_signal_demo_view(frames[view],extra_demos[view-1],false,false,detections[view]);
+    // Left, right and rear views do not display the per-camera signal HUD.
     if (options.lanes_enabled && !test4_result.brake) draw_maneuver_hud(frames[0], lane_change_result, rule_semantic);
     draw_test4_view(frames[0],test4_result,detections[0]);
     // Navigation stays in the dashboard; keep the front camera image clear.
@@ -3056,7 +3066,16 @@ int run_four_view(int argc, char** argv) {
     if(!gl_presenter && !avm_visible)
       for(int i=0;i<4;++i)draw_tile(canvas,frames[i],i,view_rects,live?rga_preview.get():nullptr);
     if(!live)draw_progress_bar(canvas,source_frame_index,source_frames,calibration_paused);
-    if(!avm_visible)draw_view_alerts(canvas,view_levels,view_rects);
+    if(!avm_visible){
+      auto alert_rects=view_rects;
+      auto alert_levels=view_levels;
+      if(camera_layout.fusion()){
+        for(int i=0;i<4;++i)alert_rects[i]=camera_layout.window_rect(i);
+        alert_levels[0]=std::max(view_levels[0],view_levels[2]);
+        alert_levels[1]=std::max(view_levels[1],view_levels[3]);
+      }
+      draw_view_alerts(canvas,alert_levels,alert_rects);
+    }
     // 最后画下拉菜单；GLES 在视频纹理之后再绘制相同的菜单区域。
     image_toolbar.draw(canvas,image_status,live);
     render_ms = std::chrono::duration<double, std::milli>(
@@ -3396,6 +3415,7 @@ int run_four_view(int argc, char** argv) {
         << " warning=" << static_cast<int>(warning_summary.primary)
         << " stale_lane_drops=" << stale_lane_drops
         << " test4_enabled=" << test4_result.enabled << " test4_brake=" << test4_result.brake
+        << " lane_assist_enabled=" << dashboard.lane_assist_enabled
         << " fcw_enabled=" << options.fcw_enabled << " fcw_level=" << int(fcw_state.level)
         << " fcw_status=" << int(fcw_state.status) << " fcw_ms=" << fcw_ms
         << " front_input_slot=" << camera_order.slot(0)

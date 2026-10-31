@@ -3,6 +3,7 @@
 #define ADAS_INPUT_MODE_TEST
 #include "../src/four_view.cpp"
 #undef main
+#include "../src/warning_logic.cpp"
 #include <cassert>
 
 namespace {
@@ -38,6 +39,41 @@ bool parse_test(std::initializer_list<const char*> values,Options& options) {
 }
 
 int main(int argc,char** argv) {
+  {
+    RoadFusionUi ui;assert(!ui.lane_assist_enabled);
+    const auto button=RoadFusionUi::lane_assist();
+    assert((button & RoadFusionUi::fcw()).area()==0);
+    assert((button & cv::Rect(878,30,178,38)).area()==0);
+    adas::NavigationDemo nav;adas::MomentaryInput mouse;
+    int x=-1,y=-1,top=0;bool avm=false,verify=true;
+    auto press=[&](){
+      mouse.press(button.x+5,button.y+5);mouse.release();auto input=mouse.take();
+      ui.route(input,x,y,top,avm,verify,nav);assert(input.clicks.empty());
+    };
+    press();assert(ui.lane_assist_enabled && ui.lane_assist_changed);
+    assert(top==0 && !avm && verify && !nav.enabled());
+    auto empty=mouse.take();ui.route(empty,x,y,top,avm,verify,nav);
+    assert(ui.lane_assist_enabled); // a held/consumed click cannot toggle twice
+    adas::LaneResult measured;measured.valid=true;measured.offset_ratio=.3f;
+    measured.left={{100,350},{260,150}};measured.right={{540,350},{380,150}};
+    adas::LaneDepartureMonitor monitor;
+    auto at=std::chrono::steady_clock::now();
+    monitor.update(measured,at);
+    auto departed=monitor.update(measured,at+std::chrono::milliseconds(200));
+    assert(departed.departure);
+    const auto on=center_lane_display(departed,true);
+    const auto off=center_lane_display(departed);
+    assert(on.departure && on.departure_side==departed.departure_side);
+    assert(!off.departure && off.offset_ratio==0.f);
+    assert(on.left==off.left && on.right==off.right);
+    adas::WarningManager manager;
+    const auto alarm=manager.update(false,false,false,false,true,{},{});
+    assert(alarm.primary==adas::WarningCode::LDW);
+    const auto collision=manager.update(true,false,false,false,true,{},{});
+    assert(collision.primary==adas::WarningCode::FCW);
+    press();assert(!ui.lane_assist_enabled);
+    std::cout<<"LANE_ASSIST_TOGGLE_PASS: independent consumed clicks; default off; real departure monitor; drawing and warning priority\n";
+  }
   {
     bool fcw=false;adas::MomentaryInput clicks;
     clicks.press(kFcwToggle.x+10,kFcwToggle.y+10);clicks.release();
