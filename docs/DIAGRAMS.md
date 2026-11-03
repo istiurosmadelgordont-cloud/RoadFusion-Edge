@@ -14,22 +14,26 @@
 ## 缓冲区所有权与图像寿命
 
 ```mermaid
-flowchart TB
-    FREE["FPGA空闲DMA槽"] --> WRITE["FPGA写图像与帧尾token"]
-    WRITE --> GET["驱动确认完整帧<br/>GET_FRAME交给应用"]
-    GET --> ROOM{"BGR池有空闲输出？"}
-    ROOM -->|否| SKIP["不访问像素，归还该源槽"]
-    ROOM -->|是| RGA["同步RGA读取源槽<br/>写入独立BGR输出"]
-    RGA -->|转换成功| SPLIT["源图读取结束"]
-    SPLIT --> PUT["PUT_FRAME携完整token归还"]
-    PUT --> FREE
-    SKIP --> FREE
-    SPLIT --> PUB["发布BGR图像<br/>推理、ROI和显示共享引用"]
-    PUB --> WAIT["所有消费者释放引用"]
-    WAIT --> REUSE["BGR池输出可再次复用"]
-    REUSE -.-> ROOM
-    RGA -->|失败| ERR["记录错误并停止采集<br/>退出时排空与回收"]
+flowchart LR
+    GET["完整DMA帧<br/>GET_FRAME持有"]
+    RGA["同步RGA<br/>写独立BGR图像"]
+    PUT["PUT_FRAME<br/>携匹配token归还"]
+    FREE["FPGA可复用源槽"]
+    PUB["发布BGR及ROI<br/>共享图像引用"]
+    USE["推理 / 显示消费"]
+    RECYCLE["最后引用释放<br/>BGR池才可复用"]
+    ERR["异常停止<br/>排空与回收"]
+    GET --> RGA
+    RGA -->|源读取结束| PUT --> FREE
+    RGA -->|转换成功| PUB --> USE --> RECYCLE
+    RGA -.->|失败| ERR
+    classDef source fill:#e8f0fb,stroke:#426b99,color:#172b4d
+    classDef image fill:#e8f5ee,stroke:#438369,color:#173e2b
+    class GET,PUT,FREE source
+    class PUB,USE,RECYCLE image
 ```
+
+图中上支路表示源槽归还，下支路表示独立图像消费。若BGR池满，不访问像素并归还本次源槽；RGA失败时停止采集并排空回收。
 
 源DMA槽在同步RGA结束后即可归还；独立BGR图像必须等推理、ROI和显示的最后一个消费者释放后才可复用。四个源槽与应用BGR输出池是不同层次，`--pcie-buffers`不改变FPGA槽数。图中是正常交付及转换失败的简化流程，STOP、会话切换和旧token拒绝以驱动实现为准。
 

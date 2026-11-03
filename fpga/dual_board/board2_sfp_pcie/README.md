@@ -27,28 +27,31 @@ FIC SHA256：`940e659a73ab1b1149f0b01e9eb8327eb3346d56104b91cf07960673b300e34d`�
 ## 图像增强与旁路
 
 ```mermaid
-flowchart TB
-    DDR["DDR读出 RGB565<br/>恢复视频同步"] --> EXP["扩展为RGB888"]
-    EXP --> DCP["DCP暗通道去雾<br/>大气光平滑 / 透射率下限 / 天空保护"]
-    DCP --> CSC["RGB转YCbCr"]
-    CSC --> Y["Y双边降噪 → Gamma<br/>CLAHE → 暗部/高光调整"]
-    CSC --> C["Cb / Cr等长延迟"]
-    CSC --> REF["增强前亮度参考<br/>等长延迟"]
-    Y --> PROTECT["高光保护 / 软拐点压缩"]
-    REF --> PROTECT
-    PROTECT --> RGB["YCbCr转RGB888"]
-    C --> RGB
-    DCP --> BYPASS["后段增强全关时<br/>等延迟原RGB旁路"]
-    RGB --> SELECT["按当前帧配置选择输出"]
-    BYPASS --> SELECT
-    SELECT --> HDMI["HDMI RGB888"]
-    SELECT --> PCIE["PCIe RGB565"]
-    CFG["帧边界应用的配置快照<br/>VS / HS / DE / 配置随像素对齐"]
-    CFG -.-> DCP
-    CFG -.-> SELECT
+flowchart LR
+    subgraph DEHAZE["① RGB域去雾"]
+        direction TB
+        DDR["DDR RGB565 → RGB888<br/>恢复视频同步"]
+        DCP["DCP去雾<br/>透射率 / 大气光 / 天空保护"]
+        DDR --> DCP
+    end
+    subgraph ENHANCE["② 共享亮度通道"]
+        direction TB
+        CSC["RGB转YCbCr"]
+        Y["Y降噪 / Gamma<br/>CLAHE / 暗部调整"]
+        RGB["高光保护 / RGB重组<br/>亮度参考与CbCr等长对齐"]
+        CSC --> Y --> RGB
+    end
+    subgraph OUTPUT["③ 同源输出"]
+        direction TB
+        SELECT["当前帧配置选择<br/>增强 / RGB旁路"]
+        PORT["HDMI RGB888<br/>PCIe RGB565"]
+        SELECT --> PORT
+    end
+    DEHAZE --> ENHANCE --> OUTPUT
+    DEHAZE -.->|后段全关：等延迟旁路| OUTPUT
 ```
 
-各处理级与旁路保持对应延迟；具体算法开关、色度、同步信号和帧配置必须逐像素对齐。图中为功能组织，完整模块与周期数以归档RTL为准。后段RGB旁路不等于关闭前段DCP，去雾有独立开关。
+VS、HS、DE、色度、原亮度参考与160位配置快照随所属像素对齐；各处理级与旁路保持对应延迟；具体算法开关、色度、同步信号和帧配置必须逐像素对齐。图中为功能组织，完整模块与周期数以归档RTL为准。后段RGB旁路不等于关闭前段DCP，去雾有独立开关。
 
 ## PCIe 与参数回执
 

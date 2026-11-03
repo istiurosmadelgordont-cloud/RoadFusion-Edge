@@ -15,39 +15,37 @@
 ## 数据流与输入映射
 
 ```mermaid
-flowchart TB
-    subgraph SOURCES["输入端"]
-        H1["板卡一HDMI<br/>左前 / 左视素材"]
-        E1["以太网1<br/>前中 / 前视素材"]
-        E0["以太网0<br/>右前 / 右视素材"]
-        H2["板卡二HDMI<br/>第四路素材"]
-    end
-    subgraph B1["板卡一 PGL50H"]
-        CAP["异步输入与完整帧DDR<br/>渲染期间锁定读页"]
-        LUT["三路LUT映射<br/>双线性采样 / 接缝羽化"]
-        QUAD["四路独立画面组合"]
-        MODE["KEY2选择输出模式<br/>结果完整后于消隐期切换"]
-        CAP --> LUT --> MODE
-        CAP --> QUAD --> MODE
-    end
-    subgraph TXBLOCK["板卡二 · 单路回传"]
-        TX["HDMI转SFP发送"]
+flowchart LR
+    INPUT["四路视频输入<br/>HDMI / 双网口 / SFP"]
+    subgraph B1["板卡一 · 采集与融合"]
+        direction TB
+        CAP["完整帧DDR<br/>渲染期间锁定读页"]
+        VIEW["三路LUT融合<br/>或四宫格组合"]
+        MODE["KEY2选模式<br/>完整结果于帧边界切换"]
+        CAP --> VIEW --> MODE
     end
     subgraph B2["板卡二 · 增强与输出"]
+        direction TB
         RX["SFP接收 / DDR缓存"]
-        IMG["图像增强流水线"]
+        IMG["去雾 / 降噪 / 增强"]
         RX --> IMG
     end
-    H1 --> CAP
-    E1 --> CAP
-    E0 --> CAP
-    H2 --> TX
-    TX -->|SFP：单路视频| CAP
-    MODE --> M1["板卡一HDMI"]
-    MODE -->|SFP：1920×1080合成视频| RX
-    IMG --> M2["板卡二HDMI"]
-    IMG -->|PCIe RGB565| ARM["RK3568 board_v12"]
-    ARM -.->|图像参数 / 接收与生效确认| IMG
+    ARM["RK3568<br/>DMA-BUF / RGA / NPU"]
+    INPUT --> B1
+    B1 -->|SFP合成帧| B2
+    B2 -->|PCIe视频| ARM
+    B1 --> M1["板卡一HDMI"]
+    B2 --> M2["板卡二HDMI"]
+    ARM -.->|参数与回执| B2
+```
+
+第四路视频的反向回传单独列出，避免与上图的合成视频前送混在一起：
+
+```mermaid
+flowchart LR
+    HDMI["板卡二HDMI<br/>第四路素材"] --> TX["板卡二SFP发送"]
+    TX -->|单路视频| RX["板卡一SFP接收<br/>DDR通道3"]
+    RX --> CANVAS["融合画布下半区<br/>或四宫格右下角"]
 ```
 
 板卡二本机HDMI经SFP送往板卡一，作为第四路输入；板卡一反向把1920×1080合成视频送回板卡二。板卡二写DDR、读出增强后，同源送本地HDMI与PCIe。SFP采用工程内自定义8b/10b视频协议，PCIe交付一张合成帧，不是四个独立采集设备。

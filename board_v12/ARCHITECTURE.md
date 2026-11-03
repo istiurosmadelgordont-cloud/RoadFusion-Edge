@@ -5,32 +5,35 @@
 ## 数据与任务分工
 
 ```mermaid
-flowchart TB
-    INPUT["FPGA 1920×1080 RGB565合成帧"]
-    GET["GET_FRAME<br/>核对完整帧、会话与token"]
-    POOL{"BGR输出池有空闲图像？"}
-    DROP["归还源槽并跳过该帧"]
-    RGA["同步RGA<br/>RGB565转BGR888"]
-    PUT["PUT_FRAME归还源槽<br/>发布带源时刻的BGR图像"]
-    SCHED["有界任务调度<br/>按服务期限选择任务"]
-    subgraph NPU["共享NPU · 按任务调度"]
-        YOLO["YOLO目标检测"]
-        MO["MO灯态细分类"]
-        UFLD["前视UFLDv2车道"]
-        YOLO -->|灯框ROI| MO
+flowchart LR
+    subgraph INPUT["① 采集与适配"]
+        direction TB
+        GET["GET_FRAME<br/>完整帧 / 会话 / token"]
+        RGA["同步RGA<br/>RGB565转BGR888"]
+        PUT["PUT_FRAME<br/>归还DMA源槽"]
+        IMAGE["发布BGR图像<br/>有界池 / 源时刻"]
+        GET --> RGA --> PUT --> IMAGE
     end
-    TRACK["ARM解码与跟踪<br/>相机身份 / 源时刻"]
-    RULE["新鲜真实观测<br/>通行 / 变道 / FCW<br/>危险模拟停车"]
-    DRAW["RGA预览 / OpenCV叠加<br/>GLES显示"]
-    INPUT --> GET --> POOL
-    POOL -->|否| DROP
-    POOL -->|是| RGA --> PUT --> SCHED
-    SCHED --> YOLO
-    SCHED --> UFLD
-    MO --> TRACK
-    UFLD --> TRACK
-    TRACK --> RULE --> DRAW
-    PUT -->|共享图像引用| DRAW
+    subgraph PERCEPTION["② 感知与共享NPU"]
+        direction TB
+        SCHED["按服务期限调度<br/>限制排队任务"]
+        YOLO["YOLO目标"]
+        MO["MO灯态"]
+        UFLD["UFLDv2车道"]
+        RESULT["带时间与相机身份的结果"]
+        SCHED --> YOLO -->|灯框ROI| MO --> RESULT
+        SCHED --> UFLD --> RESULT
+    end
+    subgraph OUTPUT["③ ARM规则与显示"]
+        direction TB
+        TRACK["解码 / 跟踪<br/>筛选新鲜真实观测"]
+        RULE["通行 / 实虚线 / FCW<br/>危险模拟停车"]
+        DRAW["RGA预览适配<br/>OpenCV叠加 / GLES显示"]
+        TRACK --> RULE --> DRAW
+    end
+    INPUT -->|模型输入| PERCEPTION
+    PERCEPTION -->|观测结果| OUTPUT
+    INPUT -.->|共享预览引用| OUTPUT
 ```
 
 图中是处理与调度关系；采集与显示可独立推进，NPU模型任务受共享执行约束。源槽与BGR图像的寿命不同，详见[缓冲流程](../docs/DIAGRAMS.md#缓冲区所有权与图像寿命)。
