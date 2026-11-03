@@ -1,4 +1,4 @@
-> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
+> 现行归档：[2026-10-30完整工程ZIP](../sfp_ddr_image_pice_handshake_tested_20261030.zip)，一次解压即可；bit/FIC来源及时序见[板卡二说明](../README.md)。以下正文保留接口设计及历史实现记录，旧构建/下载状态不代表现行归档状态。源码路径相对ZIP内工程根目录。
 
 > 2026-10-19 最新源码快照：已修复 Logos PCIe IP 的3DW包头 `tkeep=1111` 被图像命令过滤的问题。图像写入仍要求单DW数据拍 `tkeep=0001`，视频DMA原有解析条件不变。参数接收、生效和回传通过9项离线回归；此发布未运行PDS位流构建或硬件下载，不附带位流。需要自行重建匹配位流。当前FIC为 `IMAGE_ACK_RX_APPLIED_TX_20261017`，Core0端口133/161位，Core1端口244/245位，均256点。下方较早记录保留为历史说明。
 

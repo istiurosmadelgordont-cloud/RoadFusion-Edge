@@ -1,3 +1,5 @@
+> 历史资料：正文的版本、命令、指标和完成状态仅适用于原记录。当前工程请先读[现行入口](README.md)；本次整理不改变历史验证结果。
+
 # Preserved V7 model artifacts
 
 These three files are the same 21-class YOLOv8n-P2 detector at successive

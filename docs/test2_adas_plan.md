@@ -1,6 +1,8 @@
+> 历史资料：正文的版本、命令、指标和完成状态仅适用于原记录。当前工程请先读[现行入口](../board_v12/CURRENT.md)；本次整理不改变历史验证结果。
+
 **测试二：三车道感知、多视角变道辅助与碰撞预警方案**
 
-设计日期：2026-10-15；实施更新：2026-10-16。本文保留功能方案与验收目标，下文“待完成”列属于设计阶段记录；实际已接入的功能、板端运行方法、按键与验证范围以 [测试二实施记录](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/TEST2_START.md) 为准。QAT 训练及候选对照见 [QAT 记录](../training/UFLDV2_QAT.md)。
+设计日期：2026-10-15；实施更新：2026-10-16。本文保留功能方案与验收目标，下文“待完成”列属于设计阶段记录；实际已接入的功能、板端运行方法、按键与验证范围以 [当前板端功能与验证入口](../board_v12/CURRENT.md) 为准。QAT 训练及候选对照见 [QAT 记录](../training/UFLDV2_QAT.md)。
 
 项目定位：基于 FPGA 与 RK3568 的四视角 ADAS 演示系统。前视识别本车道及左右相邻候选车道，判断前方目标所属车道；左右视角识别目标侧盲区，后视补充后车接近预警；按键输入行驶意图，经融合判断后，用画面箭头和报警展示结果。车辆行为以画面或 LED 模拟。
 
@@ -106,7 +108,7 @@
 
 本地已有 PC 三车道预览：
 
-![已有 PC 三车道诊断预览：左侧原始四槽点，右侧拟合后的区域](/D:/brige/rk3568_adas/board_v8/output/pc_ufld_test/04_clear_open_road/three_lanes.jpg)
+已有 PC 三车道诊断预览：左侧原始四槽点，右侧拟合后的区域（本地证据未入库：`/D:/brige/rk3568_adas/board_v8/output/pc_ufld_test/04_clear_open_road/three_lanes.jpg`）
 
 这是既有 ONNX FP32 / CPU 离线输出，本次只查看。其用途是说明现有代码与展示基础，不代表本次板端测试。既有三组摘要中三车道区域同时有效的抽样比例约为 14%～66%，属于无标注的显示诊断统计；因此后续验收要记录外侧区域的缺失与保持，不能只挑一张三车道截图。
 
@@ -287,14 +289,14 @@ flowchart LR
 
 可复用的主要代码入口：
 
-- [types.hpp](/D:/brige/rk3568_adas/board_v8/include/adas/types.hpp:23)：四边界、三区域及车道有效性字段。
-- [ufld_lane_detector.cpp](/D:/brige/rk3568_adas/board_v8/src/ufld_lane_detector.cpp:264)：本车道和相邻候选区域生成。
-- [overlay.cpp](/D:/brige/rk3568_adas/board_v8/src/overlay.cpp:198)：相邻区域色带及本车道中心短箭头显示。
-- [adas_logic_v2.hpp](/D:/brige/rk3568_adas/board_v8/include/adas/adas_logic_v2.hpp:302)：车辆状态、线型观测、变道状态机与告警管理。
-- [warning_logic.cpp](/D:/brige/rk3568_adas/board_v8/src/warning_logic.cpp:153)：左右盲区占用确认与车道偏离。
-- [risk_estimator.cpp](/D:/brige/rk3568_adas/board_v8/src/risk_estimator.cpp:37)：距离、相对接近速度与 TTC 估计。
-- [four_view.cpp](/D:/brige/rk3568_adas/board_v8/src/four_view.cpp:1812)：四路融合、模拟方向按钮与界面叠加。
-- [perception_regression.cpp](/D:/brige/rk3568_adas/board_v8/tests/perception_regression.cpp)：现有感知及决策回归入口。
+- [types.hpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/include/adas/types.hpp)：四边界、三区域及车道有效性字段。
+- [ufld_lane_detector.cpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/src/ufld_lane_detector.cpp)：本车道和相邻候选区域生成。
+- [overlay.cpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/src/overlay.cpp)：相邻区域色带及本车道中心短箭头显示。
+- [adas_logic_v2.hpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/include/adas/adas_logic_v2.hpp)：车辆状态、线型观测、变道状态机与告警管理。
+- [warning_logic.cpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/src/warning_logic.cpp)：左右盲区占用确认与车道偏离。
+- [risk_estimator.cpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/src/risk_estimator.cpp)：距离、相对接近速度与 TTC 估计。
+- [four_view.cpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/src/four_view.cpp)：四路融合、模拟方向按钮与界面叠加。
+- [perception_regression.cpp](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v8/tests/perception_regression.cpp)：现有感知及决策回归入口。
 
 本方案的首要交付是让评审能清楚看到“检测到了什么、按了什么、为什么允许或拒绝、最后如何提示”，随后在同一系统中展示碰撞与相对测速能力。
 

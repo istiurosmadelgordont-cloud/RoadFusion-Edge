@@ -1,6 +1,6 @@
 # PCIe 视频与图像参数控制：驱动 7.0
 
-> 当前入口说明（2026-10-26）：本目录保留驱动 **7.0 单向参数提交**的独立 Qt 查看器。最新 ADAS 与 pcie_v3 8.0/8.1 双阶段回执入口见 [board_v10](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/CURRENT.md) 和 [图像控制说明](https://github.com/istiurosmadelgordont-cloud/RoadFusion-Edge/blob/a6ab14ee72b9bc163f0428a35f9c44413b2e2eaa/board_v10/docs/PCIE_V3_IMAGE_CONTROLS.md)。以下 7.0 操作与验证记录按原版本保留；两个程序不能同时占用同一设备。
+> 版本说明（2026-11-03整理）：本目录保留驱动7.0、单向参数提交的独立Qt查看器。当前ADAS为[board_v12](../../board_v12/README.md)，当前独立预览工具为[pcie_v4](../pcie_v4/README.md)，均使用PCIe驱动8.2。两阶段回执见[当前参数说明](../../board_v12/docs/PCIE_V3_IMAGE_CONTROLS.md)。以下7.0操作与验证记录按原版本保留；同一设备不能被多个采集程序同时占用。
 
 目标为 LubanCat ARM64、Linux 4.19.232、Qt 5.11.3 或兼容版本。
 本版对应 `board2_sfp_pcie` 的 20261015 FPGA 工程：图像参数控制合入

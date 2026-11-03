@@ -1,20 +1,29 @@
-board_v12：指定旧基线业务功能 + 最新固定 RGA 路径。
+board_v12 当前入口（说明整理2026-11-03；代码基线2026-10-31）
 
+在RK3568板端进入实际部署目录，例如：
 cd /home/cat/rk3568_adas/board_v12
 sh scripts/build.sh
 export DISPLAY=:0
 export XAUTHORITY="$HOME/.Xauthority"
 sh scripts/run_pcie.sh
 
-开启车道和 FCW：sh scripts/run_pcie.sh --enable-lanes --enable-fcw
-本地鸟瞰素材：sh scripts/run_avm_473423e3.sh
-视频回放：sh scripts/run_four_view.sh --scene 实际视频目录
-调整 BGR 池：sh scripts/run_pcie.sh --pcie-buffers 8
+默认显示模拟导航；车道检测、FCW、测试四、TTC默认关闭。
+车道检测与顶栏“车道保持辅助”是两个开关；后者仅控制偏离提醒。
 
-PCIe 采集/预览固定 RGA，不提供 read/CPU 对照开关。沿用板端 8.2 驱动及原模型。
-run_pcie.sh 自动检查、按需编译并加载驱动，补齐设备权限；需要时会调用 sudo。
-已加载 8.2 时直接复用；若已加载旧驱动，会提示先退出采集程序再卸载旧驱动。
-只准备驱动、不启动界面：sh scripts/prepare_pcie.sh
-原始槽默认左/前/右/后；显示左上左视、右上前视、左下右视、右下后视。
-标题栏放大视角，Z 键返回/放大。其他默认开关及业务逻辑与指定基线一致。
-完整状态见 CURRENT.md，同步和验证见 docs/BASELINE_SYNC_20261029.md。
+车道和FCW：sh scripts/run_pcie.sh --enable-lanes --enable-fcw
+危险模拟停车：sh scripts/run_test4.sh
+导航并关闭测试四：sh scripts/run_navigation_demo.sh
+本地鸟瞰：sh scripts/run_avm_473423e3.sh（需匹配视频和标定）
+文件回放：sh scripts/run_four_view.sh --scene 实际场景目录
+只准备驱动：sh scripts/prepare_pcie.sh
+指定设备：PCIE_DEVICE=/dev/fpga_frame_实际BDF sh scripts/run_pcie.sh
+应用BGR池：sh scripts/run_pcie.sh --pcie-buffers 8（FPGA仍是四DMA槽）
+
+实时路径固定驱动8.2 + DMA-BUF + 同步RGA，无read/CPU输入切换。
+脚本按需准备驱动与权限；旧驱动不匹配时先退出占用设备的程序再处理。
+NPU驱动0.8.2与PCIe驱动8.2是不同版本号。
+PCIe原始槽默认左/前/右/后，对应左上/右上/左下/右下。
+Z切换放大与返回；ARM三路融合布局需与FPGA KEY2输出人工匹配。
+导航、行驶、转向、停车均为模拟；未接视频导航OCR或真实车辆控制。
+
+完整说明见README.md、CURRENT.md、docs/README.md。

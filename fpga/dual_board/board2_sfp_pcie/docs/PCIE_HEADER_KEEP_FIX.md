@@ -1,4 +1,4 @@
-> 当前工程：[主工程ZIP](../sfp_ddr_image_pice_handshake_20261019_header_keep_fix.zip)、[PCIe仿真库ZIP](../sfp_ddr_image_pice_handshake_20261019_pcie_sim.zip)。两包解压到同一父目录，合并同名工程文件夹；下述源码路径相对工程根目录。
+> 现行归档：[2026-10-30完整工程ZIP](../sfp_ddr_image_pice_handshake_tested_20261030.zip)，一次解压即可；bit/FIC来源及时序见[板卡二说明](../README.md)。以下正文保留接口设计及历史实现记录，旧构建/下载状态不代表现行归档状态。源码路径相对ZIP内工程根目录。
 
 # Logos PCIe 3DW包头兼容修正
 

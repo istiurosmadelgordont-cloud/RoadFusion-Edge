@@ -1,58 +1,75 @@
-# board_v12：DMA-BUF + RGA 实时图像识别
+# board_v12 板端部署与使用
 
+当前 RK3568 应用。主程序为 `adas_four_view`，PCIe实时采集使用驱动8.2、DMA-BUF和同步RGA。最新功能与默认开关见 [CURRENT.md](CURRENT.md)，实现分层见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
-本目录的非 RGA 功能已同步为板端 `board_v11.before-new-baseline-20261027-195936`，保留最新 board_v12 RGA 路径及名称。先阅读 [当前版本状态](CURRENT.md) 和 [同步记录](docs/BASELINE_SYNC_20261029.md)。以下业务说明及 2026-10-27 [部署记录](docs/DEPLOYMENT_20261027.md) 属于历史基线。
+## 运行环境与外部文件
 
-# RK3568 四视角 ADAS
+- 鲁班猫2 / RK3568、ARM64 Linux；已有部署记录使用4.19.232内核、GCC8.3及OpenCV3.2。内核模块必须与目标板内核匹配。
+- CMake、C++11编译器、OpenCV、FreeType、RKNN Runtime及匹配的NPU驱动；图形显示需要X11、EGL/GLES2。按构建功能还需Rockchip MPP/GStreamer等依赖。
+- 配套RGA头文件/库随 [third_party/librga](third_party/librga/README.md) 说明管理，不用系统旧库替换其配套依赖。
+- 三份RKNN模型、视频及场景标定另行准备。模型哈希和类别表见 [config/model_manifest.json](config/model_manifest.json)。
 
-**继承的业务基线：四宫格 ADAS、车道过渡显示与 LDW 关闭。** 保留测试一、二、模拟导航、测试四与检测框残影修复；[历史验证记录](docs/VALIDATION_20261022.md) 属于原版本，不代表 board_v12 的硬件验证。
+YOLO默认查找 `models/yolo14_960x544_qat_int8.rknn`，找不到再查 `../models/`；MO文件 `mo_fp16_baseline.rknn` 必须与YOLO位于同一目录。UFLD默认查找同名模型目录，可通过 `UFLD_MODEL` 覆盖；YOLO路径可通过 `MODEL` 覆盖。
 
-以下为 2026-10-17 初始接入时的测试一历史说明，当前测试二与车道功能以 CURRENT.md 为准。
+## 构建和PCIe启动
 
-版本日期：2026-10-17。本目录同步当前 RK3568 的 `board_v8` 源码，用于视频回放、方向选择、红停绿行与模拟报警测试。YOLO 和 MobileNet 的推理由板端 NPU 实际执行。
-
-## 当前配置
-
-- YOLO：14 类定位，QAT INT8，固定输入 960×544。
-- MobileNet（MO）：128×128 FP16，红/绿各四种灯形及拒识，共 9 类；模型哈希见 [模型清单](config/model_manifest.json)。
-- 四路拼接为 1920×1080，每个更新只调用一次 YOLO，再对灯组裁剪调用 MO。
-- 保留 ByteTrack、中文检测标签、小图形叠加及叠加开关；未确认灯框和标签隐藏。
-- 默认关闭车道线和 TTC；第一排选择用途车道，第二排单击方向开始行驶，再点同方向按钮停车；行驶中点其他方向则切换方向。
-- 控制灯不依赖灯组配置：左车道看左箭头、直行车道优先直行箭头、无箭头时看圆灯、右车道看右箭头；多个圆灯优先画面中间。确认红灯时任意行驶方向都报闯红灯；绿灯下选与用途车道不符的方向报违规操作，再点同方向按钮停车并解除。
-
-“模拟板端测试一”是本次保存的版本名称。其输入是回放视频，车辆所在方向、行驶与报警通过演示控件模拟；本版本没有完成自动车道与控制灯组归属判断。夜间素材仍存在拒识、漏判及灯形误分类，不能把单张成功截图当成完整片段通过。
-
-## 构建与运行
-
-依赖板端现有 CMake、C++11 编译器、OpenCV、FreeType、RKNN Runtime、Rockchip MPP/GStreamer、RGA、EGL/GLES2、X11。
+将本目录放到板端实际部署位置，以下路径需替换：
 
 ```sh
-cd /home/cat/rk3568_adas/board_v12
+cd /path/to/RoadFusion-Edge/board_v12
 sh scripts/build.sh
 export DISPLAY=:0
 export XAUTHORITY="$HOME/.Xauthority"
-sh scripts/run_four_view.sh
+sh scripts/run_pcie.sh
 
-# 指定已保存的右转箭头与圆灯组合场景
-sh scripts/run_four_view.sh --scene four_view_sample/H_右绿圆红
-
-# 用相同程序进行单次无交互回放
-sh scripts/run_four_view.sh --scene four_view_sample/H_右绿圆红 --headless --once
+# 前视车道检测与前向风险
+sh scripts/run_pcie.sh --enable-lanes --enable-fcw
+# 危险模拟停车；不会自动开启车道检测
+sh scripts/run_test4.sh
+# 导航演示并关闭测试四
+sh scripts/run_navigation_demo.sh
 ```
 
-两个模型需位于同一 `models/` 目录：`yolo14_960x544_qat_int8.rknn` 和 `mo_fp16_baseline.rknn`。模型、视频与编译产物继续单独保存，仓库提交源码、脚本、配置和版本记录。
+`run_pcie.sh` 调用 `prepare_pcie.sh`，复用已加载的8.2驱动，或检查内核后按需编译加载，并准备设备权限及NPU环境。脚本需要时调用sudo；旧模块不匹配时先正常退出所有占用设备的程序，再按提示处理，不强制卸载。
 
-## 11组素材与七路原视频
+脚本默认打开模拟导航，关闭车道、TTC、FCW和测试四。顶栏“车道保持辅助”默认关闭，只控制前视偏离提醒。条件允许时脚本尝试把NPU最低频率恢复至800 MHz，不修改最高频率或governor。
 
-当前板端菜单保留 11 组，顺序、时长、四路输入哈希、灯组配置见 [场景清单](config/simulated_test_1_scenes.json)。本机备份位于“红绿灯测试素材汇总_20261011/红绿D”，每组独立文件夹。
+```sh
+# 多设备时指定节点；不要把占位BDF原样复制
+PCIE_DEVICE=/dev/fpga_frame_0000:01:00.0 sh scripts/run_pcie.sh
+# 只准备驱动与权限
+sh scripts/prepare_pcie.sh
+# 增大应用输出图像池，FPGA仍为四DMA槽
+sh scripts/run_pcie.sh --pcie-buffers 8
+```
 
-前 10 组英伟达素材的“七路原视频”文件夹内，各保存同车同一原始片段的七个独立相机原视频及其时间戳：前视长焦、前视广角、左侧广角、右侧广角、后视长焦、左后视、右后视。原片保留完整原始时长，当前板端回放的短片区间另行记录。第 11 组中国素材保留原有视角。七路原片保存齐全不代表每个新场景都已有鸟瞰标定。
+独立 [pcie_v4](../tools/pcie_v4/README.md) 与本应用不能同时占用同一采集设备。更多链路说明见 [PCIE_INPUT.md](PCIE_INPUT.md)。
 
-## 版本记录与验证
+## 回放与鸟瞰
 
-当前 board_v12 固定使用 DMA-BUF + RGA 实时输入，并与回放共用无需 ROI 配置的
-用途车道选灯、同方向按钮切换行驶/停车和模拟预警逻辑；默认检测间隔为 1，PCIe 显示不额外限速。
-原视频回放仍使用 scripts/run_four_view.sh，实时输入使用 scripts/run_pcie.sh。
-编译、启动、选灯规则及实时输入说明见 [PCIe 输入说明](PCIE_INPUT.md)。
+```sh
+sh scripts/run_four_view.sh --scene four_view_sample/实际场景目录
+sh scripts/run_four_view.sh --scene four_view_sample/实际场景目录 --headless --once
+# 需要特定七相机素材和标定
+sh scripts/run_avm_473423e3.sh
+```
 
-本次板端导出清单见 [源码快照](docs/BOARD_SNAPSHOT_20261015_SIMULATED_TEST_1.json)，验证详情见 [模拟板端测试一](docs/SIMULATED_BOARD_TEST_1.md)。历史模块说明保留作参考，当前模型、输入尺寸和演示配置以本页为准。脚本使用 LF 换行。
+场景目录、源视频和标定不随源码上传；[场景清单](config/simulated_test_1_scenes.json)记录的是历史整理集合，不是仓库自带的视频。回放合成脚本 [build_fpga_composite.sh](scripts/build_fpga_composite.sh) 按front/rear/left/right组织文件输入，不能把它的回放文件顺序当作PCIe默认槽序。AVM素材范围与标定方式见 [AVM.md](AVM.md)。
+
+## 界面操作
+
+| 控件 | 作用 |
+| --- | --- |
+| 四路均分/主视角优先/标题栏放大 | 改变ARM显示布局；`Z`切换放大与返回 |
+| 三路融合 | 显示FPGA已有的融合画布；源端KEY2仍需人工匹配 |
+| 用途车道、方向、行驶/停止 | 模拟车辆状态并匹配控制灯 |
+| 车道检测与车道保持辅助 | 分别控制检测、偏离提醒；后者不控制转向 |
+| FCW/危险监测 | 前向风险及测试四模拟停车 |
+| 导航/环视/调试与主题 | 切换功能页和七套主题 |
+| FPGA图像预设/详细参数 | 编辑草稿，显式应用后等待RECEIVED/APPLIED |
+
+规则与限制见 [模拟导航](docs/NAVIGATION_DEMO.md)、[测试四](docs/TEST4.md)、[图像参数](docs/PCIE_V3_IMAGE_CONTROLS.md)。
+
+## 检查与记录
+
+源码变更后按 [ENGINEERING.md](ENGINEERING.md) 执行对应构建与回归。当前源码同步记录、历史板端测试和整机性能分别见 [验证索引](docs/README.md) 与 [性能记录](../docs/PERFORMANCE.md)。文档整理不代表重新进行硬件验收。

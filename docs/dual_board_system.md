@@ -1,3 +1,5 @@
+> 历史资料：正文的版本、命令、指标和完成状态仅适用于原记录。当前工程请先读[现行入口](../fpga/dual_board/README.md)；本次整理不改变历史验证结果。
+
 # 双板系统当前入口
 
 > 2026-10-19：板卡二已替换为Logos PCIe包头兼容修正版，含最新FIC和两阶段回传；见[更新说明](../fpga/dual_board/board2_sfp_pcie/docs/PCIE_HEADER_KEEP_FIX.md)。以下较早版本记录保留为历史说明。

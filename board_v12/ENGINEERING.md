@@ -1,5 +1,7 @@
 # Board software engineering rules
 
+Current implementation and defaults: [CURRENT.md](CURRENT.md). FPGA PCIe input is already active; CAN remains an extension.
+
 These rules apply to the current RK3568 application and to later FPGA, CAN,
 perception and ADAS extensions. A feature is complete only after it satisfies
 the relevant rules and passes the board regression gate.

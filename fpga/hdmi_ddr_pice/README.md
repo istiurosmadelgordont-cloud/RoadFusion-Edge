@@ -1,3 +1,5 @@
+> 历史资料：正文的版本、命令、指标和完成状态仅适用于原记录。当前工程请先读[现行入口](../dual_board/README.md)；本次整理不改变历史验证结果。
+
 # HDMI → DDR → 图像增强 → PCIe 工程
 
 此目录保存 2026-09-15 的 `hdmi_ddr_pice` 工程版本，用于 RoadFusion-Edge 的 FPGA 视频采集与 ARM 接收联调。

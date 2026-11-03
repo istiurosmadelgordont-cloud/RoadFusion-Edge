@@ -1,55 +1,17 @@
-# 2D bird's-eye view
+# AVM本地素材鸟瞰演示
 
-The upper-right panel shows the calibrated ground projection. It renders a
-realistic transparent top-view vehicle sprite over the camera imagery and
-marks areas without observed ground as blind zones. Press `V` (or the AVM
-button) for the enlarged view. The original four video panels remain
-independent. The BEV worker refreshes at most twice per second and does not
-block replay presentation.
+AVM以相机内外参或地面对应关系进行近似二维地面投影，与板卡一的三视角LUT前景融合分开。当前界面提供环视页、本地素材播放/暂停/复位和时间微调；鸟瞰刷新不阻塞主视频显示。
 
-## NVIDIA real-video group 11
+## 当前素材入口
 
-`11_side_vehicle_bsd` has the original front, rear, left and right video plus
-downloaded rear-left, rear-right and front-tele views from the **same clip**. The latter
-are aligned by source timestamps and copied into its board replay directory
-as `rear_left.mp4`, `rear_right.mp4` and `front_tele.mp4`. The scene's `avm.yml` comes from
-NVIDIA's camera intrinsics, camera-to-ego extrinsics, ego masks and vehicle
-dimensions for clip `66b5fa4b-de68-4339-9d18-669da3c6ce80`. The board AVM
-uses all seven cameras when the three extra files exist. Only four are shown as
-normal video tiles.
+`sh scripts/run_avm_473423e3.sh` 使用 `four_view_sample/avm_473423e3`。脚本检查`avm.yml`、`sync.yml`及rear/rear_left/rear_right/front_tele视频，并以`--avm-local-scene`接入。该入口仍通过PCIe显示实时视频，AVM本地素材使用独立手动时钟，不能描述成实时输入自动同步生成的鸟瞰。
 
-Generate the calibrated map on the PC with the Python environment containing
-OpenCV, pandas, pyarrow and scipy:
+视频、标定和下载数据不随源码完整上传。必须使用同一片段、同一相机组的标定；其他组不能只改文件名复用映射。原66b5fa4b组及近似几何是历史素材，不是所有新场景的通用标定。
 
-```text
-python tools/build_nvidia_avm_calibration.py GROUP_DIR SCENE_DIR/avm.yml
-```
+## 标定与限制
 
-`GROUP_DIR` must contain `additional_views/manifest.json` and the downloaded
-`additional_views/calibration` parquet files. Maps are specific to that clip
-and rig. The live four-camera input needs its own measured calibration;
-playing a different scene with this map gives an incorrect picture.
+[tools/build_nvidia_avm_calibration.py](tools/build_nvidia_avm_calibration.py) 用NVIDIA片段相机内外参与数据清单生成标定；Python环境需要OpenCV、pandas、pyarrow及scipy。按该脚本参数准备对应`additional_views`清单与标定文件，不能仅给任意四路视频就声称已完成标定。地面对应关系实验另见 [tests/make_avm_calibration.py](tests/make_avm_calibration.py)。
 
-The projection assumes a flat ground plane. Cars, curbs and buildings above
-the plane stretch at the seams. The narrow rear telecamera leaves limited
-ground coverage behind the vehicle, and unobserved areas stay hatched. The
-display is an approximate 2D bird's-eye view, not a full 360-degree surround
-measurement or a rotatable 3D view.
+投影依赖平面地面假设，车辆、路沿与建筑会产生拉伸/接缝，未观测区域保留为空缺。该功能不是完整360度测量，也不是可旋转的真实三维重建。实时相机需单独实测标定及时间对齐。
 
-For other rigs, measured ground correspondences can be converted with
-`tests/make_avm_calibration.py`. The earlier experimental
-`config/avm/66b5fa4b_approximate.yml` uses assumed camera geometry and is
-retained only for comparison; use the real clip calibration above for the
-demonstration.
-
-## Replay timing and validation
-
-Replay follows the source clock. If the board cannot display every source
-frame, it skips late frames consistently across the four normal streams.
-`fps_1s` is the actual display FPS, `playback_dropped` counts skipped source
-frames, and recognition FPS is reported separately. This keeps a 20-second
-clip near its recorded duration even when rendering is slower than 30 FPS.
-
-`avm_regression` covers projection, overlap, missing coverage, resize and
-reset. A board screenshot should additionally be inspected to verify the
-central vehicle, seam positions and orientation for the chosen footage.
+`avm_regression`与`manual_avm_clock_regression`分别检查投影逻辑与手动时钟；具体素材仍需核对方向、接缝和车辆位置。历史与最新验证范围见 [文档索引](docs/README.md)。

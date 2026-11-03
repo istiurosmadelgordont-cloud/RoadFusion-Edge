@@ -1,3 +1,5 @@
+> 历史资料：正文的版本、命令、指标和完成状态仅适用于原记录。当前工程请先读[现行入口](../CURRENT.md)；本次整理不改变历史验证结果。
+
 # 三批 NVIDIA 素材虚实线及强制变道复测
 
 2026-10-29。修复版已在当前板端工程运行。程序 SHA256：`ddc8de3cb45e89d9933b7990e91a9a3aa3f826d03c54abe55f6b1126809fb2ef`。
@@ -58,14 +60,14 @@
 
 原程序备份：板端 `output/lane_audit_20261029/backup/adas_four_view`。原始结果、人工复核、447 帧修复输出和按钮证据分别见同目录的 `results.json`、`manual_labels.json`、`fixed.yml`、`gui_alarm.json`。
 
-![实机强制实线变道顶部报警](D:/brige/outputs/board_v11_lane_audit_20261029/force_solid_alarm.png)
+实机强制实线变道顶部报警（本地证据未入库：`D:/brige/outputs/board_v11_lane_audit_20261029/force_solid_alarm.png`）
 
-![点击保持直行后清除](D:/brige/outputs/board_v11_lane_audit_20261029/force_solid_cleared.png)
+点击保持直行后清除（本地证据未入库：`D:/brige/outputs/board_v11_lane_audit_20261029/force_solid_cleared.png`）
 
-![第一批抽样](D:/brige/outputs/board_v11_lane_audit_20261029/fixed_batch_1.jpg)
+第一批抽样（本地证据未入库：`D:/brige/outputs/board_v11_lane_audit_20261029/fixed_batch_1.jpg`）
 
-![第二批抽样](D:/brige/outputs/board_v11_lane_audit_20261029/fixed_batch_2.jpg)
+第二批抽样（本地证据未入库：`D:/brige/outputs/board_v11_lane_audit_20261029/fixed_batch_2.jpg`）
 
-![第三批抽样](D:/brige/outputs/board_v11_lane_audit_20261029/fixed_batch_3.jpg)
+第三批抽样（本地证据未入库：`D:/brige/outputs/board_v11_lane_audit_20261029/fixed_batch_3.jpg`）
 
-![补查的磨损和树影缺陷样本](D:/brige/outputs/board_v11_lane_audit_20261029/adverse_review.jpg)
+补查的磨损和树影缺陷样本（本地证据未入库：`D:/brige/outputs/board_v11_lane_audit_20261029/adverse_review.jpg`）

@@ -1,3 +1,5 @@
+> 独立参考例程：本目录用于PCIe接口学习和测试；当前ADAS请使用[board_v12](../../board_v12/README.md)，独立预览用[pcie_v4](../pcie_v4/README.md)。其设备名、驱动和协议不应直接套用于当前整机。
+
 # pango_pcie_dma_alloc — 紫光同创 PCIe 测试平台（主机侧）
 
 紫光同创官方 PCIe 测试平台套件，包含 **Linux 内核驱动 + GTK 上位机 + 参考 RTL + 应用指南**，

@@ -1,5 +1,7 @@
 # board_v12 的 PCIe/RGA 接入
 
+> 本页解释接入方式；当前界面、10月31日源码同步及默认开关见[CURRENT](../CURRENT.md)。
+
 board_v12 由 board_v11 演进，保留原识别、交互和预警功能，将 PCIe 实时图像输入固定到 DMA-BUF + RGA。当前图像链路、启动命令和回归说明见 [PCIe RGA 图像处理路径](PCIE_RGA_PREVIEW.md)。
 
 FPGA 与驱动协议不变：driver 8.2 导出四个 DMA-BUF 槽，RGA 同步读取 RGB565 并转换为 BGR888。完整 BGR 帧进入现有识别链；界面预览、YOLO/MO/UFLDv2 的可加速缩放和通道转换也使用 RGA。

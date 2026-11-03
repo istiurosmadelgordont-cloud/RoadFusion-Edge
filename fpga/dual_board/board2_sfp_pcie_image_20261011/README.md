@@ -1,3 +1,5 @@
+> 历史迁移说明：当前统一工程已更新为[10月30日完整归档](../board2_sfp_pcie/README.md)。以下日期保留当时迁移状态。
+
 # 板卡二已迁移到当前统一工程
 
 2026-10-15，双板方案板卡二已由 `sfp_ddr_image_pice_handshake` 替换，统一入口为 [board2_sfp_pcie](../board2_sfp_pcie/README.md)。

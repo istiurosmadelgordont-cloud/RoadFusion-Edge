@@ -1,50 +1,41 @@
-# RoadFusion-Edge ARM software architecture
+# board_v12 软件架构
 
-The board application follows the nine-layer architecture in the project
-diagram.  The diagram is a target architecture, so every module is also marked
-with its current implementation status below.  A module is not considered
-complete merely because a UI card exists.
+适用当前主分支，整理于2026-11-03。实时FPGA输入已经接入，使用PCIe驱动8.2、DMA-BUF和同步RGA；早期“仅文件模拟、FPGA待接入”的九层表已不适用。
 
-| Layer | Runtime responsibility | Current board status |
+## 数据与任务分工
+
+```text
+FPGA合成帧 RGB565 → PCIe四DMA槽 → GET_FRAME
+  → 同步RGA转1920×1080 BGR → PUT_FRAME归还源槽
+  → 有界BGR池 / 相机ROI / 预览
+     ├─ RGA适配 → YOLO → 灯框ROI → MO
+     ├─ RGA适配 → 前视UFLDv2
+     └─ ARM：解码/NMS、跟踪、规则、绘制 → GLES显示
+```
+
+模型共享NPU执行资源，软件工作线程不代表YOLO、MO和UFLD在硬件上同时推理。调度按服务期限限制待处理工作，YOLO与灯态细分成组完成；结果带源时刻与相机身份，规则使用新鲜真实观测，跟踪预测用于显示连续性。
+
+## 模块入口
+
+| 层次 | 文件 | 职责 |
 | --- | --- | --- |
-| 1. Input and state | FPGA-style 1920x1080 four-view composite; vehicle state | Four-view video simulation is active. FPGA live input and CAN are adapters still to be connected. |
-| 2. Hardware abstraction and sync | MPP decode, RGA conversion, frame identity, calibration, vehicle-state freshness | RGA NV12 conversion and synchronized file playback exist. The current launch script deliberately uses software decode; FPGA DMA and CAN are not active. |
-| 3. Scheduling | Serialize YOLO/UFLD work on the RK3568 NPU and keep UI independent | Active. Object, front-lane and rear-lane jobs share one NPU queue. |
-| 4. Perception | YOLOv8n-P2, UFLD V2, ByteTrack | Active. Outputs remain image coordinates and carry source-frame timing. |
-| 5. Semantic fusion | Track association, lane marking/crossing/TLC, ROI filtering and directional light matching | Logic V2 is active as a conservative demo. Weak evidence produces `UNKNOWN`. |
-| 6. ADAS logic | FCW/RCW/BSD/LDW, lane-change FSM, intersection logic, global ADAS state | Warning functions are demo-grade. Lane-change/intersection state machines provide advice only and never command steering or braking. |
-| 7. Decision management | Priority, conflict suppression, primary warning and event output | Logic V2 warning priority is active. Persistent event logging is pending. |
-| 8. Output | 1080p UI, warnings, playback, screenshots and logs | UI/playback/log output is active. Audio/LED and production recording are pending. |
-| 9. Extensions | Traffic-light ROI model, guide-arrow subclassification, AVM, Lanelet2 rules, OTA | Planned interfaces; not production functionality. |
+| 采集与设备控制 | [pcie_capture.hpp](include/adas/pcie_capture.hpp)、[driver](driver/) | 设备会话、完整帧、token、STOP、参数回执 |
+| 图像适配 | [pcie_rga.hpp](include/adas/pcie_rga.hpp)、[rga_image_ops.hpp](include/adas/rga_image_ops.hpp) | 同步RGA转色/缩放、有界输出池 |
+| 相机与显示映射 | [camera_slot_order.hpp](include/adas/camera_slot_order.hpp)、[camera_view_layout.hpp](include/adas/camera_view_layout.hpp) | 源象限到front/rear/left/right，四路/优先/单路/融合显示 |
+| 感知与调度 | [perception_schedule.hpp](include/adas/perception_schedule.hpp)、[npu_executor.hpp](include/adas/npu_executor.hpp) | 目标和车道任务安排、结果时效 |
+| 模型 | [rknn_detector.cpp](src/rknn_detector.cpp)、[lamp_classifier.cpp](src/lamp_classifier.cpp)、[ufld_lane_detector.cpp](src/ufld_lane_detector.cpp) | YOLO14类、MO9类、UFLDv2解码 |
+| 跟踪与规则 | [signal_demo.hpp](include/adas/signal_demo.hpp)、[lane_signal_simulator.hpp](include/adas/lane_signal_simulator.hpp)、[test4_safety.hpp](include/adas/test4_safety.hpp)、[fcw_monitor.hpp](include/adas/fcw_monitor.hpp) | 用途车道选灯、实虚线变道、危险模拟停车、FCW |
+| 导航与AVM | [navigation_demo.hpp](include/adas/navigation_demo.hpp)、[avm_renderer.hpp](include/adas/avm_renderer.hpp) | 人工导航输入、特定素材鸟瞰 |
+| 界面与集成 | [four_view.cpp](src/four_view.cpp)、[roadfusion_dashboard.inc](src/roadfusion_dashboard.inc)、[gl_presenter.cpp](src/gl_presenter.cpp) | 控件、状态、叠加与GLES呈现 |
 
-## Safety and validity rules
+## 缓冲与生效语义
 
-- Missing or stale vehicle, lane, side-view, route or traffic-light data is
-  represented as unknown. Zero is never used as a substitute for missing CAN.
-- A lane boundary permits a lane-change hint only after repeated dashed-line
-  evidence. Solid or unknown boundaries block the hint.
-- The target-side blind spot must remain clear for 500 ms before an allow hint.
-- Crosswalk, guide-arrow or traffic-light evidence blocks lane-change
-  confirmation because no HD-map distance is available yet.
-- Directional traffic lights are matched to the current route/turn intent.
-  Unmatched and unstable lights produce `WAIT` or `UNKNOWN`, never `GO`.
-- FCW has the highest warning priority, followed by RCW, lane-change abort,
-  BSD, LDW, intersection stop and advisory messages.
+源DMA槽只保持至同步RGA读取结束，以完整token归还；普通BGR/RGB输出由引用计数保护到最后消费者结束。池满跳过输入，不覆盖在用图像。`--pcie-buffers`控制应用输出池，不改变硬件四槽。
 
-## Open-source design references
+参数走独立控制线程：五字配置形成完整快照，cookie关联RECEIVED与APPLIED。APPLIED表示FPGA入口帧边界应用，不等于显示器已呈现对应图像；超时保留事务，不无条件重发。见 [参数协议](docs/PCIE_V3_IMAGE_CONTROLS.md)。
 
-The implementation is original and intentionally smaller than the referenced
-projects.  It adopts these design ideas:
+## 功能范围
 
-- openpilot: field-valid vehicle state, same-side blind-spot lane-change gate,
-  explicit events and alert selection.
-- Autoware Universe: separate rule and safety checks, directional traffic-light
-  matching, and restrictions near intersections/crosswalks/traffic lights.
-- Lanelet2: dashed boundaries permit crossing; solid and unknown boundaries do
-  not.
+车道保持辅助开关默认关闭，只门控前视偏离提醒；车道检测与测试二变道规则独立。导航为人工方向/距离输入，AVM依赖特定素材和标定。源端三路融合在FPGA计算，ARM融合布局负责重组显示。CAN、真实车辆控制、视频导航OCR与通用在线相机标定均未接入。
 
-The current system is an ADAS demonstration. It does not output steering,
-throttle or brake commands.
-
-Implementation and review requirements for all later modules are defined in
-[`ENGINEERING.md`](ENGINEERING.md).
+当前功能与默认值以 [CURRENT.md](CURRENT.md) 为准；新开发遵循 [工程约定](ENGINEERING.md)。

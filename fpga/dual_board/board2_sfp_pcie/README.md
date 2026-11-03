@@ -1,5 +1,7 @@
 # 板卡二：SFP 接收、图像处理与 PCIe 四缓冲
 
+> 当前工程归档：2026-10-30；在线说明整理于2026-11-03。ARM接入使用[board_v12](../../../board_v12/README.md)，整机性能与测量版本见[性能记录](../../../docs/PERFORMANCE.md)。归档bit/FIC、SHA256及原时序结论保持不变。
+
 2026-10-30 按用户指定归档 **`sfp_ddr_image_pice_handshake`** 当前桌面工程与现有 bit；用户确认该版已上板测试通过。不是名称相近的旧 `sfp_ddr_img_pice_handshake`，也没有接入暂停中的 HSV / 金字塔暗光融合实验。
 
 - [完整工程 ZIP](sfp_ddr_image_pice_handshake_tested_20261030.zip)：单个 ZIP 包含 PDS 输入、RTL/IP、约束、bit、FIC、RC 参考、测试源码及历史说明；不需要再合并旧版两个 ZIP。

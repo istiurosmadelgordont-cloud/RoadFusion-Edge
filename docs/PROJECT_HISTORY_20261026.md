@@ -1,3 +1,5 @@
+> 历史资料：正文的版本、命令、指标和完成状态仅适用于原记录。当前工程请先读[现行入口](README.md)；本次整理不改变历史验证结果。
+
 # 项目历史说明：2026-10-26 整理前的 README
 
 本页保存此前项目首页中的版本沿革、FPGA 工程记录和旧版操作说明。文中“当前版本”等措辞属于原记录的时间点；最新板端与启动方式请从 [项目首页](../README.md) 和 [board_v12 当前版本](../board_v12/CURRENT.md) 进入。
@@ -35,7 +37,7 @@
 ## 板卡一融合 / 四宫格切换（2026-10-24）
 
 [板卡一说明](../fpga/dual_board/board1_capture/README.md)已更新为四路采集、三路 LUT 融合及 KEY2 模式切换版。
-下载[工程 ZIP](../fpga/dual_board/board1_capture/board1_fusion_quad_20261024.zip)或[最新调试 bit](../fpga/dual_board/board1_capture/test_ddr_mode_switch_20261024.sbit)；配套 FIC 在工程包内。
+下载工程 ZIP（旧归档；[现行工程入口](../fpga/dual_board/board1_capture/README.md)）或最新调试 bit（旧归档；[现行工程入口](../fpga/dual_board/board1_capture/README.md)）；配套 FIC 在工程包内。
 通道顺序为 HDMI、以太网1、以太网0、SFP；前三路参与融合。上电默认 1920×540 上半区融合，KEY2（L15）切换 1920×1080 四宫格，HDMI/SFP 同时切换。
 切换集成仿真零欠读，已生成 bit；物理时序仍有违例，新集成版尚未完成上板验收，见[验证与限制](../fpga/dual_board/board1_capture/README.md#验证与已知限制)。
 
