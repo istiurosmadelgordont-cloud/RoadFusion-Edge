@@ -6,6 +6,7 @@
 
 | 主题 | 说明 |
 | --- | --- |
+| [架构与流程图](../../docs/DIAGRAMS.md) | 整机、双板、ARM、增强、参数与缓冲生命周期 |
 | [PCIe/RGA图像路径](PCIE_RGA_PREVIEW.md) | 驱动8.2、同步转换、池寿命、预览及模型前处理 |
 | [图像参数与回执](PCIE_V3_IMAGE_CONTROLS.md) | 草稿/应用、整包参数、RECEIVED/APPLIED；文件名沿用历史，正文已更新 |
 | [模拟导航](NAVIGATION_DEMO.md) | 脚本默认开启；人工方向/距离，不含视频OCR |

@@ -4,6 +4,7 @@
 
 | 阅读目标 | 入口 |
 | --- | --- |
+| [架构与流程图](DIAGRAMS.md) | 整机、双板、ARM、增强、参数与缓冲生命周期 |
 | 项目概览与快速启动 | [根README](../README.md) |
 | 当前工程、位流及Git分支 | [VERSIONS.md](VERSIONS.md) |
 | 板端部署/默认值/架构 | [使用说明](../board_v12/README.md)、[CURRENT](../board_v12/CURRENT.md)、[架构](../board_v12/ARCHITECTURE.md) |

@@ -12,6 +12,28 @@
 
 ## 寄存器与回执
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as ARM界面
+    participant CT as 控制线程与驱动
+    participant P as FPGA PCIe域
+    participant V as FPGA视频域
+    UI->>UI: 编辑预设或参数草稿
+    UI->>CT: 点击应用，提交五字快照及cookie
+    CT->>P: 写160位参数并提交非零cookie
+    P->>P: 冻结参数快照
+    P-->>CT: RECEIVED，同一cookie
+    P->>V: toggle握手，跨域传递完整快照
+    V->>V: 等待frame_start，统一应用
+    V-->>P: 入口已应用，携带cookie
+    P-->>CT: APPLIED，同一cookie与参数
+    CT-->>UI: 匹配后显示已生效
+    Note over V: 配置随所属帧通过增强流水线
+    Note over UI,V: APPLIED不代表对应图像已显示到屏幕
+    Note over CT,P: 等待期间若超时，保留在途事务并继续核对迟到回执<br/>不自动重发，不覆盖未确认事务
+```
+
 | BAR1偏移 | 语义 |
 | --- | --- |
 | 0x200/0x204/0x208/0x20C/0x210 | 五个32位参数字，形成160位快照 |

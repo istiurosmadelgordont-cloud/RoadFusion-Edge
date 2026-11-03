@@ -4,14 +4,36 @@
 
 ## 数据与任务分工
 
-```text
-FPGA合成帧 RGB565 → PCIe四DMA槽 → GET_FRAME
-  → 同步RGA转1920×1080 BGR → PUT_FRAME归还源槽
-  → 有界BGR池 / 相机ROI / 预览
-     ├─ RGA适配 → YOLO → 灯框ROI → MO
-     ├─ RGA适配 → 前视UFLDv2
-     └─ ARM：解码/NMS、跟踪、规则、绘制 → GLES显示
+```mermaid
+flowchart TB
+    INPUT["FPGA 1920×1080 RGB565合成帧"]
+    GET["GET_FRAME<br/>核对完整帧、会话与token"]
+    POOL{"BGR输出池有空闲图像？"}
+    DROP["归还源槽并跳过该帧"]
+    RGA["同步RGA<br/>RGB565转BGR888"]
+    PUT["PUT_FRAME归还源槽<br/>发布带源时刻的BGR图像"]
+    SCHED["有界任务调度<br/>按服务期限选择任务"]
+    subgraph NPU["共享NPU · 按任务调度"]
+        YOLO["YOLO目标检测"]
+        MO["MO灯态细分类"]
+        UFLD["前视UFLDv2车道"]
+        YOLO -->|灯框ROI| MO
+    end
+    TRACK["ARM解码与跟踪<br/>相机身份 / 源时刻"]
+    RULE["新鲜真实观测<br/>通行 / 变道 / FCW<br/>危险模拟停车"]
+    DRAW["RGA预览 / OpenCV叠加<br/>GLES显示"]
+    INPUT --> GET --> POOL
+    POOL -->|否| DROP
+    POOL -->|是| RGA --> PUT --> SCHED
+    SCHED --> YOLO
+    SCHED --> UFLD
+    MO --> TRACK
+    UFLD --> TRACK
+    TRACK --> RULE --> DRAW
+    PUT -->|共享图像引用| DRAW
 ```
+
+图中是处理与调度关系；采集与显示可独立推进，NPU模型任务受共享执行约束。源槽与BGR图像的寿命不同，详见[缓冲流程](../docs/DIAGRAMS.md#缓冲区所有权与图像寿命)。
 
 模型共享NPU执行资源，软件工作线程不代表YOLO、MO和UFLD在硬件上同时推理。调度按服务期限限制待处理工作，YOLO与灯态细分成组完成；结果带源时刻与相机身份，规则使用新鲜真实观测，跟踪预测用于显示连续性。
 

@@ -2,7 +2,7 @@
 
 基于双紫光同创 PGL50H FPGA 与 RK3568 ARM/NPU 的多视角辅助驾驶演示系统。以**多视角并行处理、软硬件异构协同、复杂环境图像增强**为主要特点，连接四路视频采集、三视角融合、图像增强、道路感知与预警显示。
 
-[板端部署](board_v12/README.md) · [当前版本与默认设置](board_v12/CURRENT.md) · [双板连接与工程](fpga/dual_board/README.md) · [文档导航](docs/README.md) · [性能与验证](docs/PERFORMANCE.md)
+[板端部署](board_v12/README.md) · [当前版本与默认设置](board_v12/CURRENT.md) · [双板连接与工程](fpga/dual_board/README.md) · [文档导航](docs/README.md) · [架构与流程图](docs/DIAGRAMS.md) · [性能与验证](docs/PERFORMANCE.md)
 
 ## 系统组成
 
@@ -13,17 +13,33 @@
 | 感知与交互 | 野火鲁班猫2 / RK3568 | DMA-BUF/RGA 图像适配，NPU 目标、灯态与车道推理，ARM 跟踪、规则和交互 |
 
 ```mermaid
-flowchart LR
-    H1[板卡一 HDMI] --> B1[FPGA一：采集、DDR、融合/四宫格]
-    E[两路以太网视频] --> B1
-    H2[板卡二 HDMI] -->|SFP单路回传| B1
-    B1 -->|SFP 1920×1080合成视频| B2[FPGA二：DDR与图像增强]
-    B2 --> HDMI[HDMI硬件显示]
-    B2 -->|PCIe RGB565| RGA[RK3568：DMA-BUF与同步RGA]
-    RGA --> NPU[YOLO / MO / UFLDv2]
-    NPU --> UI[ARM规则、预警与驾驶模拟]
-    UI -->|参数提交及RECEIVED/APPLIED回执| B2
+flowchart TB
+    IN["四路视频输入<br/>每路 960×540 RGB565"]
+    subgraph HW["双PGL50H · 像素流处理"]
+        direction LR
+        B1["FPGA一<br/>多源采集 / 完整帧DDR<br/>三路融合 / 四宫格"]
+        B2["FPGA二<br/>SFP接收 / DDR<br/>去雾、降噪与亮度增强"]
+        B1 -->|SFP合成视频| B2
+    end
+    IN --> B1
+    B2 --> MON["HDMI硬件画面"]
+    subgraph RK["RK3568 · 感知与交互"]
+        direction TB
+        RGA["PCIe四槽DMA-BUF<br/>同步RGA转色与缩放"]
+        NPU["NPU共享调度<br/>YOLO / MO / UFLDv2"]
+        RULE["ARM跟踪与规则<br/>通行 / 变道 / FCW<br/>危险模拟停车"]
+        UI["界面显示与人工模拟操作"]
+        RGA --> NPU --> RULE --> UI
+    end
+    B2 -->|PCIe合成帧| RGA
+    UI -.->|整包参数与两阶段回执| B2
+    classDef fpga fill:#e8f0fb,stroke:#426b99,color:#172b4d
+    classDef arm fill:#e8f5ee,stroke:#438369,color:#173e2b
+    class B1,B2 fpga
+    class RGA,NPU,RULE,UI arm
 ```
+
+图中四路输入的物理来源及板卡二HDMI经SFP回传的连接，详见[双板数据流图](fpga/dual_board/README.md#数据流与输入映射)。实线表示视频/处理数据流，虚线表示参数控制；控制链路不输出真实车辆执行命令。
 
 四路输入各为 960×540 RGB565，合成输出为 1920×1080；三路前景融合区为 1920×540，下半区居中保留后视。PCIe 向 ARM 交付一张合成图，各路画面由应用按映射提取。完整帧管理保证读写页面一致性，不代表四路曝光同步。
 

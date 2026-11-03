@@ -16,19 +16,20 @@
 板卡二自身HDMI输入经过SFP发给板卡一，供板卡一拼接；板卡一返回的合成视频经过另一方向进入板卡二，写DDR后处理，再共同送到HDMI和PCIe。
 
 ```mermaid
-flowchart LR
-    HDMI[板卡二HDMI输入] --> TX[SFP编码与发送]
-    TX --> B1[板卡一采集与四宫格]
-    B1 --> RX[SFP对齐与解码]
-    RX --> DDR[DDR保存原始RGB565]
-    DDR --> ALIGN[恢复视频时序并对齐]
-    ALIGN --> IMG[完整图像处理流水线]
-    IMG --> OUT[公共RGB888和同步寄存器]
-    OUT --> MON[HDMI输出]
-    OUT --> DMA[PCIe RGB565四缓冲DMA]
-    DMA --> RC[ARM RC]
-    RC --> CFG[pcie_dma_ctrl内的参数控制]
-    CFG --> IMG
+flowchart TB
+    HDMI["板卡二HDMI输入"] --> TX["SFP编码与发送"]
+    TX --> B1["板卡一采集、融合/四宫格"]
+    B1 --> RX["板卡二SFP对齐与解码"]
+    RX --> DDR["DDR保存合成RGB565"]
+    DDR --> ALIGN["恢复视频时序并对齐"]
+    ALIGN --> IMG["图像处理流水线<br/>像素、色度、同步、配置对齐"]
+    IMG --> OUT["公共RGB888及同步输出"]
+    OUT --> MON["HDMI显示"]
+    OUT --> DMA["PCIe RGB565四槽DMA"]
+    DMA --> RC["RK3568驱动8.2<br/>DMA-BUF / RGA / board_v12"]
+    RC -.-> CFG["pcie_dma_ctrl参数控制<br/>五字快照与cookie"]
+    CFG -.->|跨域握手 / 帧边界应用| IMG
+    CFG -.->|RECEIVED / APPLIED| RC
 ```
 
 处理模块位于DDR读侧，DDR保存的是SFP收到的原始RGB565。四个PCIe缓冲轮换承载同一条视频流，不是四路独立视频。若输入是四宫格，当前算法参数对整张合成图生效，不提供逐象限独立配置。

@@ -24,6 +24,32 @@ FIC SHA256：`940e659a73ab1b1149f0b01e9eb8327eb3346d56104b91cf07960673b300e34d`�
 
 当前处理包括 DCP 去雾、Y 通道双边去噪、Gamma、CLAHE、原暗部 / 高光调整和软膝高光压缩等，按参数开关。默认五字配置：`000001C0 00F38034 00004100 02030190 0080C040`，算法开关默认关闭；保护标志保留。字0 bit1 为 Gamma，bit2 为 CLAHE。新增多尺度暗光融合尚未实施。
 
+## 图像增强与旁路
+
+```mermaid
+flowchart TB
+    DDR["DDR读出 RGB565<br/>恢复视频同步"] --> EXP["扩展为RGB888"]
+    EXP --> DCP["DCP暗通道去雾<br/>大气光平滑 / 透射率下限 / 天空保护"]
+    DCP --> CSC["RGB转YCbCr"]
+    CSC --> Y["Y双边降噪 → Gamma<br/>CLAHE → 暗部/高光调整"]
+    CSC --> C["Cb / Cr等长延迟"]
+    CSC --> REF["增强前亮度参考<br/>等长延迟"]
+    Y --> PROTECT["高光保护 / 软拐点压缩"]
+    REF --> PROTECT
+    PROTECT --> RGB["YCbCr转RGB888"]
+    C --> RGB
+    DCP --> BYPASS["后段增强全关时<br/>等延迟原RGB旁路"]
+    RGB --> SELECT["按当前帧配置选择输出"]
+    BYPASS --> SELECT
+    SELECT --> HDMI["HDMI RGB888"]
+    SELECT --> PCIE["PCIe RGB565"]
+    CFG["帧边界应用的配置快照<br/>VS / HS / DE / 配置随像素对齐"]
+    CFG -.-> DCP
+    CFG -.-> SELECT
+```
+
+各处理级与旁路保持对应延迟；具体算法开关、色度、同步信号和帧配置必须逐像素对齐。图中为功能组织，完整模块与周期数以归档RTL为准。后段RGB旁路不等于关闭前段DCP，去雾有独立开关。
+
 ## PCIe 与参数回执
 
 保持 RGB565、64 字节图像 Payload、四缓冲所有权、帧尾 token、RELEASE / STOP 协议。
